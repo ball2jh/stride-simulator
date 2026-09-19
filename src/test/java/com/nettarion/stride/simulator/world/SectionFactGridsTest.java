@@ -1,8 +1,11 @@
 package com.nettarion.stride.simulator.world;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,25 +13,28 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 /**
- * A summary assembled from parts or cut from a source must answer every
- * coarse question exactly as a summary scanned from the same cells does, and
- * a view that edits its cells must not write through the shared summary.
+ * Fact grids assembled from parts or cut from a source must answer every
+ * coarse question exactly as grids scanned from the same cells do, and a
+ * view that edits its cells must not write through the grids another view
+ * shares.
  */
-class SectionSummaryTest {
+final class SectionFactGridsTest {
 	private static final BlockEntry AIR = BlockEntry.builder(0, "minecraft:air").build();
-	private static final BlockEntry STONE =
-	    BlockEntry.builder(1, "minecraft:stone").fullCube().build();
-	private static final BlockEntry ICE =
-	    BlockEntry.builder(2, "minecraft:ice").fullCube().friction(0.98F).build();
-	private static final BlockEntry FENCE =
-	    BlockEntry.builder(3, "minecraft:oak_fence")
-	        .boxes(new ShapeBox(0.375, 0.0, 0.375, 0.625, 1.5, 0.625))
-	        .retainsSupportPos(true)
-	        .build();
+
+	private static final BlockEntry STONE = BlockEntry.builder(1, "minecraft:stone").solid().build();
+
+	private static final BlockEntry ICE = BlockEntry.builder(2, "minecraft:ice").solid().friction(0.98F).build();
+
+	private static final BlockEntry FENCE = BlockEntry.builder(3, "minecraft:oak_fence")
+	                                            .boxes(new ShapeBox(0.375, 0.0, 0.375, 0.625, 1.5, 0.625))
+	                                            .retainsSupportPos(true)
+	                                            .build();
+
 	private static final BlockEntry VINE =
 	    BlockEntry.builder(4, "minecraft:vine").climbability(WorldView.Climbability.CLIMBABLE).build();
-	private static final FluidEntry WATER = new FluidEntry(
-	    1, "minecraft:water", FluidKind.WATER, 8.0 / 9.0, 0.0, 0.0, 0.0, true);
+
+	private static final FluidEntry WATER =
+	    new FluidEntry(1, "minecraft:water", FluidKind.WATER, 8.0 / 9.0, 0.0, 0.0, 0.0, true);
 
 	@Test
 	void aSnapshotComposedFromAlignedPartsAnswersLikeOneScannedFromItsCells() {
@@ -39,48 +45,44 @@ class SectionSummaryTest {
 				parts.add(part(random, sectionX * 16, -16, sectionZ * 16 + 32, 32));
 			}
 		}
-		WorldSnapshot composed =
-		    WorldSnapshot.compose(0, -16, 32, 48, 32, 32, OutsidePolicy.REFUSING, parts);
+		WorldSnapshot composed = WorldSnapshot.compose(0, -16, 32, 48, 32, 32, OutsidePolicy.REFUSING, parts);
 		// Parts on the union's palette are placed by reference, not copied.
 		assertSame(parts.get(0).sections()[0], composed.sections()[composed.grid().index(0, 0, 0)]);
-		WorldSnapshot scanned =
-		    new WorldSnapshot(0, -16, 32, 48, 32, 32, OutsidePolicy.REFUSING,
-		        composed.palette(), composed.cells(), composed.fluidPalette(), composed.fluidCells());
-		assertSummariesAgree(composed.summary(), scanned.summary());
-		assertViewsAgree(new SnapshotView(composed), new SnapshotView(scanned), random, 0, -16, 32, 48, 32, 32);
+		WorldSnapshot scanned = WorldSnapshot.owning(0, -16, 32, 48, 32, 32, OutsidePolicy.REFUSING, composed.palette(),
+		    composed.toDenseCells(), composed.fluidPalette(), composed.toDenseFluidCells());
+		assertGridsAgree(composed.factGrids(), scanned.factGrids());
+		assertViewsAgree(SnapshotView.compile(composed), SnapshotView.compile(scanned), random, 0, -16, 32, 48, 32, 32);
 	}
 
 	@Test
-	void aSectionAlignedCropCarriesItsSourceSummaryAndAnUnalignedOneScans() {
+	void aSectionAlignedCropCarriesItsSourceGridsAndAnUnalignedOneScans() {
 		Random random = new Random(7L);
 		List<WorldSnapshot> parts = new ArrayList<>();
 		for (int sectionX = 0; sectionX < 4; sectionX++) {
 			parts.add(part(random, sectionX * 16, 0, 0, 16));
 		}
-		WorldSnapshot source =
-		    WorldSnapshot.compose(0, 0, 0, 64, 16, 16, OutsidePolicy.REFUSING, parts);
+		WorldSnapshot source = WorldSnapshot.compose(0, 0, 0, 64, 16, 16, OutsidePolicy.REFUSING, parts);
 		WorldSnapshot aligned = source.crop(16, 0, 0, 32, 16, 16);
-		WorldSnapshot rescanned =
-		    new WorldSnapshot(16, 0, 0, 32, 16, 16, OutsidePolicy.REFUSING, aligned.palette(),
-		        aligned.cells(), aligned.fluidPalette(), aligned.fluidCells());
-		assertSummariesAgree(aligned.summary(), rescanned.summary());
+		WorldSnapshot rescanned = WorldSnapshot.owning(16, 0, 0, 32, 16, 16, OutsidePolicy.REFUSING, aligned.palette(),
+		    aligned.toDenseCells(), aligned.fluidPalette(), aligned.toDenseFluidCells());
+		assertGridsAgree(aligned.factGrids(), rescanned.factGrids());
 		// An aligned window shares its source's sections outright.
 		assertSame(source.sections()[source.grid().index(1, 0, 0)], aligned.sections()[0]);
 		assertSame(parts.get(1).sections()[0], aligned.sections()[0]);
 		WorldSnapshot unaligned = source.crop(5, 0, 3, 20, 16, 9);
-		WorldSnapshot unalignedRescanned =
-		    new WorldSnapshot(5, 0, 3, 20, 16, 9, OutsidePolicy.REFUSING, unaligned.palette(),
-		        unaligned.cells(), unaligned.fluidPalette(), unaligned.fluidCells());
-		assertSummariesAgree(unaligned.summary(), unalignedRescanned.summary());
-		assertViewsAgree(new SnapshotView(unaligned), new SnapshotView(unalignedRescanned), random, 5, 0, 3, 20, 16, 9);
+		WorldSnapshot unalignedRescanned = WorldSnapshot.owning(5, 0, 3, 20, 16, 9, OutsidePolicy.REFUSING,
+		    unaligned.palette(), unaligned.toDenseCells(), unaligned.fluidPalette(), unaligned.toDenseFluidCells());
+		assertGridsAgree(unaligned.factGrids(), unalignedRescanned.factGrids());
+		assertViewsAgree(
+		    SnapshotView.compile(unaligned), SnapshotView.compile(unalignedRescanned), random, 5, 0, 3, 20, 16, 9);
 	}
 
 	@Test
-	void editingOneViewDoesNotWriteThroughTheSummaryAnotherViewShares() {
+	void editingOneViewDoesNotWriteThroughTheGridsAnotherViewShares() {
 		Random random = new Random(3L);
 		WorldSnapshot snapshot = part(random, 0, 0, 0, 16);
-		SnapshotView edited = new SnapshotView(snapshot);
-		SnapshotView pristine = new SnapshotView(snapshot);
+		SnapshotView edited = SnapshotView.compile(snapshot).fork();
+		SnapshotView pristine = SnapshotView.compile(snapshot);
 		int fenceIndex = snapshot.palette().indexOf(FENCE);
 		int airIndex = snapshot.palette().indexOf(AIR);
 		// A fence in an air cell adds a large shape, collision and a support fact.
@@ -89,21 +91,20 @@ class SectionSummaryTest {
 		int z = 4;
 		assertEquals(airIndex, snapshot.paletteIndexAt(x, y, z), "the test cell must start as air");
 		edited.replaceCell(x, y, z, fenceIndex);
-		assertSame(snapshot.summary(), snapshot.summary());
+		assertSame(snapshot.factGrids(), snapshot.factGrids());
 		assertNotSame(edited, pristine);
 		assertEquals(pristine.propertiesIn(WorldView.PROPERTIES_ALL, x, y, z, x, y, z),
-		    new SnapshotView(snapshot).propertiesIn(WorldView.PROPERTIES_ALL, x, y, z, x, y, z),
-		    "the untouched view and a fresh one read the same summary");
-		assertEquals(true, edited.hasCollisionShapeAt(x, y, z));
-		assertEquals(false, pristine.hasCollisionShapeAt(x, y, z));
+		    SnapshotView.compile(snapshot).propertiesIn(WorldView.PROPERTIES_ALL, x, y, z, x, y, z),
+		    "the untouched view and a fresh one read the same grids");
+		assertTrue(edited.hasCollisionShapeAt(x, y, z));
+		assertFalse(pristine.hasCollisionShapeAt(x, y, z));
 	}
 
 	/** One 16-wide section column of random terrain with fences, ice, vines and pools. */
 	private static WorldSnapshot part(
 	    final Random random, final int originX, final int originY, final int originZ, final int sizeY) {
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot
-		        .builder(OutsidePolicy.REFUSING, originX, originY, originZ, 16, sizeY, 16)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, originX, originY, originZ, 16, sizeY, 16)
 		        .palette(AIR, STONE, ICE, FENCE, VINE)
 		        .fluidPalette(FluidEntry.EMPTY, WATER);
 		for (int x = 0; x < 16; x++) {
@@ -114,12 +115,13 @@ class SectionSummaryTest {
 				}
 				if (ground < originY + sizeY) {
 					double roll = random.nextDouble();
-					if (roll < 0.05)
+					if (roll < 0.05) {
 						builder.set(originX + x, ground, originZ + z, 3);
-					else if (roll < 0.10)
+					} else if (roll < 0.10) {
 						builder.set(originX + x, ground, originZ + z, 4);
-					else if (roll < 0.16)
+					} else if (roll < 0.16) {
 						builder.setFluid(originX + x, ground, originZ + z, 1);
+					}
 				}
 			}
 		}
@@ -127,16 +129,16 @@ class SectionSummaryTest {
 		return builder.set(originX + 3, originY + sizeY - 1, originZ + 4, 0).build();
 	}
 
-	private static void assertSummariesAgree(final SectionSummary actual, final SectionSummary expected) {
+	private static void assertGridsAgree(final SectionFactGrids actual, final SectionFactGrids expected) {
 		assertEquals(expected.sectionsX, actual.sectionsX);
 		assertEquals(expected.sectionsY, actual.sectionsY);
 		assertEquals(expected.sectionsZ, actual.sectionsZ);
-		org.junit.jupiter.api.Assertions.assertArrayEquals(expected.counts, actual.counts);
-		org.junit.jupiter.api.Assertions.assertArrayEquals(expected.properties, actual.properties);
-		org.junit.jupiter.api.Assertions.assertArrayEquals(expected.large, actual.large);
-		org.junit.jupiter.api.Assertions.assertArrayEquals(expected.fineProperties, actual.fineProperties);
-		org.junit.jupiter.api.Assertions.assertArrayEquals(expected.fineLarge, actual.fineLarge);
-		org.junit.jupiter.api.Assertions.assertArrayEquals(expected.uniform, actual.uniform);
+		assertArrayEquals(expected.counts, actual.counts);
+		assertArrayEquals(expected.properties, actual.properties);
+		assertArrayEquals(expected.large, actual.large);
+		assertArrayEquals(expected.fineProperties, actual.fineProperties);
+		assertArrayEquals(expected.fineLarge, actual.fineLarge);
+		assertArrayEquals(expected.uniform, actual.uniform);
 	}
 
 	private static void assertViewsAgree(final SnapshotView actual, final SnapshotView expected, final Random random,

@@ -1,29 +1,35 @@
 package com.nettarion.stride.simulator.world;
 
-import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.StateDigest;
-import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.tick.ClientTick;
-import com.nettarion.stride.simulator.tick.Scratch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.FluidSample;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.StateDigest;
+import com.nettarion.stride.simulator.UnimplementedMechanicException;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.tick.ClientTick;
+import com.nettarion.stride.simulator.tick.Scratch;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class SnapshotViewOverlayTest {
+/**
+ * A mutable view's cell replacements: they take effect immediately, version
+ * the view, fork independently, and answer every query exactly as a fresh
+ * compilation of the replaced cells would.
+ */
+final class SnapshotViewOverlayTest {
 	private static final int AIR = 0;
+
 	private static final int STONE = 1;
 
 	@Test
-	void aFrozenForkRejectsPublicationAndSurvivesSourceMutation() {
+	void aFrozenForkRejectsReplacementAndSurvivesSourceMutation() {
 		SnapshotView source = world(OutsidePolicy.SEALED);
 		SnapshotView frozen = source.frozen();
 
@@ -60,12 +66,13 @@ class SnapshotViewOverlayTest {
 
 	@Test
 	void cellStateReplacementPublishesBlockAndFluidTogether() {
-		BlockEntry air = entry(AIR, "air", 0.6F, List.of());
-		BlockEntry waterBlock = entry(2, "water", 0.6F, List.of());
-		FluidEntry water =
-		    new FluidEntry(7, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true);
-		SnapshotView world = new SnapshotView(new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED,
-		    List.of(air, waterBlock), new int[] {AIR}, List.of(FluidEntry.EMPTY, water), new int[0]));
+		BlockEntry air = entry(AIR, "air", 0.6F);
+		BlockEntry waterBlock = entry(2, "water", 0.6F);
+		FluidEntry water = new FluidEntry(7, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true);
+		SnapshotView world = mutable(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, 1, 1, 1)
+		        .palette(air, waterBlock)
+		        .fluidPalette(FluidEntry.EMPTY, water)
+		        .build());
 		FluidSample sample = new FluidSample();
 
 		world.fluidAt(0, 0, 0, sample);
@@ -92,11 +99,11 @@ class SnapshotViewOverlayTest {
 
 	@Test
 	void fluidOverlaysForkIndependently() {
-		BlockEntry air = entry(AIR, "air", 0.6F, List.of());
-		FluidEntry water =
-		    new FluidEntry(7, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true);
-		SnapshotView parent = new SnapshotView(new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED,
-		    List.of(air), new int[] {AIR}, List.of(FluidEntry.EMPTY, water), new int[0]));
+		FluidEntry water = new FluidEntry(7, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true);
+		SnapshotView parent = mutable(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, 1, 1, 1)
+		        .palette(entry(AIR, "air", 0.6F))
+		        .fluidPalette(FluidEntry.EMPTY, water)
+		        .build());
 		SnapshotView child = parent.fork();
 		FluidSample parentFluid = new FluidSample();
 		FluidSample childFluid = new FluidSample();
@@ -113,11 +120,11 @@ class SnapshotViewOverlayTest {
 
 	@Test
 	void fluidOverlayHashAndForkedGridsRemainIndependent() {
-		BlockEntry air = entry(AIR, "air", 0.6F, List.of());
-		FluidEntry water =
-		    new FluidEntry(7, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true);
-		SnapshotView parent = new SnapshotView(new WorldSnapshot(0, 0, 0, 32, 1, 1, OutsidePolicy.SEALED,
-		    List.of(air), new int[32], List.of(FluidEntry.EMPTY, water), new int[0]));
+		FluidEntry water = new FluidEntry(7, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true);
+		SnapshotView parent = mutable(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, 32, 1, 1)
+		        .palette(entry(AIR, "air", 0.6F))
+		        .fluidPalette(FluidEntry.EMPTY, water)
+		        .build());
 		for (int x = 0; x < 24; x++) {
 			parent.replaceFluidCell(x, 0, 0, 1);
 		}
@@ -138,18 +145,18 @@ class SnapshotViewOverlayTest {
 
 	@Test
 	void fallResetRaycastReadsTheEffectiveFluidOverlay() {
-		BlockEntry air = entry(AIR, "air", 0.6F, List.of());
-		FluidEntry water =
-		    new FluidEntry(7, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true);
-		SnapshotView world = new SnapshotView(new WorldSnapshot(0, 0, 0, 2, 1, 1, OutsidePolicy.SEALED,
-		    List.of(air), new int[] {AIR, AIR}, List.of(FluidEntry.EMPTY, water), new int[0]));
+		FluidEntry water = new FluidEntry(7, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true);
+		SnapshotView world = mutable(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, 2, 1, 1)
+		        .palette(entry(AIR, "air", 0.6F))
+		        .fluidPalette(FluidEntry.EMPTY, water)
+		        .build());
 
 		assertFalse(world.resetsFallDistanceAlong(0.1, 0.5, 0.5, 1.9, 0.5, 0.5));
 
 		world.replaceCellState(1, 0, 0, AIR, 1);
 
 		assertTrue(world.resetsFallDistanceAlong(0.1, 0.5, 0.5, 1.9, 0.5, 0.5),
-		    "the raycast must see water installed by a timed fluid publication");
+		    "the raycast must see water installed by a timed fluid replacement");
 
 		world.replaceCellState(1, 0, 0, AIR, 0);
 
@@ -158,7 +165,7 @@ class SnapshotViewOverlayTest {
 	}
 
 	@Test
-	void effectiveMutationInvalidatesAnEstablishedPoseCertificate() {
+	void effectiveMutationInvalidatesAnEstablishedPoseFitCache() {
 		SnapshotView world = world(OutsidePolicy.SEALED);
 		PlayerState state = fallingState();
 		state.cachePoseFit(world, PlayerState.Pose.STANDING);
@@ -178,25 +185,25 @@ class SnapshotViewOverlayTest {
 		PlayerState dynamicState = fallingState();
 		PlayerState selectedWorldState = fallingState();
 		PlayerState lateState = fallingState();
-		ClientTick dynamicKernel = new ClientTick();
-		ClientTick selectedKernel = new ClientTick();
-		ClientTick lateKernel = new ClientTick();
+		ClientTick dynamicTick = new ClientTick();
+		ClientTick selectedTick = new ClientTick();
+		ClientTick lateTick = new ClientTick();
 		PlayerInput idle = PlayerInput.idle(0.0F, 0.0F);
 
 		for (int tick = 0; tick < 4; tick++) {
 			if (tick == 1) {
 				dynamic.replaceCell(0, 0, 0, STONE);
 			}
-			dynamicKernel.tick(dynamicState, idle, dynamic);
-			selectedKernel.tick(selectedWorldState, idle, tick < 1 ? base : successor);
+			dynamicTick.tick(dynamicState, idle, dynamic);
+			selectedTick.tick(selectedWorldState, idle, tick < 1 ? base : successor);
 			assertEquals(StateDigest.state(selectedWorldState), StateDigest.state(dynamicState),
-			    "timed sparse publication diverged at tick " + tick);
+			    "timed sparse replacement diverged at tick " + tick);
 
 			if (tick <= 1) {
-				lateKernel.tick(lateState, idle, base);
+				lateTick.tick(lateState, idle, base);
 				if (tick == 1) {
 					assertNotEquals(StateDigest.state(dynamicState), StateDigest.state(lateState),
-					    "publishing after movement must not affect the already-finished tick");
+					    "replacing after movement must not affect the already-finished tick");
 				}
 			}
 		}
@@ -206,10 +213,12 @@ class SnapshotViewOverlayTest {
 
 	@Test
 	void overlayKeepsPaletteShapeOrderSurfaceDataAndOutsideSemantics() {
-		BlockEntry air = entry(AIR, "air", 0.6F, List.of());
-		BlockEntry ordered = entry(STONE, "ordered", 0.91F,
-		    List.of(new ShapeBox(0.0, 0.0, 0.0, 0.75, 1.0, 1.0),
-		        new ShapeBox(0.25, 0.0, 0.0, 1.0, 0.5, 1.0)));
+		BlockEntry air = entry(AIR, "air", 0.6F);
+		BlockEntry ordered =
+		    BlockEntry.builder(STONE, "ordered")
+		        .friction(0.91F)
+		        .boxes(new ShapeBox(0.0, 0.0, 0.0, 0.75, 1.0, 1.0), new ShapeBox(0.25, 0.0, 0.0, 1.0, 0.5, 1.0))
+		        .build();
 		SnapshotView world = snapshot(OutsidePolicy.REFUSING, List.of(air, ordered));
 		world.replaceCell(0, 0, 0, STONE);
 		CollisionBuffer collisions = new CollisionBuffer(1);
@@ -226,12 +235,10 @@ class SnapshotViewOverlayTest {
 
 	@Test
 	void emptySectionIndexTracksOverlayAddRemoveAndForksAtUnalignedOrigins() {
-		BlockEntry air = entry(AIR, "air", 0.6F, List.of());
-		BlockEntry stone =
-		    entry(STONE, "stone", 0.6F, List.of(new ShapeBox(0, 0, 0, 1, 1, 1)));
 		int size = 34;
-		SnapshotView parent = new SnapshotView(new WorldSnapshot(-17, -17, -17, size, size, size,
-		    OutsidePolicy.SEALED, List.of(air, stone), new int[size * size * size]));
+		SnapshotView parent = mutable(WorldSnapshot.builder(OutsidePolicy.SEALED, -17, -17, -17, size, size, size)
+		        .palette(entry(AIR, "air", 0.6F), stone(STONE))
+		        .build());
 		SnapshotView child = parent.fork();
 		CollisionBuffer collisions = new CollisionBuffer(1);
 
@@ -249,15 +256,15 @@ class SnapshotViewOverlayTest {
 
 	@Test
 	void sectionIndexTreatsAnOverlayContextShapeAsPotentialCollision() {
-		BlockEntry scaffolding =
-		    new BlockEntry(2, "minecraft:scaffolding", 0.6F, 1.0F, 1.0F, false, false,
-		        WorldView.BubbleColumnMode.NONE, true, WorldView.CollisionBehavior.SCAFFOLDING_SUPPORTED,
-		        Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
-		        false, WorldView.Climbability.CLIMBABLE, List.of());
+		BlockEntry scaffolding = BlockEntry.builder(2, "minecraft:scaffolding")
+		                             .fallDistanceResetting(true)
+		                             .collisionBehavior(WorldView.CollisionBehavior.SCAFFOLDING_SUPPORTED)
+		                             .climbability(WorldView.Climbability.CLIMBABLE)
+		                             .build();
 		int size = 18;
-		SnapshotView world =
-		    new SnapshotView(new WorldSnapshot(0, 0, 0, size, size, size, OutsidePolicy.SEALED,
-		        List.of(entry(AIR, "air", 0.6F, List.of()), scaffolding), new int[size * size * size]));
+		SnapshotView world = mutable(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, size, size, size)
+		        .palette(entry(AIR, "air", 0.6F), scaffolding)
+		        .build());
 		CollisionBuffer collisions = new CollisionBuffer(5);
 
 		world.replaceCell(16, 16, 16, 1);
@@ -276,10 +283,10 @@ class SnapshotViewOverlayTest {
 				effective[z * size + x] = STONE;
 			}
 		}
-		List<BlockEntry> palette = List.of(exactEntry(AIR, "air", List.of()),
-		    exactEntry(STONE, "stone", List.of(new ShapeBox(0, 0, 0, 1, 1, 1))));
-		SnapshotView overlay = new SnapshotView(
-		    new WorldSnapshot(0, 0, 0, size, 4, size, OutsidePolicy.SEALED, palette, effective));
+		List<BlockEntry> palette = List.of(BlockEntry.builder(AIR, "air").suffocation(Suffocation.NO).build(),
+		    BlockEntry.builder(STONE, "stone").suffocation(Suffocation.NO).fullCube().build());
+		SnapshotView overlay =
+		    mutable(WorldSnapshot.owning(0, 0, 0, size, 4, size, OutsidePolicy.SEALED, palette, effective.clone()));
 		int[] checkpoints = {0, 1, 4, 16, 17, 64, 256};
 		int checkpoint = 0;
 		for (int edit = 0; edit <= 256; edit++) {
@@ -292,8 +299,8 @@ class SnapshotViewOverlayTest {
 				overlay.replaceCell(x, y, z, STONE);
 			}
 			if (checkpoint < checkpoints.length && edit == checkpoints[checkpoint]) {
-				SnapshotView rebuilt = new SnapshotView(
-				    new WorldSnapshot(0, 0, 0, size, 4, size, OutsidePolicy.SEALED, palette, effective));
+				SnapshotView rebuilt = mutable(
+				    WorldSnapshot.owning(0, 0, 0, size, 4, size, OutsidePolicy.SEALED, palette, effective.clone()));
 				assertWorldAndMovementAgree(overlay, rebuilt, edit);
 				checkpoint++;
 			}
@@ -306,13 +313,9 @@ class SnapshotViewOverlayTest {
 		childEffective[(1 * size + 1) * size + 2] = AIR;
 		child.replaceCell(2, 1, 1, AIR);
 		assertWorldAndMovementAgree(overlay,
-		    new SnapshotView(
-		        new WorldSnapshot(0, 0, 0, size, 4, size, OutsidePolicy.SEALED, palette, effective)),
-		    255);
+		    mutable(WorldSnapshot.owning(0, 0, 0, size, 4, size, OutsidePolicy.SEALED, palette, effective)), 255);
 		assertWorldAndMovementAgree(child,
-		    new SnapshotView(
-		        new WorldSnapshot(0, 0, 0, size, 4, size, OutsidePolicy.SEALED, palette, childEffective)),
-		    255);
+		    mutable(WorldSnapshot.owning(0, 0, 0, size, 4, size, OutsidePolicy.SEALED, palette, childEffective)), 255);
 		assertEquals(STONE, child.paletteIndexAt(1, 1, 1));
 		assertEquals(STONE, overlay.paletteIndexAt(2, 1, 1));
 	}
@@ -336,30 +339,25 @@ class SnapshotViewOverlayTest {
 		overlayState.verticalCollision = true;
 		overlayState.verticalCollisionBelow = true;
 		PlayerState rebuiltState = overlayState.copy();
-		ClientTick overlayKernel = new ClientTick();
-		ClientTick rebuiltKernel = new ClientTick();
+		ClientTick overlayTick = new ClientTick();
+		ClientTick rebuiltTick = new ClientTick();
 		Scratch overlayScratch = new Scratch();
 		Scratch rebuiltScratch = new Scratch();
 		PlayerInput action = new PlayerInput(true, false, false, false, false, false, true, 17.0F, 0.0F);
 		for (int tick = 0; tick < 4; tick++) {
-			overlayKernel.tick(overlayState, action, overlay, overlayScratch);
-			rebuiltKernel.tick(rebuiltState, action, rebuilt, rebuiltScratch);
+			overlayTick.tick(overlayState, action, overlay, overlayScratch);
+			rebuiltTick.tick(rebuiltState, action, rebuilt, rebuiltScratch);
 			assertEquals(StateDigest.state(rebuiltState), StateDigest.state(overlayState),
 			    "movement after " + edits + " edits at tick " + tick);
 		}
 	}
 
-	private static BlockEntry exactEntry(
-	    final int id, final String name, final List<ShapeBox> boxes) {
-		return new BlockEntry(id, name, 0.6F, 1.0F, 1.0F, false, false, WorldView.BubbleColumnMode.NONE,
-		    false, WorldView.CollisionBehavior.ORDINARY, Suffocation.NO, WorldView.InsideEffect.NONE,
-		    0.0F, false, WorldView.StepOn.NONE, false, WorldView.Climbability.NONE, boxes);
+	private static BlockEntry stone(final int id) {
+		return BlockEntry.builder(id, "stone").fullCube().build();
 	}
 
 	private static SnapshotView world(final OutsidePolicy outside) {
-		return snapshot(outside,
-		    List.of(entry(AIR, "air", 0.6F, List.of()),
-		        entry(STONE, "stone", 0.6F, List.of(new ShapeBox(0, 0, 0, 1, 1, 1)))));
+		return snapshot(outside, List.of(entry(AIR, "air", 0.6F), stone(STONE)));
 	}
 
 	/**
@@ -367,14 +365,17 @@ class SnapshotViewOverlayTest {
 	 * cell is inside the box makes every tick ask what suffocates outside it,
 	 * which no snapshot can answer.
 	 */
-	private static SnapshotView snapshot(
-	    final OutsidePolicy outside, final List<BlockEntry> palette) {
-		return new SnapshotView(new WorldSnapshot(-2, -2, -2, 5, 8, 5, outside, palette, new int[200]));
+	private static SnapshotView snapshot(final OutsidePolicy outside, final List<BlockEntry> palette) {
+		return mutable(WorldSnapshot.builder(outside, -2, -2, -2, 5, 8, 5).palette(palette).build());
 	}
 
-	private static BlockEntry entry(
-	    final int id, final String name, final float friction, final List<ShapeBox> boxes) {
-		return new BlockEntry(id, name, friction, 1.0F, 1.0F, boxes);
+	private static SnapshotView mutable(final WorldSnapshot snapshot) {
+		return SnapshotView.compile(snapshot).fork();
+	}
+
+	/** An entry with the given friction and no shape, as an old capture would hold it. */
+	private static BlockEntry entry(final int id, final String name, final float friction) {
+		return BlockEntry.builder(id, name).friction(friction).build();
 	}
 
 	private static PlayerState fallingState() {

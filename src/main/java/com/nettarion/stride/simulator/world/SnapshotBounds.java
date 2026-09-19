@@ -1,9 +1,15 @@
 package com.nettarion.stride.simulator.world;
 
-/** Checked closed-open bounds and dense cardinality for a planning snapshot. */
+/** Checked closed-open bounds and dense cardinality of a snapshot region. */
 final class SnapshotBounds {
 	private SnapshotBounds() {}
 
+	/**
+	 * The number of cells in the region.
+	 *
+	 * @throws IllegalArgumentException when a size is not positive, an end overflows {@code int}, or the
+	 *     cell count exceeds the array domain
+	 */
 	static int requireCellCount(
 	    final int originX, final int originY, final int originZ, final int sizeX, final int sizeY, final int sizeZ) {
 		if (sizeX <= 0 || sizeY <= 0 || sizeZ <= 0 || (long) originX + sizeX > Integer.MAX_VALUE

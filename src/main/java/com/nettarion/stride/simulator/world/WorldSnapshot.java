@@ -14,47 +14,170 @@ import java.util.Objects;
  * coefficients of every distinct state it contains.
  *
  * <p>The palette carries resolved shapes and movement facts rather than making
- * the kernel derive them from Minecraft registries. The live adapter captures
+ * the simulator derive them from Minecraft registries: a producer captures
  * those facts, the trace package persists them, and the tick consumes the
- * portable record without a Minecraft or filesystem dependency.
+ * portable record without a Minecraft or filesystem dependency. Shape
+ * coordinates and coefficients are kept as the doubles and floats the capture
+ * recorded, since a shape face that is off by one ulp changes a collision.
  *
- * <p>Coordinates and coefficients are stored as raw bits, for the same reason
- * traces are: a shape boundary that is off by one ulp changes a collision.
+ * <p>Build one with {@link #builder}, or with {@link #owning} over planes a
+ * producer has just filled. Storage is a grid of immutable 16-cube sections,
+ * as vanilla's level is, each carrying its own coarse facts; {@link #compose}
+ * and {@link #crop} on section boundaries share the sections of their sources
+ * outright, so a snapshot re-composed after a chunk crossing holds the same
+ * objects for every section it already held and costs only the sections that
+ * changed. A uniform section holds no plane, so air over a valley is one
+ * shared object. Bounds need not fall on section boundaries; the cells of an
+ * edge section outside the bounds are padding no read ever reaches.
  *
- * <p>Storage is a grid of immutable 16-cube {@link Section}s, as vanilla's
- * level is, each carrying its own coarse facts. {@link #compose} and
- * {@link #crop} on section boundaries share the sections of their sources
- * outright: a corridor re-published after a chunk crossing holds the same
- * objects for every section it already held, copies nothing and rescans
- * nothing, so a publication costs the sections that changed. A uniform
- * section holds no plane, so air over a valley is one shared object. Bounds
- * need not fall on section boundaries; the cells of an edge section outside
- * the bounds are padding no read ever reaches. A section-aligned composition
- * whose parts leave a section uncovered holds {@link Section#MISSING} there:
- * not padding and not air, a hole every cell read refuses across, as the
- * simulator refuses rather than guesses. {@link #hasMissingSections} says
- * whether a snapshot holds one; a materialized plane of such a snapshot
- * refuses, since a dense plane has no cell that means unknown.
+ * <p>A section-aligned composition whose parts leave a section uncovered holds
+ * a missing section there: not padding and not air, a hole every cell read
+ * refuses across. {@link #hasMissingSections} says whether a snapshot holds
+ * one; a dense plane of such a snapshot refuses, since it has no cell that
+ * means unknown.
  *
- * <p>Immutable. Two snapshots are equal only when they are the same object; a
- * compiled view compares them so.
+ * <p>Immutable and safe to share. Two snapshots are equal only when they are
+ * the same object; a compiled view compares them so.
  */
 public final class WorldSnapshot {
 	private final int originX;
+
 	private final int originY;
+
 	private final int originZ;
+
 	private final int sizeX;
+
 	private final int sizeY;
+
 	private final int sizeZ;
+
 	private final OutsidePolicy outside;
+
 	private final List<BlockEntry> palette;
+
 	private final List<FluidEntry> fluidPalette;
+
 	private final SectionGrid grid;
+
 	private final Section[] sections;
+
 	private final boolean anyFluid;
+
 	private final boolean anyMissing;
+
 	/** The flat grids a view answers span questions from, concatenated from the sections on first use. */
-	private volatile SectionSummary summary;
+	private volatile SectionFactGrids factGrids;
+
+	/**
+	 * A snapshot without fluid cells over the caller's plane.
+	 *
+	 * <p>Superseded by {@link #builder} and {@link #owning}; this constructor
+	 * will become non-public once callers have moved.
+	 */
+	public WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
+	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette, final int[] cells) {
+		this(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, palette, cells, List.of(FluidEntry.EMPTY),
+		    new int[0]);
+	}
+
+	/**
+	 * A snapshot over the caller's planes and palettes, which are copied into
+	 * sections and validated cell by cell against the palettes.
+	 *
+	 * <p>Superseded by {@link #builder} and {@link #owning}; this constructor
+	 * will become non-public once callers have moved.
+	 */
+	public WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
+	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette, final int[] cells,
+	    final List<FluidEntry> fluidPalette, final int[] fluidCells) {
+		this(fromDense(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, List.copyOf(palette), cells,
+		    List.copyOf(fluidPalette), fluidCells, false));
+	}
+
+	/** Every field of another snapshot; the public constructors delegate their sectioning here. */
+	private WorldSnapshot(final WorldSnapshot built) {
+		this.originX = built.originX;
+		this.originY = built.originY;
+		this.originZ = built.originZ;
+		this.sizeX = built.sizeX;
+		this.sizeY = built.sizeY;
+		this.sizeZ = built.sizeZ;
+		this.outside = built.outside;
+		this.palette = built.palette;
+		this.fluidPalette = built.fluidPalette;
+		this.grid = built.grid;
+		this.sections = built.sections;
+		this.anyFluid = built.anyFluid;
+		this.anyMissing = built.anyMissing;
+	}
+
+	/** Adopts sections this class chose; the palettes are already immutable lists. */
+	private WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
+	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette,
+	    final List<FluidEntry> fluidPalette, final SectionGrid grid, final Section[] sections) {
+		this.originX = originX;
+		this.originY = originY;
+		this.originZ = originZ;
+		this.sizeX = sizeX;
+		this.sizeY = sizeY;
+		this.sizeZ = sizeZ;
+		this.outside = Objects.requireNonNull(outside, "outside");
+		this.palette = palette;
+		this.fluidPalette = fluidPalette;
+		if (fluidPalette.isEmpty() || !FluidEntry.EMPTY.equals(fluidPalette.getFirst())) {
+			throw new IllegalArgumentException("fluid palette index 0 must be canonical EMPTY");
+		}
+		this.grid = grid;
+		this.sections = sections;
+		boolean fluid = false;
+		boolean missing = false;
+		for (Section section : sections) {
+			fluid |= section.hasFluids();
+			missing |= section.isMissing();
+		}
+		this.anyFluid = fluid;
+		this.anyMissing = missing;
+	}
+
+	/**
+	 * Fills one dimensioned region cell by cell, in world coordinates.
+	 *
+	 * <p>Cells start at palette index 0 and fluid cells at the canonical empty
+	 * fluid, so a caller writes only what differs from an empty region. A
+	 * write outside the region, or of an index the declared palette does not
+	 * hold, refuses at the call rather than corrupting a neighboring cell.
+	 */
+	public static Builder builder(final OutsidePolicy outside, final int originX, final int originY, final int originZ,
+	    final int sizeX, final int sizeY, final int sizeZ) {
+		return new Builder(outside, originX, originY, originZ, sizeX, sizeY, sizeZ);
+	}
+
+	/**
+	 * A snapshot that takes ownership of planes the caller has just written and
+	 * will not touch again: validated cell by cell, and a plane that is exactly
+	 * one section on its boundaries is adopted without a copy. This is for
+	 * producers that fill a fresh array per section or per read; a caller that
+	 * keeps writing to the array breaks the snapshot. {@code fluidCells} is
+	 * empty for a dry plane.
+	 *
+	 * @throws IllegalArgumentException when a plane has the wrong length or a cell selects an index the
+	 *     palette does not hold
+	 */
+	public static WorldSnapshot owning(final int originX, final int originY, final int originZ, final int sizeX,
+	    final int sizeY, final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette,
+	    final int[] cells, final List<FluidEntry> fluidPalette, final int[] fluidCells) {
+		return fromDense(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, List.copyOf(palette), cells,
+		    List.copyOf(fluidPalette), fluidCells, true);
+	}
+
+	/** {@link #owning} without a fluid plane. */
+	public static WorldSnapshot owning(final int originX, final int originY, final int originZ, final int sizeX,
+	    final int sizeY, final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette,
+	    final int[] cells) {
+		return owning(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, palette, cells,
+		    List.of(FluidEntry.EMPTY), new int[0]);
+	}
 
 	/**
 	 * Joins disjoint immutable parts into one snapshot.
@@ -62,8 +185,14 @@ public final class WorldSnapshot {
 	 * <p>Parts and target on section boundaries compose by reference: each
 	 * target section is the part's section that covers it, re-indexed only
 	 * when the part's palette is not a prefix of the union's, as a part from
-	 * a {@link SharedPalette} always is. Parts placed otherwise are joined
-	 * cell by cell, which a test fixture may do and a publication never does.
+	 * a {@link SharedPalette} always is. A slot no part covers holds a missing
+	 * section, and a part's own missing section is filled by a later part that
+	 * covers the slot rather than counted as an overlap. Parts placed otherwise
+	 * are joined cell by cell, which a test fixture may do and a producer never
+	 * does; there every cell must be covered.
+	 *
+	 * @throws IllegalArgumentException when a part lies outside the target, two parts hold the same
+	 *     section or cell, or an unaligned composition leaves a cell uncovered
 	 */
 	public static WorldSnapshot compose(final int originX, final int originY, final int originZ, final int sizeX,
 	    final int sizeY, final int sizeZ, final OutsidePolicy outside, final List<WorldSnapshot> parts) {
@@ -99,13 +228,20 @@ public final class WorldSnapshot {
 							int slot = grid.index(partGrid.sectionOriginX() + sx - grid.sectionOriginX(),
 							    partGrid.sectionOriginY() + sy - grid.sectionOriginY(),
 							    partGrid.sectionOriginZ() + sz - grid.sectionOriginZ());
-							if (sections[slot] != null) {
+							Section incoming = part.sections[partGrid.index(sx, sy, sz)];
+							Section held = sections[slot];
+							if (held != null && !held.isMissing()) {
+								if (incoming.isMissing()) {
+									// A hole in a later part claims nothing about
+									// a section an earlier part holds.
+									continue;
+								}
 								throw new IllegalArgumentException("snapshot parts overlap at section "
 								    + ((partGrid.sectionOriginX() + sx) << Section.SHIFT) + ","
 								    + ((partGrid.sectionOriginY() + sy) << Section.SHIFT) + ","
 								    + ((partGrid.sectionOriginZ() + sz) << Section.SHIFT));
 							}
-							sections[slot] = part.sections[partGrid.index(sx, sy, sz)].remapped(blockRemap, fluidRemap);
+							sections[slot] = incoming.remapped(blockRemap, fluidRemap);
 						}
 					}
 				}
@@ -128,8 +264,8 @@ public final class WorldSnapshot {
 			int[] fluidRemap = extendsPrefix(fluidPalette, fluidIndices, part.fluidPalette)
 			    ? null
 			    : remap(part.fluidPalette, fluidIndices, fluidPalette);
-			int[] partCells = part.cells();
-			int[] partFluids = part.anyFluid ? part.fluidCells() : null;
+			int[] partCells = part.toDenseCells();
+			int[] partFluids = part.anyFluid ? part.toDenseFluidCells() : null;
 			if (partFluids != null && fluidCells == null) {
 				fluidCells = new int[cellCount];
 			}
@@ -165,10 +301,12 @@ public final class WorldSnapshot {
 
 	/**
 	 * The window of this snapshot inside the given closed-open bounds, with the
-	 * same palettes and outside semantics. A window on section boundaries
-	 * shares this snapshot's sections; any other is cut cell by cell.
+	 * same palettes and outside policy. A window on section boundaries shares
+	 * this snapshot's sections, missing ones included; any other is cut cell by
+	 * cell and refuses when it reaches a missing section.
 	 *
 	 * @throws IllegalArgumentException when the window is not wholly inside
+	 * @throws UnimplementedMechanicException when an unaligned window reaches a missing section
 	 */
 	public WorldSnapshot crop(final int windowX, final int windowY, final int windowZ, final int windowSizeX,
 	    final int windowSizeY, final int windowSizeZ) {
@@ -213,6 +351,163 @@ public final class WorldSnapshot {
 		    cells, this.fluidPalette, fluids, true);
 	}
 
+	/** This snapshot with the requested outside policy, sharing its immutable sections and palettes. */
+	public WorldSnapshot withOutside(final OutsidePolicy policy) {
+		Objects.requireNonNull(policy, "outside");
+		if (policy == this.outside) {
+			return this;
+		}
+		return new WorldSnapshot(this.originX, this.originY, this.originZ, this.sizeX, this.sizeY, this.sizeZ, policy,
+		    this.palette, this.fluidPalette, this.grid, this.sections);
+	}
+
+	/** Whether any section is missing: a hole no part of a composition covered. */
+	public boolean hasMissingSections() {
+		return this.anyMissing;
+	}
+
+	/** Whether the section holding a world position inside the bounds is missing. */
+	public boolean isMissingAt(final int x, final int y, final int z) {
+		return contains(x, y, z) && sectionAt(x, y, z).isMissing();
+	}
+
+	/** The inclusive minimum X cell coordinate of the region. */
+	public int originX() {
+		return this.originX;
+	}
+
+	/** The inclusive minimum Y cell coordinate of the region. */
+	public int originY() {
+		return this.originY;
+	}
+
+	/** The inclusive minimum Z cell coordinate of the region. */
+	public int originZ() {
+		return this.originZ;
+	}
+
+	/** The extent of the region along X, in cells. */
+	public int sizeX() {
+		return this.sizeX;
+	}
+
+	/** The extent of the region along Y, in cells. */
+	public int sizeY() {
+		return this.sizeY;
+	}
+
+	/** The extent of the region along Z, in cells. */
+	public int sizeZ() {
+		return this.sizeZ;
+	}
+
+	/** What lies beyond the region. */
+	public OutsidePolicy outside() {
+		return this.outside;
+	}
+
+	/** The distinct block states, by the index the cells select; immutable. */
+	public List<BlockEntry> palette() {
+		return this.palette;
+	}
+
+	/** The distinct fluid states, by the index the fluid cells select; index 0 is empty. Immutable. */
+	public List<FluidEntry> fluidPalette() {
+		return this.fluidPalette;
+	}
+
+	/**
+	 * The block cells as one dense plane over the bounds, y outermost then z then x; a fresh copy.
+	 *
+	 * @throws UnimplementedMechanicException when a section is missing
+	 */
+	public int[] toDenseCells() {
+		requireNoMissingSections("the dense cells");
+		int[] out = new int[this.sizeX * this.sizeY * this.sizeZ];
+		for (int y = 0; y < this.sizeY; y++) {
+			for (int z = 0; z < this.sizeZ; z++) {
+				copyRowTo(this.originX, this.originY + y, this.originZ + z, this.sizeX, out,
+				    (y * this.sizeZ + z) * this.sizeX);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The fluid cells as one dense plane like {@link #toDenseCells()}, or empty when no cell selects a fluid.
+	 *
+	 * @throws UnimplementedMechanicException when a section is missing
+	 */
+	public int[] toDenseFluidCells() {
+		requireNoMissingSections("the dense fluid cells");
+		if (!this.anyFluid) {
+			return new int[0];
+		}
+		int[] out = new int[this.sizeX * this.sizeY * this.sizeZ];
+		for (int y = 0; y < this.sizeY; y++) {
+			for (int z = 0; z < this.sizeZ; z++) {
+				copyFluidRowTo(this.originX, this.originY + y, this.originZ + z, this.sizeX, out,
+				    (y * this.sizeZ + z) * this.sizeX);
+			}
+		}
+		return out;
+	}
+
+	/** Superseded by {@link #toDenseCells()}; retained until callers have moved. */
+	public int[] cells() {
+		return toDenseCells();
+	}
+
+	/** Superseded by {@link #toDenseFluidCells()}; retained until callers have moved. */
+	public int[] fluidCells() {
+		return toDenseFluidCells();
+	}
+
+	/** Whether the region contains any non-empty fluid cell. */
+	public boolean hasFluids() {
+		return this.anyFluid;
+	}
+
+	/** Whether a position lies inside the bounds; it may still belong to a missing section. */
+	public boolean contains(final int x, final int y, final int z) {
+		return x >= this.originX && x < this.originX + this.sizeX && y >= this.originY && y < this.originY + this.sizeY
+		    && z >= this.originZ && z < this.originZ + this.sizeZ;
+	}
+
+	/** Palette index at a world position, or -1 outside the region or in a missing section. */
+	public int paletteIndexAt(final int x, final int y, final int z) {
+		if (!contains(x, y, z)) {
+			return -1;
+		}
+		return sectionAt(x, y, z).cell(x & Section.MASK, y & Section.MASK, z & Section.MASK);
+	}
+
+	/** The block entry at a world position, or {@code null} outside the region or in a missing section. */
+	public BlockEntry entryAt(final int x, final int y, final int z) {
+		int index = paletteIndexAt(x, y, z);
+		return index < 0 ? null : this.palette.get(index);
+	}
+
+	/**
+	 * Fluid palette index at a world position, or -1 outside the region or in a
+	 * missing section; 0 everywhere in a dry snapshot.
+	 */
+	public int fluidPaletteIndexAt(final int x, final int y, final int z) {
+		if (!contains(x, y, z)) {
+			return -1;
+		}
+		Section section = sectionAt(x, y, z);
+		return section.isMissing()
+		    ? -1
+		    : section.fluidCell(Section.index(x & Section.MASK, y & Section.MASK, z & Section.MASK));
+	}
+
+	/** The fluid entry at a world position, or {@code null} outside the region or in a missing section. */
+	public FluidEntry fluidEntryAt(final int x, final int y, final int z) {
+		int index = fluidPaletteIndexAt(x, y, z);
+		return index < 0 ? null : this.fluidPalette.get(index);
+	}
+
 	/** This snapshot's sections under a palette that extends this one's, which every index already selects into. */
 	WorldSnapshot withPalette(final List<BlockEntry> extended) {
 		List<BlockEntry> blocks = List.copyOf(extended);
@@ -224,12 +519,12 @@ public final class WorldSnapshot {
 	}
 
 	/** The flat grids of this snapshot's section facts, concatenated once. */
-	SectionSummary summary() {
-		SectionSummary current = this.summary;
+	SectionFactGrids factGrids() {
+		SectionFactGrids current = this.factGrids;
 		if (current == null) {
 			// Two threads may both build; the results are equal, and either is kept.
-			current = SectionSummary.of(this);
-			this.summary = current;
+			current = SectionFactGrids.of(this);
+			this.factGrids = current;
 		}
 		return current;
 	}
@@ -307,171 +602,6 @@ public final class WorldSnapshot {
 	}
 
 	/**
-	 * Fills one dimensioned region cell by cell, in world coordinates.
-	 *
-	 * <p>Every caller that authors a snapshot otherwise repeats the same three
-	 * steps: allocate {@code sizeX * sizeY * sizeZ} cells, write them through an
-	 * open-coded {@code (y * sizeZ + z) * sizeX + x} index, and assemble a
-	 * palette. The open-coded index silently corrupts a neighboring cell when
-	 * a coordinate leaves the region, so the builder refuses that write instead.
-	 *
-	 * <p>Cells start at palette index 0 and fluid cells at the canonical empty
-	 * fluid, so a fixture writes only what differs from an empty region.
-	 */
-	public static Builder builder(final OutsidePolicy outside, final int originX, final int originY, final int originZ,
-	    final int sizeX, final int sizeY, final int sizeZ) {
-		return new Builder(outside, originX, originY, originZ, sizeX, sizeY, sizeZ);
-	}
-
-	/** Accumulates the dense planes and palettes of one {@link WorldSnapshot}. */
-	public static final class Builder {
-		private final OutsidePolicy outside;
-		private final int originX;
-		private final int originY;
-		private final int originZ;
-		private final int sizeX;
-		private final int sizeY;
-		private final int sizeZ;
-		private final int[] cells;
-		private int[] fluidCells;
-		private final List<BlockEntry> palette = new ArrayList<>();
-		private List<FluidEntry> fluidPalette = List.of(FluidEntry.EMPTY);
-
-		private Builder(final OutsidePolicy outside, final int originX, final int originY, final int originZ,
-		    final int sizeX, final int sizeY, final int sizeZ) {
-			this.outside = Objects.requireNonNull(outside, "outside");
-			int cellCount = SnapshotBounds.requireCellCount(originX, originY, originZ, sizeX, sizeY, sizeZ);
-			this.originX = originX;
-			this.originY = originY;
-			this.originZ = originZ;
-			this.sizeX = sizeX;
-			this.sizeY = sizeY;
-			this.sizeZ = sizeZ;
-			this.cells = new int[cellCount];
-		}
-
-		/** Declares the block palette, in the index order the cells refer to. */
-		public Builder palette(final List<BlockEntry> entries) {
-			this.palette.clear();
-			for (BlockEntry entry : entries) {
-				this.palette.add(Objects.requireNonNull(entry, "palette entry"));
-			}
-			return this;
-		}
-
-		/** Declares the block palette, in the index order the cells refer to. */
-		public Builder palette(final BlockEntry... entries) {
-			return palette(Arrays.asList(entries));
-		}
-
-		/**
-		 * Declares the fluid palette, in the index order the fluid cells refer
-		 * to. Index 0 must be {@link FluidEntry#EMPTY}.
-		 */
-		public Builder fluidPalette(final List<FluidEntry> entries) {
-			this.fluidPalette = List.copyOf(entries);
-			return this;
-		}
-
-		/** Declares the fluid palette, in the index order the fluid cells refer to. */
-		public Builder fluidPalette(final FluidEntry... entries) {
-			return fluidPalette(Arrays.asList(entries));
-		}
-
-		/** Selects a block palette index at one world position. */
-		public Builder set(final int x, final int y, final int z, final int paletteIndex) {
-			this.cells[index(x, y, z)] = paletteIndex;
-			return this;
-		}
-
-		/** Selects a fluid palette index at one world position. */
-		public Builder setFluid(final int x, final int y, final int z, final int fluidIndex) {
-			int at = index(x, y, z);
-			if (this.fluidCells == null) {
-				this.fluidCells = new int[this.cells.length];
-			}
-			this.fluidCells[at] = fluidIndex;
-			return this;
-		}
-
-		private int index(final int x, final int y, final int z) {
-			int localX = x - this.originX;
-			int localY = y - this.originY;
-			int localZ = z - this.originZ;
-			if (localX < 0 || localX >= this.sizeX || localY < 0 || localY >= this.sizeY || localZ < 0
-			    || localZ >= this.sizeZ) {
-				throw new IllegalArgumentException(
-				    "snapshot cell " + x + "," + y + "," + z + " lies outside the region");
-			}
-			return (localY * this.sizeZ + localZ) * this.sizeX + localX;
-		}
-
-		/** Publishes the builder's declared region as an immutable section-based snapshot. */
-		public WorldSnapshot build() {
-			return new WorldSnapshot(this.originX, this.originY, this.originZ, this.sizeX, this.sizeY, this.sizeZ,
-			    this.outside, List.copyOf(this.palette), this.cells, this.fluidPalette,
-			    this.fluidCells == null ? new int[0] : this.fluidCells);
-		}
-	}
-
-	/** Creates a snapshot without fluid cells. */
-	public WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
-	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette, final int[] cells) {
-		this(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, palette, cells, List.of(FluidEntry.EMPTY),
-		    new int[0]);
-	}
-
-	/**
-	 * A snapshot over the caller's planes and palettes, which are copied into
-	 * sections and validated cell by cell against the palettes.
-	 */
-	public WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
-	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette, final int[] cells,
-	    final List<FluidEntry> fluidPalette, final int[] fluidCells) {
-		this(fromDense(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, List.copyOf(palette), cells,
-		    List.copyOf(fluidPalette), fluidCells, false));
-	}
-
-	/** Every field of another snapshot; the public constructors delegate their sectioning here. */
-	private WorldSnapshot(final WorldSnapshot built) {
-		this.originX = built.originX;
-		this.originY = built.originY;
-		this.originZ = built.originZ;
-		this.sizeX = built.sizeX;
-		this.sizeY = built.sizeY;
-		this.sizeZ = built.sizeZ;
-		this.outside = built.outside;
-		this.palette = built.palette;
-		this.fluidPalette = built.fluidPalette;
-		this.grid = built.grid;
-		this.sections = built.sections;
-		this.anyFluid = built.anyFluid;
-		this.anyMissing = built.anyMissing;
-	}
-
-	/**
-	 * A snapshot that takes ownership of planes the caller has just written and
-	 * will not touch again: validated cell by cell like the constructor, and a
-	 * plane that is exactly one section on its boundaries is adopted without a
-	 * copy. This is for producers that fill a fresh array per section or per
-	 * read; a caller that keeps writing to the array breaks the snapshot.
-	 */
-	public static WorldSnapshot owning(final int originX, final int originY, final int originZ, final int sizeX,
-	    final int sizeY, final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette,
-	    final int[] cells, final List<FluidEntry> fluidPalette, final int[] fluidCells) {
-		return fromDense(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, List.copyOf(palette), cells,
-		    List.copyOf(fluidPalette), fluidCells, true);
-	}
-
-	/** {@link #owning} without a fluid plane. */
-	public static WorldSnapshot owning(final int originX, final int originY, final int originZ, final int sizeX,
-	    final int sizeY, final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette,
-	    final int[] cells) {
-		return owning(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, palette, cells,
-		    List.of(FluidEntry.EMPTY), new int[0]);
-	}
-
-	/**
 	 * Cuts dense planes into sections. A section wholly inside the bounds is
 	 * gathered by row copies; the cells of an edge section outside the bounds
 	 * are padding at index zero. {@code fluidCells} is empty for a dry plane.
@@ -509,10 +639,14 @@ public final class WorldSnapshot {
 						int toX = (int) Math.min((long) worldX + Section.EDGE, (long) originX + sizeX);
 						for (int ly = 0; ly < Section.EDGE; ly++) {
 							long y = (long) worldY + ly;
-							if (y < originY || y >= (long) originY + sizeY) continue;
+							if (y < originY || y >= (long) originY + sizeY) {
+								continue;
+							}
 							for (int lz = 0; lz < Section.EDGE; lz++) {
 								long z = (long) worldZ + lz;
-								if (z < originZ || z >= (long) originZ + sizeZ) continue;
+								if (z < originZ || z >= (long) originZ + sizeZ) {
+									continue;
+								}
 								int source =
 								    (int) (((y - originY) * sizeZ + (z - originZ)) * sizeX + (fromX - originX));
 								int target = Section.index(fromX - worldX, ly, lz);
@@ -531,135 +665,11 @@ public final class WorldSnapshot {
 		    originX, originY, originZ, sizeX, sizeY, sizeZ, outside, palette, fluidPalette, grid, sections);
 	}
 
-	/** Adopts sections this class chose; the palettes are already immutable lists. */
-	private WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
-	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette,
-	    final List<FluidEntry> fluidPalette, final SectionGrid grid, final Section[] sections) {
-		this.originX = originX;
-		this.originY = originY;
-		this.originZ = originZ;
-		this.sizeX = sizeX;
-		this.sizeY = sizeY;
-		this.sizeZ = sizeZ;
-		this.outside = Objects.requireNonNull(outside, "outside");
-		this.palette = palette;
-		this.fluidPalette = fluidPalette;
-		if (fluidPalette.isEmpty() || !FluidEntry.EMPTY.equals(fluidPalette.getFirst())) {
-			throw new IllegalArgumentException("fluid palette index 0 must be canonical EMPTY");
-		}
-		this.grid = grid;
-		this.sections = sections;
-		boolean fluid = false;
-		boolean missing = false;
-		for (Section section : sections) {
-			fluid |= section.hasFluids();
-			missing |= section.isMissing();
-		}
-		this.anyFluid = fluid;
-		this.anyMissing = missing;
-	}
-
-	/** Whether any section is {@link Section#MISSING}: a hole no part of a composition covered. */
-	public boolean hasMissingSections() {
-		return this.anyMissing;
-	}
-
-	/** Whether the section holding a world position inside the bounds is missing. */
-	public boolean isMissingAt(final int x, final int y, final int z) {
-		return contains(x, y, z) && sectionAt(x, y, z).isMissing();
-	}
-
 	private void requireNoMissingSections(final String what) {
 		if (this.anyMissing) {
-			throw UnimplementedMechanicException.deferred(RefusalCause.OUTSIDE_REGION,
+			throw UnimplementedMechanicException.deferred(RefusalCause.UNDECLARED_WORLD_FACT,
 			    () -> what + " of a snapshot with a missing section: a dense plane has no cell that means unknown");
 		}
-	}
-
-	/** Returns the inclusive minimum X cell coordinate of the declared region. */
-	public int originX() {
-		return this.originX;
-	}
-
-	/** Returns the inclusive minimum Y cell coordinate of the declared region. */
-	public int originY() {
-		return this.originY;
-	}
-
-	/** Returns the inclusive minimum Z cell coordinate of the declared region. */
-	public int originZ() {
-		return this.originZ;
-	}
-
-	/** Returns the extent of the declared region along X, in cells. */
-	public int sizeX() {
-		return this.sizeX;
-	}
-
-	/** Returns the extent of the declared region along Y, in cells. */
-	public int sizeY() {
-		return this.sizeY;
-	}
-
-	/** Returns the extent of the declared region along Z, in cells. */
-	public int sizeZ() {
-		return this.sizeZ;
-	}
-
-	/** Returns the declared policy for queries outside the captured region. */
-	public OutsidePolicy outside() {
-		return this.outside;
-	}
-
-	/** This snapshot with the requested outside semantics, sharing its immutable sections and palettes. */
-	public WorldSnapshot withOutside(final OutsidePolicy policy) {
-		Objects.requireNonNull(policy, "outside");
-		if (policy == this.outside) return this;
-		return new WorldSnapshot(this.originX, this.originY, this.originZ, this.sizeX, this.sizeY, this.sizeZ, policy,
-		    this.palette, this.fluidPalette, this.grid, this.sections);
-	}
-
-	/** The distinct block states, by the index the cells select. */
-	public List<BlockEntry> palette() {
-		return this.palette;
-	}
-
-	/** The distinct fluid states, by the index the fluid cells select; index 0 is empty. */
-	public List<FluidEntry> fluidPalette() {
-		return this.fluidPalette;
-	}
-
-	/**
-	 * The block cells as one dense plane over the bounds, y outermost then z then x; a fresh copy.
-	 *
-	 * @throws UnimplementedMechanicException when a section is missing
-	 */
-	public int[] cells() {
-		requireNoMissingSections("the dense cells");
-		int[] out = new int[this.sizeX * this.sizeY * this.sizeZ];
-		for (int y = 0; y < this.sizeY; y++) {
-			for (int z = 0; z < this.sizeZ; z++) {
-				copyRowTo(this.originX, this.originY + y, this.originZ + z, this.sizeX, out,
-				    (y * this.sizeZ + z) * this.sizeX);
-			}
-		}
-		return out;
-	}
-
-	/** The fluid cells as one dense plane like {@link #cells()}, or empty when no cell selects a fluid. */
-	public int[] fluidCells() {
-		requireNoMissingSections("the dense fluid cells");
-		if (!this.anyFluid) {
-			return new int[0];
-		}
-		int[] out = new int[this.sizeX * this.sizeY * this.sizeZ];
-		for (int y = 0; y < this.sizeY; y++) {
-			for (int z = 0; z < this.sizeZ; z++) {
-				copyFluidRowTo(this.originX, this.originY + y, this.originZ + z, this.sizeX, out,
-				    (y * this.sizeZ + z) * this.sizeX);
-			}
-		}
-		return out;
 	}
 
 	/** Copy {@code count} block cells along x from a world position into {@code target} at {@code at}. */
@@ -674,8 +684,8 @@ public final class WorldSnapshot {
 			int localX = x & Section.MASK;
 			int run = Math.min(count, Section.EDGE - localX);
 			if (section.isMissing()) {
-				throw new UnimplementedMechanicException(
-				    RefusalCause.OUTSIDE_REGION, "a dense copy reached a missing section at " + x + "," + y + "," + z);
+				throw new UnimplementedMechanicException(RefusalCause.UNDECLARED_WORLD_FACT,
+				    "a dense copy reached a missing section at " + x + "," + y + "," + z);
 			}
 			int[] cells = section.rawCells();
 			if (cells == null) {
@@ -701,8 +711,8 @@ public final class WorldSnapshot {
 			int localX = x & Section.MASK;
 			int run = Math.min(count, Section.EDGE - localX);
 			if (section.isMissing()) {
-				throw new UnimplementedMechanicException(
-				    RefusalCause.OUTSIDE_REGION, "a dense fluid copy reached a missing section at " + x + "," + y + "," + z);
+				throw new UnimplementedMechanicException(RefusalCause.UNDECLARED_WORLD_FACT,
+				    "a dense fluid copy reached a missing section at " + x + "," + y + "," + z);
 			}
 			int[] fluids = section.rawFluidCells();
 			if (fluids == null) {
@@ -716,51 +726,139 @@ public final class WorldSnapshot {
 		}
 	}
 
-	/** Returns whether the declared region contains any nonempty fluid cells. */
-	public boolean hasFluids() {
-		return this.anyFluid;
-	}
-
-	/** Tests the declared rectangular bounds; a coordinate inside them may still belong to a missing section. */
-	public boolean contains(final int x, final int y, final int z) {
-		return x >= this.originX && x < this.originX + this.sizeX && y >= this.originY && y < this.originY + this.sizeY
-		    && z >= this.originZ && z < this.originZ + this.sizeZ;
-	}
-
-	/** Palette index at a world position, or -1 outside the region or in a missing section. */
-	public int paletteIndexAt(final int x, final int y, final int z) {
-		if (!contains(x, y, z)) {
-			return -1;
-		}
-		return sectionAt(x, y, z).cell(x & Section.MASK, y & Section.MASK, z & Section.MASK);
-	}
-
-	/** Returns the declared block palette entry, or {@code null} outside the region or in a missing section. */
-	public BlockEntry entryAt(final int x, final int y, final int z) {
-		int index = paletteIndexAt(x, y, z);
-		return index < 0 ? null : this.palette.get(index);
-	}
-
-	/** Fluid palette index at a world position, or -1 outside the region or in a missing section; 0 everywhere in a dry snapshot. */
-	public int fluidPaletteIndexAt(final int x, final int y, final int z) {
-		if (!contains(x, y, z)) {
-			return -1;
-		}
-		Section section = sectionAt(x, y, z);
-		return section.isMissing()
-		    ? -1
-		    : section.fluidCell(Section.index(x & Section.MASK, y & Section.MASK, z & Section.MASK));
-	}
-
-	/** Returns the declared fluid entry, or {@code null} outside the region or in a missing section. */
-	public FluidEntry fluidEntryAt(final int x, final int y, final int z) {
-		int index = fluidPaletteIndexAt(x, y, z);
-		return index < 0 ? null : this.fluidPalette.get(index);
-	}
-
 	/** The section holding a world position inside the bounds. */
 	private Section sectionAt(final int x, final int y, final int z) {
 		return this.sections[this.grid.index((x >> Section.SHIFT) - this.grid.sectionOriginX(),
 		    (y >> Section.SHIFT) - this.grid.sectionOriginY(), (z >> Section.SHIFT) - this.grid.sectionOriginZ())];
+	}
+
+	/**
+	 * Accumulates the dense planes and palettes of one {@link WorldSnapshot}.
+	 * Each method returns this builder. Not thread-safe.
+	 */
+	public static final class Builder {
+		private final OutsidePolicy outside;
+
+		private final int originX;
+
+		private final int originY;
+
+		private final int originZ;
+
+		private final int sizeX;
+
+		private final int sizeY;
+
+		private final int sizeZ;
+
+		private final int[] cells;
+
+		private int[] fluidCells;
+
+		private List<BlockEntry> palette = List.of();
+
+		private List<FluidEntry> fluidPalette = List.of(FluidEntry.EMPTY);
+
+		private Builder(final OutsidePolicy outside, final int originX, final int originY, final int originZ,
+		    final int sizeX, final int sizeY, final int sizeZ) {
+			this.outside = Objects.requireNonNull(outside, "outside");
+			int cellCount = SnapshotBounds.requireCellCount(originX, originY, originZ, sizeX, sizeY, sizeZ);
+			this.originX = originX;
+			this.originY = originY;
+			this.originZ = originZ;
+			this.sizeX = sizeX;
+			this.sizeY = sizeY;
+			this.sizeZ = sizeZ;
+			this.cells = new int[cellCount];
+		}
+
+		/** Declares the block palette, in the index order the cells refer to; the list is copied. */
+		public Builder palette(final List<BlockEntry> entries) {
+			this.palette = List.copyOf(entries);
+			return this;
+		}
+
+		/** Declares the block palette, in the index order the cells refer to. */
+		public Builder palette(final BlockEntry... entries) {
+			return palette(Arrays.asList(entries));
+		}
+
+		/**
+		 * Declares the fluid palette, in the index order the fluid cells refer
+		 * to; the list is copied. Index 0 must be {@link FluidEntry#EMPTY}.
+		 *
+		 * @throws IllegalArgumentException when index 0 is not the empty entry
+		 */
+		public Builder fluidPalette(final List<FluidEntry> entries) {
+			List<FluidEntry> copy = List.copyOf(entries);
+			if (copy.isEmpty() || !FluidEntry.EMPTY.equals(copy.getFirst())) {
+				throw new IllegalArgumentException("fluid palette index 0 must be canonical EMPTY");
+			}
+			this.fluidPalette = copy;
+			return this;
+		}
+
+		/** Declares the fluid palette, in the index order the fluid cells refer to. */
+		public Builder fluidPalette(final FluidEntry... entries) {
+			return fluidPalette(Arrays.asList(entries));
+		}
+
+		/**
+		 * Selects a block palette index at one world position.
+		 *
+		 * @throws IllegalArgumentException when the position lies outside the region, or the index is
+		 *     negative or beyond a palette already declared
+		 */
+		public Builder set(final int x, final int y, final int z, final int paletteIndex) {
+			int at = index(x, y, z);
+			if (paletteIndex < 0 || !this.palette.isEmpty() && paletteIndex >= this.palette.size()) {
+				throw new IllegalArgumentException("snapshot cell " + x + "," + y + "," + z + " selects palette index "
+				    + paletteIndex + ", palette size is " + this.palette.size());
+			}
+			this.cells[at] = paletteIndex;
+			return this;
+		}
+
+		/**
+		 * Selects a fluid palette index at one world position.
+		 *
+		 * @throws IllegalArgumentException when the position lies outside the region, or the index is
+		 *     negative or beyond the fluid palette
+		 */
+		public Builder setFluid(final int x, final int y, final int z, final int fluidIndex) {
+			int at = index(x, y, z);
+			if (fluidIndex < 0 || fluidIndex >= this.fluidPalette.size()) {
+				throw new IllegalArgumentException("snapshot cell " + x + "," + y + "," + z + " selects fluid index "
+				    + fluidIndex + ", fluid palette size is " + this.fluidPalette.size());
+			}
+			if (this.fluidCells == null) {
+				this.fluidCells = new int[this.cells.length];
+			}
+			this.fluidCells[at] = fluidIndex;
+			return this;
+		}
+
+		/**
+		 * The immutable section-based snapshot of the declared region.
+		 *
+		 * @throws IllegalArgumentException when a cell selects an index the palette does not hold
+		 */
+		public WorldSnapshot build() {
+			return new WorldSnapshot(this.originX, this.originY, this.originZ, this.sizeX, this.sizeY, this.sizeZ,
+			    this.outside, this.palette, this.cells, this.fluidPalette,
+			    this.fluidCells == null ? new int[0] : this.fluidCells);
+		}
+
+		private int index(final int x, final int y, final int z) {
+			int localX = x - this.originX;
+			int localY = y - this.originY;
+			int localZ = z - this.originZ;
+			if (localX < 0 || localX >= this.sizeX || localY < 0 || localY >= this.sizeY || localZ < 0
+			    || localZ >= this.sizeZ) {
+				throw new IllegalArgumentException(
+				    "snapshot cell " + x + "," + y + "," + z + " lies outside the region");
+			}
+			return (localY * this.sizeZ + localZ) * this.sizeX + localX;
+		}
 	}
 }

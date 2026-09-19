@@ -1,11 +1,10 @@
 package com.nettarion.stride.simulator.world;
 
-import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.List;
+import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -14,8 +13,9 @@ import org.junit.jupiter.api.Test;
  * asked for it had. A segment that only meets water between a cell's own
  * height and the full cube has no world-determined answer and refuses.
  */
-class FallResetWaterShapeTest {
-	private static final int AIR = 0;
+final class FallResetWaterShapeTest {
+	private static final BlockEntry AIR = BlockEntry.builder(0, "minecraft:air").build();
+
 	private static final double OWN_HEIGHT = 8 / 9.0F;
 
 	@Test
@@ -52,22 +52,23 @@ class FallResetWaterShapeTest {
 	void aCertainHitFurtherAlongTheSegmentStillAnswers() {
 		// Cell 1 is water met only in its top ninth; cell 2 is a tagged block,
 		// which the clip meets as a full cube whatever the water's shape.
-		BlockEntry air = new BlockEntry(AIR, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
-		BlockEntry cobweb =
-		    BlockEntry.builder(9, "minecraft:cobweb").fallDistanceResetting(true).build();
-		FluidEntry water = new FluidEntry(
-		    7, "minecraft:water", FluidKind.WATER, OWN_HEIGHT, 0.0, 0.0, 0.0, true);
-		SnapshotView world = new SnapshotView(new WorldSnapshot(0, 0, 0, 3, 2, 1, OutsidePolicy.SEALED,
-		    List.of(air, cobweb), new int[] {AIR, AIR, 1, AIR, AIR, AIR},
-		    List.of(FluidEntry.EMPTY, water), new int[] {0, 1, 0, 0, 0, 0}));
+		BlockEntry cobweb = BlockEntry.builder(9, "minecraft:cobweb").fallDistanceResetting(true).build();
+		FluidEntry water = new FluidEntry(7, "minecraft:water", FluidKind.WATER, OWN_HEIGHT, 0.0, 0.0, 0.0, true);
+		SnapshotView world = SnapshotView.compile(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, 3, 2, 1)
+		        .palette(AIR, cobweb)
+		        .fluidPalette(FluidEntry.EMPTY, water)
+		        .set(2, 0, 0, 1)
+		        .setFluid(1, 0, 0, 1)
+		        .build());
 		assertTrue(world.resetsFallDistanceAlong(0.1, 0.95, 0.5, 2.9, 0.95, 0.5));
 	}
 
 	private static SnapshotView world(final double height, final boolean source) {
-		BlockEntry air = new BlockEntry(AIR, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
-		FluidEntry water = new FluidEntry(
-		    7, "minecraft:water", FluidKind.WATER, height, 0.0, 0.0, 0.0, source);
-		return new SnapshotView(new WorldSnapshot(0, 0, 0, 2, 2, 1, OutsidePolicy.SEALED, List.of(air),
-		    new int[] {AIR, AIR, AIR, AIR}, List.of(FluidEntry.EMPTY, water), new int[] {0, 1, 0, 0}));
+		FluidEntry water = new FluidEntry(7, "minecraft:water", FluidKind.WATER, height, 0.0, 0.0, 0.0, source);
+		return SnapshotView.compile(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, 2, 2, 1)
+		        .palette(AIR)
+		        .fluidPalette(FluidEntry.EMPTY, water)
+		        .setFluid(1, 0, 0, 1)
+		        .build());
 	}
 }
