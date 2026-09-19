@@ -155,6 +155,23 @@ All three run the same transition, so they agree bit for bit; choosing a schedul
 problem, and none of them infers network latency. The client tick beneath them lives in the `tick` package,
 which is internal to the module.
 
+## Speed
+
+One thread simulates a few million steps per second. `./gradlew runThroughput` walks and sprint-jumps a
+player across a flat stone floor, twenty steps per run, and prints nanoseconds per step for both fixed
+stepping APIs. On a Ryzen 9 9950X3D with OpenJDK 25, after warm-up:
+
+| API | Per step | Steps per second | Game time per real second |
+| --- | --- | --- | --- |
+| `Simulator.advance` | about 405 ns | about 2.5 million | about 34 hours |
+| `Rollout.tick` | about 325 ns | about 3.1 million | about 43 hours |
+
+A step is one game tick, so the last column is how much play one thread covers per second. The scenario
+exercises floor collision, jumping, and the composed server tick, but no fluids, block effects, or hits;
+denser terrain and contact effects cost more per step. Stepping objects are confined to one thread and
+share nothing, so throughput scales with cores by giving each thread its own `Simulator` or `Rollout` over
+the same compiled `SnapshotView`. Treat the figures as an order of magnitude, not a benchmark suite.
+
 ## Describing the world
 
 Build a `WorldSnapshot` with `WorldSnapshot.builder(outside, originX, originY, originZ, sizeX, sizeY,
