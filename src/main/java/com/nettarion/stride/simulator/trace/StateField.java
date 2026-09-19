@@ -1,232 +1,248 @@
 package com.nettarion.stride.simulator.trace;
 
+import com.nettarion.stride.simulator.PlayerState;
+
+import java.util.List;
+
 /**
- * A field of the audited player state vector.
+ * One field of the recorded player state vector.
  *
- * <p>The declaration order here is the order fields appear in a trace and the
- * order divergences are reported in. Appending a field requires a matching
- * trace format change.
+ * <p>Declaration order is the column order of a trace and the order divergences are reported
+ * in. Appending a field is a trace format change ({@link Trace#FORMAT_VERSION}).
  *
- * <p>Every field is stored as raw bits in a {@code long} regardless of its
- * source type, so the equality relation is plain
- * {@code long} comparison. No floating-point comparison happens anywhere,
- * which is what keeps {@code -0.0} distinct from {@code 0.0} and preserves NaN
- * payloads — both reachable in vanilla collision code and both invisible to
- * {@code ==}.
+ * <p>Every field is stored as raw bits in a {@code long} whatever its source type, so equality
+ * is plain {@code long} comparison. No floating-point comparison happens anywhere, which keeps
+ * {@code -0.0} distinct from {@code 0.0} and preserves NaN payloads; both are reachable in
+ * vanilla collision code and both are invisible to {@code ==}.
  */
 public enum StateField {
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#x}. */
+	/** {@link PlayerState#x}, in blocks. */
 	POS_X(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#y}. */
+	/** {@link PlayerState#y}, in blocks. */
 	POS_Y(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#z}. */
+	/** {@link PlayerState#z}, in blocks. */
 	POS_Z(Kind.DOUBLE),
 
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#deltaMovementX}. */
+	/** {@link PlayerState#deltaMovementX}, in blocks per tick. */
 	DELTA_X(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#deltaMovementY}. */
+	/** {@link PlayerState#deltaMovementY}, in blocks per tick. */
 	DELTA_Y(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#deltaMovementZ}. */
+	/** {@link PlayerState#deltaMovementZ}, in blocks per tick. */
 	DELTA_Z(Kind.DOUBLE),
 
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#yRot}. */
+	/** {@link PlayerState#yRot}, yaw in degrees. */
 	Y_ROT(Kind.FLOAT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#xRot}. */
+	/** {@link PlayerState#xRot}, pitch in degrees. */
 	X_ROT(Kind.FLOAT),
 
-	// Entity.bb is mutated directly by move()/setPos(), so it is carried rather
-	// than derived from position and dimensions.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#boundingBoxMinX}. */
+	/**
+	 * {@link PlayerState#boundingBoxMinX}. Vanilla mutates {@code Entity.bb} directly in
+	 * {@code move()} and {@code setPos()}, so the box is carried rather than derived from position
+	 * and dimensions.
+	 */
 	BB_MIN_X(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#boundingBoxMinY}. */
+	/** {@link PlayerState#boundingBoxMinY}. */
 	BB_MIN_Y(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#boundingBoxMinZ}. */
+	/** {@link PlayerState#boundingBoxMinZ}. */
 	BB_MIN_Z(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#boundingBoxMaxX}. */
+	/** {@link PlayerState#boundingBoxMaxX}. */
 	BB_MAX_X(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#boundingBoxMaxY}. */
+	/** {@link PlayerState#boundingBoxMaxY}. */
 	BB_MAX_Y(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#boundingBoxMaxZ}. */
+	/** {@link PlayerState#boundingBoxMaxZ}. */
 	BB_MAX_Z(Kind.DOUBLE),
 
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#onGround}. */
+	/** {@link PlayerState#onGround}. */
 	ON_GROUND(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#horizontalCollision}. */
+	/** {@link PlayerState#horizontalCollision}. */
 	HORIZONTAL_COLLISION(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#verticalCollision}. */
+	/** {@link PlayerState#verticalCollision}. */
 	VERTICAL_COLLISION(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#verticalCollisionBelow}. */
+	/** {@link PlayerState#verticalCollisionBelow}. */
 	VERTICAL_COLLISION_BELOW(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#minorHorizontalCollision}. */
+	/** {@link PlayerState#minorHorizontalCollision}. */
 	MINOR_HORIZONTAL_COLLISION(Kind.BOOLEAN),
 
-	// double in 26.2, float in older versions. Read from Entity.fallDistance.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#fallDistance}. */
+	/** {@link PlayerState#fallDistance}, in blocks; a double in 26.2 ({@code Entity.fallDistance}). */
 	FALL_DISTANCE(Kind.DOUBLE),
 
-	// Entity.entityData shared flags, split by who computes each bit rather
-	// than carried as one byte. The bits have different owners, and auditing
-	// the storage location instead of the facts meant one server-owned bit
-	// forced the whole byte out of the equality relation, taking client-computed
-	// sprint state with it. The protocol therefore names each semantic bit.
-	//
-	// Bit numbers are from the Entity.setSharedFlag call sites.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#sprinting}. */
-	SPRINTING(Kind.BOOLEAN), // bit 3, LocalPlayer.aiStep
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#swimming}. */
-	SWIMMING(Kind.BOOLEAN), // bit 4, Entity.updateSwimming
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#fallFlying}. */
-	FALL_FLYING(Kind.BOOLEAN), // bit 7, LivingEntity / Player
+	/**
+	 * {@link PlayerState#sprinting}: bit 3 of the vanilla shared-flags byte, set by
+	 * {@code LocalPlayer.aiStep}.
+	 *
+	 * <p>The shared-flags byte is split into named fields by who computes each bit. Recording the
+	 * byte as one value would let one server-owned bit force the whole byte out of comparison,
+	 * taking the client-computed sprint state with it. Bit numbers are those of the
+	 * {@code Entity.setSharedFlag} call sites; see {@link SharedFlagBits}.
+	 */
+	SPRINTING(Kind.BOOLEAN),
+	/** {@link PlayerState#swimming}: shared-flags bit 4, set by {@code Entity.updateSwimming}. */
+	SWIMMING(Kind.BOOLEAN),
+	/** {@link PlayerState#fallFlying}: shared-flags bit 7, set by {@code LivingEntity} and {@code Player}. */
+	FALL_FLYING(Kind.BOOLEAN),
 
-	// Bit 1. Set only by vanilla ServerGamePacketListenerImpl and echoed back through
-	// entity-data sync, so it can never be reproduced by a implementation without a
-	// server. Inert for client movement: LocalPlayer overrides isShiftKeyDown()
-	// to read input.keyPresses.sneak() directly and never consults this bit.
-	// It exists so other players' clients can render the crouch.
-	/** The server-owned shared sneak flag, preserved separately from local sneak input. */
+	/**
+	 * Shared-flags bit 1, the server-owned sneak flag, kept apart from local sneak input.
+	 *
+	 * <p>Only the vanilla server sets this bit, and it reaches the client through the entity-data
+	 * echo, so no implementation without a server can reproduce it. It is inert for client
+	 * movement: {@code LocalPlayer.isShiftKeyDown()} reads {@code input.keyPresses.sneak()} and
+	 * never consults the bit. It exists so other clients can render the crouch.
+	 */
 	SHIFT_KEY_DOWN(Kind.BOOLEAN),
 
-	// Every bit not named above (0 on-fire, 2, 5 invisible, 6 glowing), masked.
-	// Carried so a bit nobody has classified yet still diverges loudly instead
-	// of becoming invisible the moment the byte was split up.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#sharedFlagsResidual}. */
+	/**
+	 * {@link PlayerState#sharedFlagsResidual}: every shared-flags bit not named above (0 on fire,
+	 * 2, 5 invisible, 6 glowing), masked by {@link SharedFlagBits#RESIDUAL_MASK}. Carried so an
+	 * unclassified bit still diverges loudly instead of vanishing when the byte was split.
+	 */
 	SHARED_FLAGS_RESIDUAL(Kind.BYTE_FLAGS),
 
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#pose}. */
+	/** {@link PlayerState#pose}, stored as the vanilla numeric pose id. */
 	POSE(Kind.ENUM),
 
-	// LivingEntity movement input, written by applyInput/modifyInput before
-	// travel reads it.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#xxa}. */
+	/** {@link PlayerState#xxa}: vanilla {@code LivingEntity.xxa}, written by input handling before travel. */
 	XXA(Kind.FLOAT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#yya}. */
+	/** {@link PlayerState#yya}: vanilla {@code LivingEntity.yya}. */
 	YYA(Kind.FLOAT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#zza}. */
+	/** {@link PlayerState#zza}: vanilla {@code LivingEntity.zza}. */
 	ZZA(Kind.FLOAT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#jumping}. */
+	/** {@link PlayerState#jumping}: vanilla {@code LivingEntity.jumping}. */
 	JUMPING(Kind.BOOLEAN),
 
-	// Tick-based trigger state machines. These are the reason a transition is
-	// not a pure function of position and velocity.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#sprintTriggerTime}. */
+	/**
+	 * {@link PlayerState#sprintTriggerTime}, in ticks. The tick-based trigger state machines are
+	 * why a transition is not a pure function of position and velocity.
+	 */
 	SPRINT_TRIGGER_TIME(Kind.INT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#jumpTriggerTime}. */
+	/** {@link PlayerState#jumpTriggerTime}, in ticks. */
 	JUMP_TRIGGER_TIME(Kind.INT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#autoJumpTime}. */
+	/** {@link PlayerState#autoJumpTime}, in ticks. */
 	AUTO_JUMP_TIME(Kind.INT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#noJumpDelay}. */
+	/** {@link PlayerState#noJumpDelay}, in ticks. */
 	NO_JUMP_DELAY(Kind.INT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#crouching}. */
+	/** {@link PlayerState#crouching}. */
 	CROUCHING(Kind.BOOLEAN),
 
-	// ClientInput is sampled at the start of LocalPlayer.aiStep, before
-	// KeyboardInput.tick overwrites it with this tick's action. Without these
-	// fields an arbitrary mid-trace state cannot be forked exactly.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#inputKeyPresses}. */
+	/**
+	 * {@link PlayerState#inputKeyPresses}: the vanilla {@code ClientInput} sampled at the start
+	 * of {@code LocalPlayer.aiStep}, before {@code KeyboardInput.tick} overwrites it with this
+	 * tick's action. Without these fields a mid-trace state cannot be forked exactly.
+	 */
 	INPUT_KEY_PRESSES(Kind.BYTE_FLAGS),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#inputMoveVectorX}. */
+	/** {@link PlayerState#inputMoveVectorX}. */
 	INPUT_MOVE_VECTOR_X(Kind.FLOAT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#inputMoveVectorY}. */
+	/** {@link PlayerState#inputMoveVectorY}. */
 	INPUT_MOVE_VECTOR_Y(Kind.FLOAT),
 
-	// EntityFluidInteraction tracker state at the end of the tick. The next
-	// baseTick samples EYE_IN_WATER before rebuilding the tracker, so this is
-	// semantic fork state rather than a world-derived observation that can be
-	// discarded. Heights are also audited explicitly at the implementation boundary.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#waterHeight}. */
+	/**
+	 * {@link PlayerState#waterHeight}, in blocks: the vanilla {@code EntityFluidInteraction}
+	 * tracker at the end of the tick. The next {@code baseTick} samples {@code EYE_IN_WATER} before
+	 * rebuilding the tracker, so this is fork state rather than a derived observation.
+	 */
 	WATER_HEIGHT(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#lavaHeight}. */
+	/** {@link PlayerState#lavaHeight}, in blocks. */
 	LAVA_HEIGHT(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#eyeInWater}. */
+	/** {@link PlayerState#eyeInWater}. */
 	EYE_IN_WATER(Kind.BOOLEAN),
 
-	// Player.Abilities movement state. `flying` changes travel, collision-side
-	// behavior and pose selection; `mayfly` owns the double-tap state machine;
-	// the speed is mutable and therefore cannot be assumed to be its default.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#mayfly}. */
+	/**
+	 * {@link PlayerState#mayfly}: vanilla {@code Player.Abilities.mayfly}, which owns the
+	 * double-tap flight state machine.
+	 */
 	MAY_FLY(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#flying}. */
+	/** {@link PlayerState#flying}: vanilla {@code Player.Abilities.flying}, which changes travel and pose. */
 	FLYING(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#flyingSpeed}. */
+	/** {@link PlayerState#flyingSpeed}: vanilla {@code Player.Abilities.flyingSpeed}; mutable, so carried. */
 	FLYING_SPEED(Kind.FLOAT),
 
-	// Fall-flying has a client tick counter and its local start transition reads
-	// whether any equipped item is currently a usable glider. Carrying the
-	// capability keeps custom gliders possible without importing inventory into
-	// the movement contract.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#fallFlyTicks}. */
+	/** {@link PlayerState#fallFlyTicks}, in ticks: the client's fall-flying counter. */
 	FALL_FLY_TICKS(Kind.INT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#gliderUsable}. */
+	/**
+	 * {@link PlayerState#gliderUsable}: whether an equipped item is a usable glider. Carrying
+	 * the capability keeps custom gliders possible without recording inventory.
+	 */
 	GLIDER_USABLE(Kind.BOOLEAN),
 
-	// Powder-snow contact is a delayed movement effect: entityInside installs
-	// the stuck multiplier after travel and the next Entity.move consumes it.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#stuckSpeedMultiplierX}. */
+	/**
+	 * {@link PlayerState#stuckSpeedMultiplierX}: powder-snow contact is a delayed effect;
+	 * {@code entityInside} installs the multiplier after travel and the next {@code Entity.move}
+	 * consumes it.
+	 */
 	STUCK_SPEED_X(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#stuckSpeedMultiplierY}. */
+	/** {@link PlayerState#stuckSpeedMultiplierY}. */
 	STUCK_SPEED_Y(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#stuckSpeedMultiplierZ}. */
+	/** {@link PlayerState#stuckSpeedMultiplierZ}. */
 	STUCK_SPEED_Z(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#isInPowderSnow}. */
+	/** {@link PlayerState#isInPowderSnow}. */
 	IN_POWDER_SNOW(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#wasInPowderSnow}. */
+	/** {@link PlayerState#wasInPowderSnow}. */
 	WAS_IN_POWDER_SNOW(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#ticksFrozen}. */
+	/** {@link PlayerState#ticksFrozen}, in ticks. */
 	TICKS_FROZEN(Kind.INT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#canFreeze}. */
+	/** {@link PlayerState#canFreeze}. */
 	CAN_FREEZE(Kind.BOOLEAN),
-	// Server-installed, synchronized attribute state; it can lag TICKS_FROZEN.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#frostSpeedTicks}. */
+	/**
+	 * {@link PlayerState#frostSpeedTicks}, in ticks: server-written attribute state that can lag
+	 * {@link #TICKS_FROZEN}.
+	 */
 	FROST_SPEED_TICKS(Kind.INT),
 
-	// Entity.checkSupportingBlock retains these across ticks. Jump and ground
-	// friction read the previous tick's identity before the next move.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#mainSupportingBlockPosPresent}. */
+	/**
+	 * {@link PlayerState#mainSupportingBlockPosPresent}: vanilla {@code Entity.checkSupportingBlock}
+	 * retains the supporting block across ticks; jump and ground friction read the previous tick's
+	 * identity before the next move.
+	 */
 	SUPPORTING_BLOCK_PRESENT(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#mainSupportingBlockPosX}. */
+	/** {@link PlayerState#mainSupportingBlockPosX}, a block coordinate. */
 	SUPPORTING_BLOCK_X(Kind.INT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#mainSupportingBlockPosY}. */
+	/** {@link PlayerState#mainSupportingBlockPosY}, a block coordinate. */
 	SUPPORTING_BLOCK_Y(Kind.INT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#mainSupportingBlockPosZ}. */
+	/** {@link PlayerState#mainSupportingBlockPosZ}, a block coordinate. */
 	SUPPORTING_BLOCK_Z(Kind.INT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#onGroundNoBlocks}. */
+	/** {@link PlayerState#onGroundNoBlocks}. */
 	ON_GROUND_NO_BLOCKS(Kind.BOOLEAN),
 
-	// Equipment-derived powder-snow collision and post-collision lift capability.
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#canWalkOnPowderSnow}. */
+	/** {@link PlayerState#canWalkOnPowderSnow}: equipment-derived powder-snow collision capability. */
 	CAN_WALK_ON_POWDER_SNOW(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#sprintWindowTicks}. */
+	/** {@link PlayerState#sprintWindowTicks}, in ticks. */
 	SPRINT_WINDOW_TICKS(Kind.INT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#autoJumpEnabled}. */
+	/** {@link PlayerState#autoJumpEnabled}. */
 	AUTO_JUMP_ENABLED(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#fastLava}. */
+	/** {@link PlayerState#fastLava}. */
 	FAST_LAVA(Kind.BOOLEAN),
 
-	// Effective movement contributions of the three MCPK parkour effects.
-	// Sprint remains kernel-owned state rather than part of the external factor.
+	/**
+	 * {@link PlayerState#movementSpeedMultiplier}: the effective movement-speed attribute
+	 * multiplier from effects and equipment. Sprinting stays a separate field rather than part of
+	 * this factor.
+	 */
 	MOVEMENT_SPEED_MULTIPLIER(Kind.DOUBLE),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#jumpBoostPower}. */
+	/** {@link PlayerState#jumpBoostPower}: the effective jump-boost contribution. */
 	JUMP_BOOST_POWER(Kind.FLOAT),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#sprintingAttribute}. */
+	/** {@link PlayerState#sprintingAttribute}: whether the sprint speed modifier is installed. */
 	SPRINTING_ATTRIBUTE(Kind.BOOLEAN),
-	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#foodLevel}. */
+	/** {@link PlayerState#foodLevel}. */
 	FOOD_LEVEL(Kind.INT);
 
 	/** The scalar encoding used to store one state field in a raw-bit trace. */
 	public enum Kind {
-		/** Raw IEEE 754 double bits. */
+		/** Raw IEEE 754 double bits, all 64. */
 		DOUBLE,
 		/** Raw IEEE 754 float bits in the low 32 bits. */
 		FLOAT,
-		/** Zero or one for a boolean value. */
+		/** Zero or one. */
 		BOOLEAN,
-		/** A signed integer scalar. */
+		/** A signed 32-bit integer in the low 32 bits. */
 		INT,
-		/** Eight packed flag bits. */
+		/** Eight packed flag bits in the low byte. */
 		BYTE_FLAGS,
-		/** A stable ordinal with an optional diagnostic label. */
+		/** A stable numeric id with an optional diagnostic label. */
 		ENUM
 	}
+
+	/** Every field in declaration order, which is trace column order. */
+	public static final List<StateField> ALL = List.of(values());
 
 	private final Kind kind;
 
@@ -234,9 +250,8 @@ public enum StateField {
 		this.kind = kind;
 	}
 
+	/** The scalar encoding of this field. */
 	public Kind kind() {
 		return this.kind;
 	}
-
-	public static final StateField[] ALL = values();
 }

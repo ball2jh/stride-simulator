@@ -4,23 +4,19 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * Every public semantic field must reach {@link StateDigest}.
+ * Every public field of the three player copies, and the server's retained movement list, must
+ * reach {@link StateDigest}.
  *
- * <p>Two reflection guards cover the other consumers of the state vector:
- * {@link PlayerStateCopyTest} requires every public field to survive
- * {@code copyInto}, and the planner's {@code FutureIdentityTest} requires every
- * one to change both the identity hash and {@code rawEquals}. The digest had
- * none, and it is the consumer where a gap is least visible — it is the
- * persisted cross-implementation identity, so a field that misses it is a field two implementations
- * can disagree on while every trace comparison reports agreement.
- *
- * <p>This closes that gap by construction rather than by remembering: a field
- * added to {@link PlayerState} either reaches the digest or fails here.
+ * <p>{@link PlayerStateCopyTest} guards {@code copyInto} the same way. The digest is the consumer
+ * where a gap is least visible: it is the recorded identity of a state, so a field that misses it
+ * is a field two producers can disagree on while every digest comparison reports agreement. A
+ * field added to a copy either reaches the digest or fails here.
  */
-class StateDigestCoverageTest {
+final class StateDigestCoverageTest {
 	@Test
 	void everyPublicSemanticFieldReachesTheDigest() throws Exception {
 		PlayerState baseline = new PlayerState();
@@ -34,8 +30,8 @@ class StateDigestCoverageTest {
 			PlayerState changed = baseline.copy();
 			mutate(field, changed, ordinal++);
 			assertNotEquals(baselineDigest, StateDigest.state(changed),
-			    field.getName() + " does not reach the persisted digest, so two implementations"
-			        + " could disagree on it without any trace comparison saying so");
+			    field.getName() + " does not reach the recorded digest, so two producers"
+			        + " could disagree on it without any digest comparison saying so");
 		}
 	}
 
@@ -52,9 +48,27 @@ class StateDigestCoverageTest {
 			ServerPlayerState changed = baseline.copy();
 			mutate(field, changed, ordinal++);
 			assertNotEquals(baselineDigest, StateDigest.server(changed),
-			    field.getName() + " does not reach the server digest, so a stress chain"
+			    field.getName() + " does not reach the server digest, so two runs"
 			        + " could agree while the server copies differ");
 		}
+	}
+
+	@Test
+	void theRetainedMovementListReachesTheServerDigest() {
+		// additionalMovements is package-private, so the reflection loop over public fields
+		// above never mutates it; guard it explicitly.
+		ServerPlayerState baseline = new ServerPlayerState();
+		long baselineDigest = StateDigest.server(baseline);
+		ServerPlayerState oneMovement = baseline.copy();
+		oneMovement.restoreAdditionalMovements(
+		    List.of(new ServerPlayerState.Movement(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+		ServerPlayerState signedZero = baseline.copy();
+		signedZero.restoreAdditionalMovements(
+		    List.of(new ServerPlayerState.Movement(-0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+
+		assertNotEquals(baselineDigest, StateDigest.server(oneMovement), "an all-zero movement still counts");
+		assertNotEquals(
+		    StateDigest.server(oneMovement), StateDigest.server(signedZero), "movements are digested as raw bits");
 	}
 
 	@Test
@@ -85,10 +99,9 @@ class StateDigestCoverageTest {
 	}
 
 	/**
-	 * Raw bit patterns rather than ordinary values, so a field that reaches the
-	 * digest only through a lossy conversion still fails. NaN payloads and signed
-	 * zero are both reachable in vanilla collision code and both invisible to
-	 * {@code ==}.
+	 * Raw bit patterns rather than ordinary values, so a field that reaches the digest only
+	 * through a lossy conversion still fails. NaN payloads and signed zero are both reachable in
+	 * vanilla collision code and both invisible to {@code ==}.
 	 */
 	private static void mutate(final Field field, final Object state, final int ordinal) throws Exception {
 		Class<?> type = field.getType();

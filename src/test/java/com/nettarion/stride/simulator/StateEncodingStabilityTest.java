@@ -3,7 +3,7 @@ package com.nettarion.stride.simulator;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.nettarion.stride.simulator.trace.BoundaryCodec;
+import com.nettarion.stride.simulator.trace.SimulationStateCodec;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -15,19 +15,16 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * The digest and the boundary wire of one fixed composed state are pinned
- * bit for bit.
+ * The digest and the boundary wire of one fixed composed state are pinned bit for bit.
  *
- * <p>Every pin in the repository is a {@link StateDigest}, and every archived
- * boundary is a {@link BoundaryCodec} stream, so the two encodings are part
- * of the recorded evidence: a change to either, however the plumbing behind
- * them is arranged, is a change to what every pin means. The state here sets
- * every public field of all three copies to a distinct raw pattern by
- * reflection, so a field dropped from or reordered in either encoding moves
- * the constant. A deliberate change to an encoding re-records the constants
- * in the same change, with the pins it invalidates.
+ * <p>Every recorded digest is a {@link StateDigest}, and every recorded boundary is a
+ * {@link SimulationStateCodec} stream, so the two encodings are part of the recorded data: a
+ * change to either, however the plumbing behind them is arranged, changes what every recorded
+ * value means. The state here sets every public field of all three copies to a distinct raw
+ * pattern by reflection, so a field dropped from or reordered in either encoding moves the
+ * constant. A deliberate change to an encoding re-records the constants in the same change.
  */
-class StateEncodingStabilityTest {
+final class StateEncodingStabilityTest {
 	@Test
 	void theDigestsOfTheFixedStateAreStable() {
 		assertEquals("73cd0519c21609df", Long.toHexString(StateDigest.state(fixedClient())));
@@ -96,7 +93,9 @@ class StateEncodingStabilityTest {
 	private static void fill(final Object target, final Class<?> type, final int salt) {
 		int ordinal = 0;
 		for (Field field : type.getFields()) {
-			if (Modifier.isStatic(field.getModifiers())) continue;
+			if (Modifier.isStatic(field.getModifiers())) {
+				continue;
+			}
 			ordinal++;
 			try {
 				Class<?> t = field.getType();
@@ -127,7 +126,7 @@ class StateEncodingStabilityTest {
 
 	private static byte[] encode(final SimulationState state, final int schema) throws IOException {
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-		BoundaryCodec.write(state, new DataOutputStream(bytes), schema);
+		SimulationStateCodec.write(state, new DataOutputStream(bytes), schema);
 		return bytes.toByteArray();
 	}
 
