@@ -1,4 +1,4 @@
-# Java formatting; preserve source-order arithmetic and explanatory comments.
+# Java formatting for Stride Simulator; run `clang-format -i` on the files you change.
 Language: Java
 BasedOnStyle: Google
 IndentWidth: 4
@@ -20,4 +20,5 @@ BreakAfterJavaFieldAnnotations: false
 SpacesBeforeTrailingComments: 1
 ReflowComments: false
 BreakStringLiterals: false
-SortIncludes: Never
+SortIncludes: CaseSensitive
+JavaImportGroups: ['com.nettarion', 'java', 'javax', 'org']

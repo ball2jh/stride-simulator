@@ -24,13 +24,28 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+sourceSets {
+    // Runnable tutorials, compiled against the library and run by `check`.
+    examples {
+        java.srcDir 'examples/src/main/java'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+    // Build-time tooling that is not shipped: the API documentation check.
+    tools {
+        java.srcDir 'tools'
+    }
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 25
-    // Every lint category is an error except `exports`: the exported world, block and geometry
-    // packages hold mechanism types whose signatures mention the non-exported tick and server
-    // packages. Those members are internal; the package documentation names the supported API.
-    options.compilerArgs.addAll(['-Xlint:all,-exports', '-Werror'])
+    // Every lint category is an error except `exports`: the exported world, block and geometry packages
+    // hold mechanism types whose signatures mention the non-exported tick and server packages. Those
+    // members are internal; the package documentation names the supported API. Tests additionally drop
+    // `serial` and `this-escape`, which only flag JUnit fixtures.
+    String lint = name == 'compileTestJava' ? '-Xlint:all,-exports,-serial,-this-escape' : '-Xlint:all,-exports'
+    options.compilerArgs.addAll([lint, '-Werror'])
 }
 
 tasks.named('test', Test) {
@@ -40,11 +55,28 @@ tasks.named('test', Test) {
     testLogging { exceptionFormat = 'full' }
 }
 
+tasks.named('jar', Jar) {
+    manifest {
+        attributes(
+            'Implementation-Title': 'Stride Simulator',
+            'Implementation-Version': project.version,
+        )
+    }
+}
+
 tasks.withType(Javadoc).configureEach {
+    File overview = layout.projectDirectory.file('src/main/javadoc/overview.html').asFile
+    inputs.file(overview).withPathSensitivity(PathSensitivity.RELATIVE)
     options.encoding = 'UTF-8'
     options.charSet = 'UTF-8'
-    options.docTitle = 'Stride Simulator API'
-    options.windowTitle = 'Stride Simulator API'
+    options.docTitle = "Stride Simulator ${project.version} API"
+    options.windowTitle = "Stride Simulator ${project.version} API"
+    options.overview = overview.path
+    options.noTimestamp = true
+    options.group('API', 'com.nettarion.stride.simulator', 'com.nettarion.stride.simulator.world',
+        'com.nettarion.stride.simulator.block', 'com.nettarion.stride.simulator.geometry',
+        'com.nettarion.stride.simulator.trace')
+    options.group('Internal', 'com.nettarion.stride.simulator.tick', 'com.nettarion.stride.simulator.server')
     options.addBooleanOption('Xdoclint:all,-missing', true)
     options.addStringOption('Xmaxwarns', '10000')
     options.addBooleanOption('Werror', true)
@@ -62,12 +94,20 @@ publishing {
             artifactId = 'stride-simulator'
             pom {
                 name = 'Stride Simulator'
-                description = 'A deterministic Java simulator for an admitted subset of Minecraft player movement.'
+                description = 'Deterministic Minecraft Java Edition 26.2 player movement and the server ' +
+                    'mechanics that affect it, as a dependency-free Java library.'
                 url = 'https://github.com/ball2jh/stride-simulator'
+                inceptionYear = '2026'
                 licenses {
                     license {
                         name = 'MIT License'
-                        url = 'https://opensource.org/license/mit'
+                        url = 'https://github.com/ball2jh/stride-simulator/blob/main/LICENSE'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'ball2jh'
+                        name = 'Jonathan Ball'
                     }
                 }
                 scm {
@@ -79,90 +119,136 @@ publishing {
     }
 }
 
-// VoxelShape.collide uses AxisCycle to orient one collision rule. Expand that
-// orientation at build time: the upstream project measured a throughput cost for runtime-shared loops. The template is the only maintained collision arithmetic.
+// Vanilla's VoxelShape.collide uses AxisCycle to orient one collision rule. The orientation is expanded
+// at build time because a runtime-shared loop costs measurable throughput. The template is the only
+// maintained collision arithmetic.
 def generateShapeCollision = tasks.register('generateShapeCollision') {
-	description = 'Expands the collision template into three fixed axis orientations.'
-	inputs.file(layout.projectDirectory.file('src/main/templates/ShapeCollision.java.template'))
-		.withPathSensitivity(PathSensitivity.RELATIVE)
-	outputs.dir(layout.buildDirectory.dir('generated/sources/shapeCollision/java/main'))
+    description = 'Expands the collision template into three fixed axis orientations.'
+    inputs.file(layout.projectDirectory.file('src/main/templates/ShapeCollision.java.template'))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.dir(layout.buildDirectory.dir('generated/sources/shapeCollision/java/main'))
+    outputs.cacheIf { true }
 
-	doLast { task ->
-		task.outputs.files.singleFile.deleteDir()
-		String template = task.inputs.files.singleFile.getText('UTF-8')
-		String[] prefixAndLoop = template.split('@BEGIN_AXIS_LOOP@', -1)
-		if (prefixAndLoop.length != 2) {
-			throw new GradleException('Collision template must have one @BEGIN_AXIS_LOOP@ marker')
-		}
-		String[] loopAndSuffix = prefixAndLoop[1].split('@END_AXIS_LOOP@', -1)
-		if (loopAndSuffix.length != 2) {
-			throw new GradleException('Collision template must have one @END_AXIS_LOOP@ marker')
-		}
-		String methods = [['X', 'Y', 'Z'], ['Y', 'X', 'Z'], ['Z', 'X', 'Y']].collect { axes ->
-			loopAndSuffix[0].replace('@AXIS@', axes[0])
-				.replace('@FIRST@', axes[1]).replace('@SECOND@', axes[2])
-		}.join('\n')
-		String source = prefixAndLoop[0] + methods + loopAndSuffix[1]
-		if (source =~ /@[A-Z_]+@/) {
-			throw new GradleException('Collision template contains an unexpanded marker')
-		}
-		File output = new File(task.outputs.files.singleFile,
-			'com/nettarion/stride/simulator/geometry/ShapeCollision.java')
-		output.parentFile.mkdirs()
-		output.setText(source, 'UTF-8')
-	}
+    doLast { task ->
+        task.outputs.files.singleFile.deleteDir()
+        String template = task.inputs.files.singleFile.getText('UTF-8')
+        String[] prefixAndLoop = template.split('@BEGIN_AXIS_LOOP@', -1)
+        if (prefixAndLoop.length != 2) {
+            throw new GradleException('Collision template must have one @BEGIN_AXIS_LOOP@ marker')
+        }
+        String[] loopAndSuffix = prefixAndLoop[1].split('@END_AXIS_LOOP@', -1)
+        if (loopAndSuffix.length != 2) {
+            throw new GradleException('Collision template must have one @END_AXIS_LOOP@ marker')
+        }
+        String methods = [['X', 'Y', 'Z'], ['Y', 'X', 'Z'], ['Z', 'X', 'Y']].collect { axes ->
+            loopAndSuffix[0].replace('@AXIS@', axes[0])
+                .replace('@FIRST@', axes[1]).replace('@SECOND@', axes[2])
+        }.join('\n')
+        String source = prefixAndLoop[0] + methods + loopAndSuffix[1]
+        if (source =~ /@[A-Z_]+@/) {
+            throw new GradleException('Collision template contains an unexpanded marker')
+        }
+        File output = new File(task.outputs.files.singleFile,
+            'com/nettarion/stride/simulator/geometry/ShapeCollision.java')
+        output.parentFile.mkdirs()
+        output.setText(source, 'UTF-8')
+    }
 }
 
 sourceSets.main.java.srcDir(generateShapeCollision)
 
-// One declared field table expands into the copy, equality, digest and wire
-// plumbing of the three player copies, so adding a field is one row and one
-// declaration. StateEncodingStabilityTest holds the expansion to the recorded bits.
+// One declared field table expands into the copy, equality, digest and wire plumbing of the three
+// player copies, so adding a field is one row and one declaration. StateEncodingStabilityTest holds
+// the expansion to the recorded bits. This is the build's only use of Python.
 def generateStateFields = tasks.register('generateStateFields', Exec) {
-	description = 'Expands the state field table into StateFields.java.'
-	def table = layout.projectDirectory.file('src/main/fields/state-fields.tsv')
-	def script = layout.projectDirectory.file('src/main/fields/generate.py')
-	def output = layout.buildDirectory.dir('generated/sources/stateFields/java/main')
-	inputs.file(table).withPathSensitivity(PathSensitivity.RELATIVE)
-	inputs.file(script).withPathSensitivity(PathSensitivity.RELATIVE)
-	outputs.dir(output)
-	commandLine providers.gradleProperty('pythonExecutable').getOrElse('python3'), script.asFile.path, table.asFile.path, output.get().asFile.path
+    description = 'Expands the state field table into StateFields.java.'
+    def table = layout.projectDirectory.file('src/main/fields/state-fields.tsv')
+    def script = layout.projectDirectory.file('src/main/fields/generate.py')
+    def output = layout.buildDirectory.dir('generated/sources/stateFields/java/main')
+    inputs.file(table).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(script).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.dir(output)
+    outputs.cacheIf { true }
+    commandLine providers.gradleProperty('pythonExecutable').getOrElse('python3'), script.asFile.path,
+        table.asFile.path, output.get().asFile.path
 }
 
 sourceSets.main.java.srcDir(generateStateFields)
 
-sourceSets {
-    examples {
-        java.srcDir 'examples/src/main/java'
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += sourceSets.main.output
+def example = tasks.register('runExample', JavaExec) {
+    group = 'application'
+    description = 'Runs the GettingStarted tutorial: a flat world, walking, a sprint-jump, a refusal, a fork.'
+    classpath = sourceSets.examples.runtimeClasspath
+    mainClass = 'com.nettarion.stride.examples.GettingStarted'
+}
+
+def refusalsExample = tasks.register('runHandlingRefusals', JavaExec) {
+    group = 'application'
+    description = 'Runs the HandlingRefusals tutorial: classifying refusals by type and by cause group.'
+    classpath = sourceSets.examples.runtimeClasspath
+    mainClass = 'com.nettarion.stride.examples.HandlingRefusals'
+}
+
+def apiDocs = tasks.register('checkApiDocs', JavaExec) {
+    group = 'verification'
+    description = 'Checks that every public type and every package of the library and the examples is documented.'
+    List<String> roots = ['src/main/java', 'examples/src/main/java']
+    Provider<RegularFile> report = layout.buildDirectory.file('reports/checkApiDocs/summary.txt')
+    roots.each { inputs.dir(layout.projectDirectory.dir(it)).withPathSensitivity(PathSensitivity.RELATIVE) }
+    outputs.file(report)
+    classpath = sourceSets.tools.runtimeClasspath
+    mainClass = 'CheckApiDocs'
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+    args(['--report', report.get().asFile.path] + roots)
+}
+
+def fixtures = tasks.register('verifyFixtures') {
+    group = 'verification'
+    description = 'Verifies the bundled capture fixtures against the SHA-256 digests in provenance.json.'
+    File projectRoot = layout.projectDirectory.asFile
+    File manifest = layout.projectDirectory.file('provenance.json').asFile
+    File captures = layout.projectDirectory.dir('src/test/resources/captures').asFile
+    Provider<RegularFile> report = layout.buildDirectory.file('reports/verifyFixtures/summary.txt')
+    inputs.file(manifest).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(captures).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.file(report)
+
+    doLast {
+        List<Map<String, String>> listed = new groovy.json.JsonSlurper().parse(manifest, 'UTF-8').fixtures
+        java.security.MessageDigest sha256 = java.security.MessageDigest.getInstance('SHA-256')
+        List<String> failures = []
+        Set<String> listedPaths = [] as Set
+        listed.each { fixture ->
+            listedPaths.add(fixture.path)
+            File file = new File(projectRoot, fixture.path)
+            if (!file.isFile()) {
+                failures.add("Missing fixture ${fixture.path}")
+                return
+            }
+            String actual = java.util.HexFormat.of().formatHex(sha256.digest(file.bytes))
+            if (actual != fixture.sha256) {
+                failures.add("Fixture differs from its recorded bytes: ${fixture.path} (sha256 ${actual})")
+            }
+        }
+        captures.eachFileRecurse(groovy.io.FileType.FILES) { file ->
+            String relative = projectRoot.toPath().relativize(file.toPath()).toString().replace('\\', '/')
+            if (!file.name.endsWith('.md') && !listedPaths.contains(relative)) {
+                failures.add("Fixture not listed in provenance.json: ${relative}")
+            }
+        }
+        if (!failures.isEmpty()) {
+            throw new GradleException(failures.join('\n'))
+        }
+        String summary = "Verified ${listed.size()} capture fixtures against provenance.json."
+        File out = report.get().asFile
+        out.parentFile.mkdirs()
+        out.setText(summary + '\n', 'UTF-8')
+        logger.lifecycle(summary)
     }
 }
 
-def example = tasks.register('runExample', JavaExec) {
-    group = 'application'
-    description = 'Runs the standalone world, stepping, and scheduled-fork example.'
-    dependsOn tasks.named('examplesClasses')
-    classpath = sourceSets.examples.runtimeClasspath
-    mainClass = 'com.nettarion.stride.examples.GettingStarted'
-    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
-}
-
-def apiDocs = tasks.register('checkApiDocs', Exec) {
-    group = 'verification'
-    description = 'Checks that every public declared type and source package has documentation.'
-    def launcher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
-    commandLine launcher.get().executablePath.asFile, 'tools/CheckApiDocs.java', 'src/main/java'
-}
-
-def fixtures = tasks.register('verifyFixtures', Exec) {
-    group = 'verification'
-    description = 'Verifies the bundled observation fixtures against their recorded hashes.'
-    commandLine providers.gradleProperty('pythonExecutable').getOrElse('python3'), 'tools/verify-fixtures.py'
-}
-
 tasks.named('check') {
-    dependsOn tasks.named('javadoc'), apiDocs, fixtures, example
+    dependsOn tasks.named('javadoc'), apiDocs, fixtures, example, refusalsExample
 }
 
 tasks.named('sourcesJar') {
