@@ -153,7 +153,6 @@ public final class ServerMovementListener {
 		    kind.hasPosition() ? clientAfter.y : server.y, -VERTICAL_COORDINATE_LIMIT, VERTICAL_COORDINATE_LIMIT);
 		double targetZ = Mth.clamp(
 		    kind.hasPosition() ? clientAfter.z : server.z, -HORIZONTAL_COORDINATE_LIMIT, HORIZONTAL_COORDINATE_LIMIT);
-		MovementCorrection.Target target = new MovementCorrection.Target(targetX, targetY, targetZ);
 		double startX = server.x;
 		double startY = server.y;
 		double startZ = server.z;
@@ -175,7 +174,8 @@ public final class ServerMovementListener {
 			awaitTeleport(server);
 			// The server never moved: the correction is the start position with
 			// the copy's own rotation, read after awaitTeleport canonicalized it.
-			return corrected(kind, CorrectionReason.MOVED_TOO_QUICKLY, target,
+			return corrected(kind, CorrectionReason.MOVED_TOO_QUICKLY,
+			    new MovementCorrection.Target(targetX, targetY, targetZ),
 			    new MovementCorrection.Resolved(startX, startY, startZ, movedDist),
 			    new MovementCorrection.Teleport(startX, startY, startZ, server.yRot, server.xRot), damage);
 		}
@@ -226,12 +226,12 @@ public final class ServerMovementListener {
 		        targetZ, server.shiftKeyDown, world, scratch);
 		if (fail && oldBoxFree || newCollision) {
 			return correct(kind, newCollision ? CorrectionReason.NEW_COLLISION : CorrectionReason.MOVED_WRONGLY,
-			    clientAfter, server, world, scratch, target,
+			    clientAfter, server, world, scratch, new MovementCorrection.Target(targetX, targetY, targetZ),
 			    new MovementCorrection.Resolved(resolvedX, resolvedY, resolvedZ, residualSquared),
 			    new MovementCorrection.Teleport(startX, startY, startZ, targetYRot, targetXRot), damage);
 		}
-		return accept(kind, clientAfter, server, world, scratch, target, targetYRot, targetXRot, startX, startY, startZ,
-		    yDist, standsOnSomething, residualSquared, fail && !oldBoxFree, damage);
+		return accept(kind, clientAfter, server, world, scratch, targetX, targetY, targetZ, targetYRot, targetXRot,
+		    startX, startY, startZ, yDist, standsOnSomething, residualSquared, fail && !oldBoxFree, damage);
 	}
 
 	/**
@@ -286,11 +286,11 @@ public final class ServerMovementListener {
 	 * contact bits, support, fall, known movement and movement statistics, and advance the last-good anchor.
 	 */
 	private static ServerTick.Accepted accept(final MovementPacket kind, final PlayerState clientAfter,
-	    final ServerPlayerState server, final SnapshotView world, final Scratch scratch,
-	    final MovementCorrection.Target target, final float targetYRot, final float targetXRot, final double startX,
+	    final ServerPlayerState server, final SnapshotView world, final Scratch scratch, final double targetX,
+	    final double targetY, final double targetZ, final float targetYRot, final float targetXRot, final double startX,
 	    final double startY, final double startZ, final double yDist, final boolean standsOnSomething,
 	    final double residualSquared, final boolean forgivenByOccupiedStart, final ServerDamage damage) {
-		snapTo(server, target.x(), target.y(), target.z());
+		snapTo(server, targetX, targetY, targetZ);
 		installRotation(server, targetYRot, targetXRot);
 		boolean airborneCandidate = yDist >= FLOATING_DESCENT_ALLOWANCE && !standsOnSomething && !server.allowFlight
 		    && !server.mayfly && !server.fallFlying;
@@ -324,8 +324,8 @@ public final class ServerMovementListener {
 		server.lastGoodX = server.x;
 		server.lastGoodY = server.y;
 		server.lastGoodZ = server.z;
-		return new ServerTick.Accepted(kind, target.x(), target.y(), target.z(), residualSquared,
-		    forgivenByOccupiedStart, server.clientIsFloating, server.floatingUnknown, damage.effects());
+		return new ServerTick.Accepted(kind, targetX, targetY, targetZ, residualSquared, forgivenByOccupiedStart,
+		    server.clientIsFloating, server.floatingUnknown, damage.effects());
 	}
 
 	private static ServerTick.Corrected corrected(final MovementPacket kind, final CorrectionReason reason,

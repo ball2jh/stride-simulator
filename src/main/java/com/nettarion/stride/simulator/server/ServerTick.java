@@ -97,14 +97,14 @@ public final class ServerTick {
 	// ---- the composed step, in call order
 
 	/**
-	 * Begin the composed step's transaction on the server copy that step owns. Admission is
-	 * {@link ServerPlayerState#requireValid()}, a declared difficulty, and no attached firework rocket while either
-	 * copy glides. The last step's tracker sample and health packet are forgotten.
+	 * Begin the composed step's transaction on the server copy that step owns. Admission is a declared
+	 * difficulty and no attached firework rocket while either copy glides; the copy's validity was established
+	 * at the boundary. The last step's tracker sample and health packet are forgotten.
 	 *
 	 * @throws PendingServerWriteException when the difficulty is undeclared or a rocket would write the velocity
 	 */
 	public void beginTick(final PlayerState client, final ServerPlayerState server) {
-		begin(server, Objects.requireNonNull(client, "client").fallFlying);
+		begin(server, Objects.requireNonNull(client, "client").fallFlying, false);
 	}
 
 	/**
@@ -221,7 +221,7 @@ public final class ServerTick {
 	 * @throws PendingServerWriteException as {@link #advanceTicks}, and when a rocket is attached
 	 */
 	public Effects tickConnection(final ServerPlayerState server, final SnapshotView world) {
-		begin(server, true);
+		begin(server, true, true);
 		connectionTick(server, world);
 		return this.authority.damage().effects();
 	}
@@ -238,7 +238,7 @@ public final class ServerTick {
 		if (kind == MovementPacket.NONE) {
 			throw new IllegalArgumentException("NONE is not a packet");
 		}
-		begin(server, Objects.requireNonNull(payload, "payload").fallFlying);
+		begin(server, Objects.requireNonNull(payload, "payload").fallFlying, true);
 		return ServerMovementListener.handleMovePlayer(payload, kind, server, world, this.serverScratch);
 	}
 
@@ -356,7 +356,7 @@ public final class ServerTick {
 		Objects.requireNonNull(kind, "kind");
 		Objects.requireNonNull(action, "action");
 		Objects.requireNonNull(world, "world");
-		begin(server, clientAfter.fallFlying);
+		begin(server, clientAfter.fallFlying, false);
 		// MinecraftServer.processPacketsAndTick drains the client's packets
 		// before tickServer; the level tick and the connection tick then run on
 		// the copy at the accepted target and restore the packet-owned position.
@@ -385,11 +385,16 @@ public final class ServerTick {
 	// ---- private
 
 	/**
-	 * The one admission rule of a transaction: a valid copy with a declared difficulty and no attached firework
-	 * rocket while either copy glides. Forgets the last transaction's hits, sample and health packet.
+	 * The admission rule of a transaction: a declared difficulty and no attached firework rocket while either
+	 * copy glides. Forgets the last transaction's hits, sample and health packet. A scheduled event also runs
+	 * {@link ServerPlayerState#requireValid()}, since its state may come from a decoded packet; the composed step
+	 * trusts the copies it produced itself, which {@code SimulationState} admitted at the boundary.
 	 */
-	private void begin(final ServerPlayerState server, final boolean clientGlides) {
-		Objects.requireNonNull(server, "server").requireValid();
+	private void begin(final ServerPlayerState server, final boolean clientGlides, final boolean validate) {
+		Objects.requireNonNull(server, "server");
+		if (validate) {
+			server.requireValid();
+		}
 		FoodData.requireSupported(server);
 		requireNoRocketWrites(server, clientGlides);
 		this.emittedDamageCount = 0;
@@ -510,6 +515,9 @@ public final class ServerTick {
 	 * @param damage every hit dealt, in the order the server dealt them
 	 */
 	public record Effects(Optional<HurtCause> hurt, List<DamageEvent> damage) {
+		/** A transaction that marked nothing and dealt no hit. */
+		public static final Effects NONE = new Effects(Optional.empty(), List.of());
+
 		/** Validates and copies. */
 		public Effects {
 			Objects.requireNonNull(hurt, "hurt");

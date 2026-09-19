@@ -1,5 +1,6 @@
 package com.nettarion.stride.simulator;
 
+import com.nettarion.stride.simulator.geometry.Mth;
 import com.nettarion.stride.simulator.world.WorldView;
 
 import java.util.Optional;
@@ -26,8 +27,36 @@ public sealed class PlayerState permits ServerPlayerState {
 
 	private static final double MAX_VERTICAL_CENTER = 20_000_000.0;
 
-	/** Collision memo for the current pose; see {@code PoseFitCache}. Not part of equality or the digest. */
-	private final PoseFitCache poseFit = new PoseFitCache();
+	/**
+	 * The pose-fit cache: the memoized collision result for one pose at one position in one world.
+	 * Optimization metadata only, absent from the digest and the trace state. Every use rechecks the
+	 * recorded key and the raw position bits, so a stale entry can only become a miss. The entry is keyed
+	 * on the world's identity number and the collision version of the cells the box can touch, and never
+	 * holds the world; after {@link #carryPoseFitCache} it is also keyed on the span revision of those
+	 * cells. Zero names no world, so a state never checked, or checked in a view without an identity,
+	 * holds no entry.
+	 */
+	private long poseFitWorld;
+
+	/** The collision version of the span at the time of the entry, or zero in an immutable view. */
+	private long poseFitCollisionVersion;
+
+	/** The span revision the entry stands under once carried, and zero until then. */
+	private long poseFitSpanRevision;
+
+	private long poseFitXBits;
+
+	private long poseFitYBits;
+
+	private long poseFitZBits;
+
+	private int poseFitWidthBits;
+
+	/** The height of the pose that fit; negative once cleared, which fails every comparison. */
+	private float poseFitHeight;
+
+	/** The inflation vanilla's collision query applies to a box before scanning cells, in blocks. */
+	private static final double POSE_FIT_EPSILON = 1.0E-7;
 
 	/** Player center on the east-west axis, in blocks; use {@link #placeAt} to keep the box consistent. */
 	public double x;
@@ -354,7 +383,14 @@ public sealed class PlayerState permits ServerPlayerState {
 	/** {@link #copyInto} without the server override: the movement half and the pose-fit cache only. */
 	final void copyMovementInto(final PlayerState copy) {
 		StateFields.copy(copy, this);
-		this.poseFit.copyInto(copy.poseFit);
+		copy.poseFitWorld = this.poseFitWorld;
+		copy.poseFitCollisionVersion = this.poseFitCollisionVersion;
+		copy.poseFitSpanRevision = this.poseFitSpanRevision;
+		copy.poseFitXBits = this.poseFitXBits;
+		copy.poseFitYBits = this.poseFitYBits;
+		copy.poseFitZBits = this.poseFitZBits;
+		copy.poseFitWidthBits = this.poseFitWidthBits;
+		copy.poseFitHeight = this.poseFitHeight;
 	}
 
 	/** An immutable copy of the retained collision box. */
@@ -499,28 +535,121 @@ public sealed class PlayerState permits ServerPlayerState {
 		}
 	}
 
-	/** Clears the pose-fit cache. */
+	/**
+	 * Clears the pose-fit cache. The height is what every check compares against a pose, so a negative
+	 * one fails them all; the world identity is kept, since the next entry is almost always in the same
+	 * world.
+	 */
 	void clearPoseFitCache() {
-		this.poseFit.clear();
+		this.poseFitHeight = -1.0F;
 	}
 
 	/** Whether the pose-fit cache covers {@code pose} at this position in {@code world}. */
 	public boolean hasCachedPoseFit(final WorldView world, final Pose pose) {
-		return this.poseFit.covers(world, this.x, this.y, this.z, pose);
+		return this.poseFitWorld != 0L && this.poseFitXBits == Double.doubleToRawLongBits(this.x)
+		    && this.poseFitYBits == Double.doubleToRawLongBits(this.y)
+		    && this.poseFitZBits == Double.doubleToRawLongBits(this.z)
+		    && this.poseFitWidthBits == Float.floatToRawIntBits(pose.width) && this.poseFitHeight >= pose.height
+		    && poseFitHolds(world);
+	}
+
+	/**
+	 * Whether the entry holds in {@code world}: in the view it was taken in, by the span's collision
+	 * version unless the view is immutable; in another view, by span revision when the entry carries
+	 * one and the world answers the same.
+	 */
+	private boolean poseFitHolds(final WorldView world) {
+		long identity = world.identity();
+		if (identity != 0L && this.poseFitWorld == identity) {
+			// The very view the entry was taken in: immutable, nothing to read;
+			// mutable, the span's version says whether an edit reached it.
+			return world.movementFactsImmutable() || this.poseFitCollisionVersion == poseFitSpan(world, false);
+		}
+		// Another view: the entry holds there when it answers the same span
+		// revision, which a republication that kept the sections does.
+		return this.poseFitSpanRevision != 0L && this.poseFitSpanRevision == poseFitSpan(world, true);
 	}
 
 	/**
 	 * Carries the pose-fit cache across a world republication: records, from the view it was taken in,
-	 * the span revision it stands under, so a later check in another view can honor it. A consumer
-	 * calls this on the states it keeps across a republication; the tick never does.
+	 * the span revision it stands under, so a later check in another view can honor it. Nothing is read
+	 * when the entry is absent, already carried, or stale in its own view. A consumer calls this on the
+	 * states it keeps across a republication; the tick never does.
 	 */
 	public void carryPoseFitCache(final WorldView world) {
-		this.poseFit.carry(world);
+		if (this.poseFitSpanRevision != 0L || this.poseFitWorld == 0L || this.poseFitHeight < 0.0F) {
+			return;
+		}
+		long identity = world.identity();
+		if (identity == 0L || this.poseFitWorld != identity) {
+			return;
+		}
+		if (!world.movementFactsImmutable() && this.poseFitCollisionVersion != poseFitSpan(world, false)) {
+			return;
+		}
+		this.poseFitSpanRevision = poseFitSpan(world, true);
 	}
 
 	/** Records a pose fit the caller established; no collision query runs here. */
 	public void cachePoseFit(final WorldView world, final Pose pose) {
-		this.poseFit.record(world, this.x, this.y, this.z, pose);
+		long xBits = Double.doubleToRawLongBits(this.x);
+		long yBits = Double.doubleToRawLongBits(this.y);
+		long zBits = Double.doubleToRawLongBits(this.z);
+		int widthBits = Float.floatToRawIntBits(pose.width);
+		// A view without an identity cannot be keyed on: nothing to record,
+		// and every later check is a miss.
+		long identity = world.identity();
+		if (identity == 0L) {
+			clearPoseFitCache();
+			return;
+		}
+		// A fresh shorter entry cannot renew a still-valid taller one.
+		if (this.poseFitWorld != 0L && this.poseFitXBits == xBits && this.poseFitYBits == yBits
+		    && this.poseFitZBits == zBits && this.poseFitWidthBits == widthBits && this.poseFitHeight >= pose.height
+		    && poseFitHolds(world)) {
+			return;
+		}
+		this.poseFitWorld = identity;
+		this.poseFitXBits = xBits;
+		this.poseFitYBits = yBits;
+		this.poseFitZBits = zBits;
+		this.poseFitWidthBits = widthBits;
+		this.poseFitHeight = pose.height;
+		// Read last, over the span the fields above now describe. The span
+		// revision is not read here: see carryPoseFitCache.
+		this.poseFitSpanRevision = 0L;
+		this.poseFitCollisionVersion = world.movementFactsImmutable() ? 0L : poseFitSpan(world, false);
+	}
+
+	/**
+	 * The {@link WorldView#spanRevision} ({@code revision}) or {@link WorldView#collisionVersionIn} of the
+	 * cells the recorded box can touch. The span is rebuilt from the entry's own record:
+	 * {@code Float.intBitsToFloat} inverts {@code floatToRawIntBits} exactly and the height is held as a
+	 * float already, so this reproduces the probe's box bit for bit. It uses the recorded height, which
+	 * {@link #hasCachedPoseFit} allows to exceed the pose being asked about, so the span can only be too
+	 * large. Shapes are cell-bounded wherever an entry can be recorded, so no cell outside this span can
+	 * contribute a box that reaches the recorded one.
+	 */
+	private long poseFitSpan(final WorldView world, final boolean revision) {
+		float halfWidth = Float.intBitsToFloat(this.poseFitWidthBits) / 2.0F;
+		double cachedX = Double.longBitsToDouble(this.poseFitXBits);
+		double cachedY = Double.longBitsToDouble(this.poseFitYBits);
+		double cachedZ = Double.longBitsToDouble(this.poseFitZBits);
+		double minX = cachedX - halfWidth + POSE_FIT_EPSILON;
+		double minY = cachedY + POSE_FIT_EPSILON;
+		double minZ = cachedZ - halfWidth + POSE_FIT_EPSILON;
+		double maxX = cachedX + halfWidth - POSE_FIT_EPSILON;
+		double maxY = cachedY + this.poseFitHeight - POSE_FIT_EPSILON;
+		double maxZ = cachedZ + halfWidth - POSE_FIT_EPSILON;
+		// The span collectCollisions scans for that box, derived the same way.
+		int fromX = Mth.floor(minX - POSE_FIT_EPSILON) - 1;
+		int fromY = Mth.floor(minY - POSE_FIT_EPSILON) - 1;
+		int fromZ = Mth.floor(minZ - POSE_FIT_EPSILON) - 1;
+		int toX = Mth.floor(maxX + POSE_FIT_EPSILON) + 1;
+		int toY = Mth.floor(maxY + POSE_FIT_EPSILON) + 1;
+		int toZ = Mth.floor(maxZ + POSE_FIT_EPSILON) + 1;
+		return revision ? world.spanRevision(fromX, fromY, fromZ, toX, toY, toZ)
+		                : world.collisionVersionIn(fromX, fromY, fromZ, toX, toY, toZ);
 	}
 
 	/** Records a collision-clear current pose only when the retained box exactly matches that pose. */

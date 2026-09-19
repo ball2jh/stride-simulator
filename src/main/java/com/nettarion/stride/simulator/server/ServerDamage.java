@@ -85,7 +85,8 @@ public final class ServerDamage {
 
 	/** The mark and the hits together, as a transaction reports them. */
 	ServerTick.Effects effects() {
-		return new ServerTick.Effects(marked(), dealt());
+		return this.marked == null && this.damage.isEmpty() ? ServerTick.Effects.NONE
+		                                                    : new ServerTick.Effects(marked(), dealt());
 	}
 
 	/**
