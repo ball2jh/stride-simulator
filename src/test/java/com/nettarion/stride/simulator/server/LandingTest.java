@@ -12,6 +12,7 @@ import static com.nettarion.stride.simulator.server.ServerTestWorlds.packet;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.region;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.view;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.wallWorld;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -32,7 +33,9 @@ import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.Suffocation;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -175,16 +178,22 @@ final class LandingTest {
 
 	@Test
 	void farmlandRefusesATrampleOnlyForABodyLargeEnoughToTrampleIt() {
-		// FarmlandBlock.fallOn tramples at random only when width^2 * height
-		// exceeds 0.512; a glider's 0.6-cube box is 0.216 and lands ordinarily.
-		PendingServerWriteException refusal = assertThrows(PendingServerWriteException.class,
-		    () -> landOnFarmland(false), "a standing body past half a block is a random trample");
-		assertEquals(RefusalCause.PENDING_SERVER_RANDOM, refusal.cause());
-		ServerPlayerState glider = landOnFarmland(true);
+		// FarmlandBlock.fallOn tramples when random.nextFloat() < fallDistance - 0.5
+		// and width^2 * height exceeds 0.512. A one-block drop is a coin toss the
+		// server decides; a three-block drop tramples for certain and refuses as a
+		// world write. A glider's 0.6-cube box is 0.216 and lands ordinarily.
+		PendingServerWriteException random = assertThrows(PendingServerWriteException.class,
+		    () -> landOnFarmland(false, 1.0, 0.0), "a standing body past half a block is a random trample");
+		assertEquals(RefusalCause.PENDING_SERVER_RANDOM, random.cause());
+		PendingServerWriteException certain = assertThrows(PendingServerWriteException.class,
+		    () -> landOnFarmland(false, 2.0, 1.0), "a fall past a block and a half always tramples");
+		assertEquals(RefusalCause.UNMODELED_WORLD_WRITE, certain.cause());
+		ServerPlayerState glider = landOnFarmland(true, 2.0, 1.0);
 		assertRaw(0.0, glider.fallDistance, "");
 	}
 
-	private static ServerPlayerState landOnFarmland(final boolean gliding) {
+	private static ServerPlayerState landOnFarmland(
+	    final boolean gliding, final double startY, final double priorFallDistance) {
 		PlayerState before = new PlayerState();
 		if (gliding) {
 			before.pose = PlayerState.Pose.FALL_FLYING;
@@ -192,8 +201,8 @@ final class LandingTest {
 			before.gliderUsable = true;
 			before.fallFlyTicks = 5;
 		}
-		before.placeAt(0.5, 2.0, 0.5);
-		before.fallDistance = 1.0;
+		before.placeAt(0.5, startY, 0.5);
+		before.fallDistance = priorFallDistance;
 		ServerPlayerState server = ServerPlayerState.atBoundary(before);
 		PlayerState after = before.copy();
 		after.placeAt(0.5, 0.0, 0.5);
