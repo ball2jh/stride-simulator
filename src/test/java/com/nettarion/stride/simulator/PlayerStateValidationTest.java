@@ -1,14 +1,15 @@
 package com.nettarion.stride.simulator;
 
-import com.nettarion.stride.simulator.world.FlatFloorView;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.nettarion.stride.simulator.world.FlatFloorView;
 import org.junit.jupiter.api.Test;
 
-class PlayerStateValidationTest {
+/** {@code requireValidForTransition} admits exactly the finite, consistent states inside the coordinate domain. */
+final class PlayerStateValidationTest {
 	@Test
 	void acceptsAPlacedFiniteState() {
 		PlayerState state = new PlayerState();
@@ -64,7 +65,7 @@ class PlayerStateValidationTest {
 	}
 
 	@Test
-	void locationCopyMovesCorrelatedFieldsAndInvalidatesTheTargetCertificate() {
+	void locationCopyMovesCorrelatedFieldsAndClearsTheTargetsPoseFitCache() {
 		PlayerState source = new PlayerState();
 		source.placeAt(-7.25, 18.0, 4.5);
 		PlayerState target = new PlayerState();

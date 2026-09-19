@@ -1,5 +1,7 @@
 package com.nettarion.stride.simulator;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.nettarion.stride.simulator.block.BlockEffects;
 import com.nettarion.stride.simulator.server.FoodData;
 import com.nettarion.stride.simulator.server.Survival;
@@ -13,30 +15,28 @@ import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.tick.Travel;
 import com.nettarion.stride.simulator.world.FlatFloorView;
 import com.nettarion.stride.simulator.world.WorldView;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
- * Each phase writes only the {@link PlayerState} fields its contract
- * declares, on both copies of the player. The declared sets are what a
- * reader of a phase relies on; this holds them to the code by running the
- * phases in tick order over a short schedule and diffing every public field
- * around each one.
+ * Each phase writes only the {@link PlayerState} fields its contract declares, on both copies of the
+ * player, checked by running the phases in tick order over a short schedule and diffing every public
+ * field around each one.
  */
-class PhaseWriteSetTest {
+final class PhaseWriteSetTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
+
 	private static final PlayerInput SPRINT_JUMP =
-	    new PlayerInput(true, false, false, false, true, true, false, 35.0F, -10.0F);
+	    PlayerInput.of(35.0F, -10.0F, PlayerInput.Key.FORWARD, PlayerInput.Key.JUMP, PlayerInput.Key.SNEAK);
+
 	private static final PlayerInput SNEAK_BACK =
-	    new PlayerInput(false, true, false, true, false, false, true, 200.0F, 20.0F);
+	    PlayerInput.of(200.0F, 20.0F, PlayerInput.Key.BACKWARD, PlayerInput.Key.RIGHT, PlayerInput.Key.SPRINT);
 
 	private static final PlayerInput[] SCHEDULE = {IDLE, SPRINT_JUMP, SPRINT_JUMP, SPRINT_JUMP, SNEAK_BACK, SNEAK_BACK,
 	    IDLE, SPRINT_JUMP, IDLE, SNEAK_BACK, IDLE, IDLE};
@@ -73,7 +73,7 @@ class PhaseWriteSetTest {
 
 	@Test
 	void everyDeclaredFieldExists() throws ReflectiveOperationException {
-		Set<String> declared = new java.util.HashSet<>(BaseTick.WRITES);
+		Set<String> declared = new HashSet<>(BaseTick.WRITES);
 		declared.addAll(AiStep.WRITES);
 		declared.addAll(Travel.WRITES);
 		declared.addAll(Move.WRITES);
@@ -136,16 +136,9 @@ class PhaseWriteSetTest {
 	private static Map<String, Object> snapshot(final PlayerState state) throws ReflectiveOperationException {
 		Map<String, Object> values = new HashMap<>();
 		for (Field field : state.getClass().getFields()) {
-			if (Modifier.isStatic(field.getModifiers())) {
-				continue;
+			if (ReflectiveFields.isInstanceField(field)) {
+				values.put(field.getName(), ReflectiveFields.rawValue(field, state));
 			}
-			Object value = field.get(state);
-			if (value instanceof Double d) {
-				value = Double.doubleToRawLongBits(d);
-			} else if (value instanceof Float f) {
-				value = Float.floatToRawIntBits(f);
-			}
-			values.put(field.getName(), value);
 		}
 		return values;
 	}

@@ -9,12 +9,13 @@ package com.nettarion.stride.simulator;
 public final class PendingServerWriteException extends RefusalException {
 	private static final long serialVersionUID = 1L;
 
+	/** The refusal {@link Simulator#run} throws when a sequence ends with a hurt write still pending. */
 	PendingServerWriteException() {
 		this(RefusalCause.PENDING_WRITE,
 		    "the action sequence ends before the hurt-marked velocity write the last server tick caused arrives");
 	}
 
-	/** Refuses a server outcome that the supplied boundary cannot determine. */
+	/** A refusal with the given stable cause and a message naming the missing fact. */
 	public PendingServerWriteException(final RefusalCause cause, final String message) {
 		super(cause, message);
 	}

@@ -7,32 +7,25 @@ import com.nettarion.stride.simulator.world.SnapshotView;
 import java.util.Objects;
 
 /**
- * The one transition body: every phase of a client-and-server step, each
- * a method both runners call, so the fused schedule and an explicit one
- * share every line of arithmetic and differ only in when they call it and
- * where packets wait.
+ * The one transition body: every phase of a client-and-server step as a method both runners call, so
+ * the composed schedule and an explicit one share every line of arithmetic and differ only in when
+ * they call each phase and where packets wait.
  *
- * <p>The phases are the pinned server's, in its order: the entity tracker's
- * sample ({@link #publishServerEntity}), {@code ServerPlayer.tick}
- * ({@link #tickLevel}), the connection's {@code doTick}
- * ({@link #tickConnection}), the client's tick with its publisher's packet
- * choice ({@link #tickClient}), the packet handlers
- * ({@link #handleInput}, {@link #handleSprint}, {@link #handleGlide},
- * {@link #handleMove}, {@link #handleAcceptTeleport}), the server's bound
- * publications ({@link #dataPublication}, {@link #healthPublication}), and
- * the client's application of a delivered write ({@link #deliver}).
- * {@link Simulator} calls them in the constructed schedule with nothing
- * queued between; a {@link ScheduledSimulation} calls one per event with
- * FIFO queues in each direction. {@code ScheduledSimulationTest} holds the
- * two bit-equal under the constructed schedule.
+ * <p>The phases, in vanilla's order: the tracker sample ({@link #publishServerEntity}),
+ * {@code ServerPlayer.tick} ({@link #tickLevel}), the connection's {@code doTick}
+ * ({@link #tickConnection}), the client tick with its packet choice ({@link #tickClient}), the packet
+ * handlers ({@link #handleInput}, {@link #handleSprint}, {@link #handleGlide}, {@link #handleMove},
+ * {@link #handleAcceptTeleport}), the server's writes ({@link #dataPublication},
+ * {@link #healthPublication}) and the client's application of one ({@link #deliver}).
  *
- * <p>An instance retains the client and server scratch and the tracker's
- * sample, and is not thread-safe. It sends nothing and queues nothing: the
- * runner that calls a phase owns what it produced.
+ * <p>An instance retains the client and server scratch and the tracker's sample, and is not
+ * thread-safe. It sends nothing and queues nothing: the runner that calls a phase owns what it produced.
  */
 final class Transition {
 	private final ClientTick clientTick = new ClientTick();
+
 	private final Scratch clientScratch = new Scratch();
+
 	private final ServerTick serverTick = new ServerTick();
 
 	/** The server tick and its scratch, for the runner's world binding and the packet listeners. */
@@ -74,7 +67,7 @@ final class Transition {
 	/**
 	 * {@code ServerGamePacketListenerImpl.tickPlayer}: {@code doTick} on the
 	 * server's copy under server authority. The hits it deals are on the
-	 * survival ledger from {@code emittedFrom} on; the marking one is returned.
+	 * survival ledger; the marking one is returned.
 	 */
 	public ServerTick.Effects tickConnection(final ServerPlayerState server, final SnapshotView world) {
 		return this.serverTick.tickConnection(server, world);
@@ -106,7 +99,7 @@ final class Transition {
 		this.serverTick.handlePlayerCommand(server, sprinting);
 	}
 
-	/** Applies one decoded request to start gliding under the server's admission rules. */
+	/** Applies one decoded request to start gliding under the server's own checks. */
 	public void handleGlide(final ServerPlayerState server) {
 		this.serverTick.handleStartFallFlying(server);
 	}
@@ -114,7 +107,7 @@ final class Transition {
 	/**
 	 * {@code handleMovePlayer} on the decoded packet. Under a pending
 	 * correction the listener applies the packet's rotation only; the
-	 * fused runner refuses that state before it reaches here, since its
+	 * composed runner refuses that state before it reaches here, since its
 	 * transport has no place to hold the acknowledgement, and an explicit
 	 * schedule delivers the acknowledgement as its own packet.
 	 */

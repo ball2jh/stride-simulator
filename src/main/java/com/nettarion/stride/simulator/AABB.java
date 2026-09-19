@@ -1,10 +1,18 @@
 package com.nettarion.stride.simulator;
 
-
-/** An axis-aligned box, matching vanilla's {@code AABB} semantics. */
+/**
+ * An axis-aligned box in blocks, matching vanilla's {@code AABB} semantics.
+ *
+ * @param minX the minimum X face
+ * @param minY the minimum Y face
+ * @param minZ the minimum Z face
+ * @param maxX the maximum X face
+ * @param maxY the maximum Y face
+ * @param maxZ the maximum Z face
+ */
 public record AABB(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
 	/**
-	 * Player boxes are built from a width and height centerd on x/z and resting
+	 * Player boxes are built from a width and height centered on x/z and resting
 	 * on y, exactly as {@code EntityDimensions.makeBoundingBox} does.
 	 */
 	public static AABB around(final double x, final double y, final double z, final float width, final float height) {

@@ -1,43 +1,56 @@
 package com.nettarion.stride.simulator;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.nettarion.stride.simulator.server.ServerTick;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.*;
-import com.nettarion.stride.simulator.world.OutsidePolicy;
-import com.nettarion.stride.simulator.world.BlockEntry;
 
-class ScheduledSimulationTest {
+/**
+ * An explicit schedule delivers each packet where it is told to, forks own their queues, and the
+ * composed order reproduces {@link Simulator} bit for bit.
+ */
+final class ScheduledSimulationTest {
+	private static final PlayerInput SPRINT = PlayerInput.of(0, 0, PlayerInput.Key.FORWARD, PlayerInput.Key.SPRINT);
+
+	private static final PlayerInput WALK = PlayerInput.of(0, 0, PlayerInput.Key.FORWARD);
+
 	@Test
 	void delayedHealthChangesSprintOnlyAtDelivery() {
-		var client = state();
-		var server = ServerPlayerState.atBoundary(client);
+		PlayerState client = state();
+		ServerPlayerState server = ServerPlayerState.atBoundary(client);
 		server.foodLevel = 6;
-		var simulation = new ScheduledSimulation(new SimulationState(client, server, 0), world());
+		ScheduledSimulation simulation = new ScheduledSimulation(new SimulationState(client, server, 0), world());
 		simulation.tickConnection();
-		var sprint = new PlayerInput(true, false, false, false, false, false, true, 0, 0);
-		simulation.tickClient(sprint);
-		simulation.tickClient(sprint);
+		simulation.tickClient(SPRINT);
+		simulation.tickClient(SPRINT);
 		assertTrue(simulation.clientState().sprinting);
 		assertEquals(20, simulation.clientState().foodLevel);
-		var fork = simulation.fork();
+		ScheduledSimulation fork = simulation.fork();
 		assertTrue(simulation.deliverClientbound());
 		assertEquals(6, simulation.clientState().foodLevel);
 		assertEquals(20, fork.clientState().foodLevel);
 		assertEquals(1, simulation.writes().getLast().actionIndex());
-		simulation.tickClient(sprint);
+		simulation.tickClient(SPRINT);
 		assertFalse(simulation.clientState().sprinting);
 	}
 
 	@Test
 	void delayedCorrectionsProduceAcknowledgementAndPositionResponseInOrder() {
-		var simulation =
+		ScheduledSimulation simulation =
 		    new ScheduledSimulation(new SimulationState(state(), ServerPlayerState.atBoundary(state()), 0), world());
 		simulation.tickConnection();
-		var sprint = new PlayerInput(true, false, false, false, false, false, true, 0, 0);
-		for (int i = 0; i < 60; i++)
-			simulation.tickClient(sprint);
+		for (int i = 0; i < 60; i++) {
+			simulation.tickClient(SPRINT);
+		}
 		while (simulation.deliverServerbound()) {}
 		assertTrue(simulation.serverState().correctionPending);
 		while (simulation.deliverClientbound()) {}
@@ -52,14 +65,14 @@ class ScheduledSimulationTest {
 
 	@Test
 	void absoluteCorrectionsNormalizeZeroAndClampPitchAsPositionMoveRotationDoes() {
-		var player = state();
+		PlayerState player = state();
 		new PlayerPositionWrite(0, StateDigest.state(player), 7, -0.0, -0.0, -0.0, -0.0F, 120)
 		    .applyAfterAction(0, player);
 		assertEquals(0L, Double.doubleToRawLongBits(player.x));
 		assertEquals(0, Float.floatToRawIntBits(player.yRot));
 		assertEquals(90, player.xRot);
-		var server = ServerPlayerState.atBoundary(state());
-		var packet = state();
+		ServerPlayerState server = ServerPlayerState.atBoundary(state());
+		PlayerState packet = state();
 		packet.xRot = 120;
 		new ServerTick().handleMovePlayer(packet, MovementPacket.ROT, server, world());
 		assertEquals(90, server.xRot);
@@ -67,17 +80,17 @@ class ScheduledSimulationTest {
 
 	@Test
 	void explicitFixedScheduleMatchesExistingComposition() {
-		var world = world();
-		var simulator = new Simulator();
-		SimulationState fixed = simulator.start(state(), state());
-		var scheduled = new ScheduledSimulation(fixed, world);
-		var schedule = ActionSchedule.composed();
+		SnapshotView world = world();
+		Simulator simulator = new Simulator();
+		SimulationState fixed = new SimulationState(state(), ServerPlayerState.atBoundary(state()), 0);
+		ScheduledSimulation scheduled = new ScheduledSimulation(fixed, world);
+		ActionSchedule schedule = ActionSchedule.composed();
 		for (int i = 0; i < 35; i++) {
-			var input = new PlayerInput(i < 20, false, false, false, i == 5, i > 25, i < 15, 0, 0);
+			PlayerInput input = new PlayerInput(i < 20, false, false, false, i == 5, i > 25, i < 15, 0, 0);
 			// The composed step's schedule: the server tick that drained the
 			// last packets finishes (sample, level tick, connection tick), the
 			// client ticks and the next drain runs, and the sample reaches the
-			// client before its next tick, as the live captures measure.
+			// client before its next tick, as the bundled captures record.
 			schedule.advance(scheduled, input);
 			fixed = simulator.advance(fixed, input, world).state();
 			assertTrue(PlayerState.rawEquals(fixed.clientState(), scheduled.clientState()), "client tick " + i);
@@ -90,12 +103,12 @@ class ScheduledSimulationTest {
 
 	@Test
 	void packetPayloadAndQueuesSurviveIndependentForks() {
-		var scheduled =
+		ScheduledSimulation scheduled =
 		    new ScheduledSimulation(new SimulationState(state(), ServerPlayerState.atBoundary(state()), 0), world());
-		scheduled.tickClient(new PlayerInput(true, false, false, false, false, false, false, 0, 0));
+		scheduled.tickClient(WALK);
 		double firstZ = scheduled.clientState().z;
-		var branch = scheduled.fork();
-		scheduled.tickClient(new PlayerInput(true, false, false, false, false, false, false, 0, 0));
+		ScheduledSimulation branch = scheduled.fork();
+		scheduled.tickClient(WALK);
 		assertTrue(scheduled.deliverServerbound()); // input
 		assertTrue(scheduled.deliverServerbound()); // first movement, not the later mutable client
 		assertEquals(firstZ, scheduled.serverState().z);
@@ -106,17 +119,31 @@ class ScheduledSimulationTest {
 	}
 
 	@Test
+	void theInteractionDeclarationIsCarriedByForksAndTheTransportState() {
+		SimulationState start = new SimulationState(state(), ServerPlayerState.atBoundary(state()), 0);
+		ScheduledSimulation undeclared = new ScheduledSimulation(start, world());
+		assertEquals(Interaction.UNDECLARED, undeclared.transportState().interaction());
+		assertNull(undeclared.transportState().mayInteract());
+		ScheduledSimulation allowed = new ScheduledSimulation(start, world(), Interaction.ALLOWED);
+		assertEquals(Interaction.ALLOWED, allowed.fork().transportState().interaction());
+		assertEquals(Boolean.TRUE, allowed.transportState().mayInteract());
+		ScheduledSimulation denied = new ScheduledSimulation(start, world(), Boolean.FALSE);
+		assertEquals(Interaction.DENIED, denied.transportState().interaction());
+		assertFalse(ScheduledSimulation.sameState(allowed, denied), "the declaration is part of the branch");
+	}
+
+	@Test
 	void batchedSpeedBudgetResetsAfterFiveAndUsesFirstGood() {
-		var server = ServerPlayerState.atBoundary(state());
-		var tick = new ServerTick();
+		ServerPlayerState server = ServerPlayerState.atBoundary(state());
+		ServerTick tick = new ServerTick();
 		tick.tickConnection(server, world());
 		for (double x : new double[] {9.5, 13.5, 17.5, 19.5, 21.5}) {
-			var packet = state();
+			PlayerState packet = state();
 			packet.placeAt(x, 0, 0.5);
 			assertInstanceOf(
 			    ServerTick.Accepted.class, tick.handleMovePlayer(packet, MovementPacket.POS, server, world()));
 		}
-		var packet = state();
+		PlayerState packet = state();
 		packet.placeAt(22.5, 0, 0.5);
 		assertEquals(CorrectionReason.MOVED_TOO_QUICKLY,
 		    assertInstanceOf(
@@ -129,16 +156,17 @@ class ScheduledSimulationTest {
 
 	@Test
 	void pendingTeleportAppliesRotationAndRetriesOnlyOnPacketAfterTwentyTicks() {
-		var server = ServerPlayerState.atBoundary(state());
-		var tick = new ServerTick();
+		ServerPlayerState server = ServerPlayerState.atBoundary(state());
+		ServerTick tick = new ServerTick();
 		tick.tickConnection(server, world());
-		var packet = state();
+		PlayerState packet = state();
 		packet.placeAt(25, 0, 0.5);
 		tick.handleMovePlayer(packet, MovementPacket.POS, server, world());
 		int originalId = server.awaitingTeleport;
 		packet.yRot = 73;
-		for (int i = 0; i < 20; i++)
+		for (int i = 0; i < 20; i++) {
 			tick.tickConnection(server, world());
+		}
 		assertInstanceOf(
 		    ServerTick.AwaitingTeleport.class, tick.handleMovePlayer(packet, MovementPacket.POS_ROT, server, world()));
 		assertEquals(73, server.yRot);
@@ -157,39 +185,42 @@ class ScheduledSimulationTest {
 
 	@Test
 	void movementTailIsCopiedDigestedAndCappedWithVanillaMerge() {
-		var server = ServerPlayerState.atBoundary(state());
+		ServerPlayerState server = ServerPlayerState.atBoundary(state());
 		for (int i = 0; i < 100; i++) {
 			server.addMovementThisTick(i, 0, 0, i + 1, 0, 0, 0, 0);
 		}
-		var fork = server.copy();
+		ServerPlayerState fork = server.copy();
 		assertTrue(ServerPlayerState.rawEquals(server, fork));
 		long digest = StateDigest.server(server);
 		server.addMovementThisTick(100, 0, 0, 101, 0, 0, 0, 0);
-		assertEquals(99, server.additionalMovements.size());
+		assertEquals(ServerPlayerState.MAXIMUM_MOVEMENTS_THIS_TICK - 1, server.additionalMovementCount());
 		assertFalse(server.movementAxisDependent);
 		assertEquals(0, server.movementFromX);
 		assertEquals(2, server.movementToX);
 		assertNotEquals(digest, StateDigest.server(server));
 		assertFalse(ServerPlayerState.rawEquals(server, fork));
 		server.clearMovementThisTick();
-		assertEquals(99, fork.additionalMovements.size());
+		assertEquals(ServerPlayerState.MAXIMUM_MOVEMENTS_THIS_TICK - 1, fork.additionalMovementCount());
 	}
 
 	static PlayerState state() {
-		var state = new PlayerState();
+		PlayerState state = new PlayerState();
 		state.placeAt(0.5, 0, 0.5);
 		state.onGround = true;
 		state.mainSupportingBlockPosPresent = true;
 		state.mainSupportingBlockPosY = -1;
 		return state;
 	}
+
 	static SnapshotView world() {
-		var builder = WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -2, -4, 36, 16, 36)
-		                  .palette(BlockEntry.builder(0, "minecraft:air").build(),
-		                      BlockEntry.builder(1, "minecraft:stone").fullCube().build());
-		for (int x = -4; x < 32; x++)
-			for (int z = -4; z < 32; z++)
+		WorldSnapshot.Builder builder = WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -2, -4, 36, 16, 36)
+		                                    .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		                                        BlockEntry.builder(1, "minecraft:stone").fullCube().build());
+		for (int x = -4; x < 32; x++) {
+			for (int z = -4; z < 32; z++) {
 				builder.set(x, -1, z, 1);
+			}
+		}
 		return SnapshotView.compile(builder.build());
 	}
 }

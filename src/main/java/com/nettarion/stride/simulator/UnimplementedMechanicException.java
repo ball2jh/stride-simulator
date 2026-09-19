@@ -12,20 +12,26 @@ import java.util.function.Supplier;
  * silently becomes ordinary movement. This is not a claim that the movement is impossible in
  * Minecraft, only that this simulator does not compute it.
  *
- * <p>The message may be built lazily; see {@link #deferred(RefusalCause, Supplier)}.
+ * <p>The message may be built lazily; see {@link #deferred(RefusalCause, Supplier)}. A deferred
+ * message is built by a transient supplier: serializing the exception before anything read the
+ * message drops it, and the deserialized copy reports a {@code null} message beside its cause.
  */
 public final class UnimplementedMechanicException extends RefusalException {
 	private static final long serialVersionUID = 1L;
+
 	/** The message not yet built, or null once {@link #getMessage} built it or the constructor was given one. */
 	private transient Supplier<String> deferred;
+
+	/** The built or eagerly given message, or null while a deferred one is unread. */
 	private String message;
 
-	/** A refusal with an eagerly built message. */
+	/** A refusal with the given stable cause and an eagerly built message. */
 	public UnimplementedMechanicException(final RefusalCause cause, final String message) {
 		super(cause, message);
 		this.message = message;
 	}
 
+	/** A refusal whose message {@code deferred} builds on the first read. */
 	private UnimplementedMechanicException(final RefusalCause cause, final Supplier<String> deferred) {
 		super(cause, null);
 		this.deferred = Objects.requireNonNull(deferred, "deferred");
@@ -51,6 +57,7 @@ public final class UnimplementedMechanicException extends RefusalException {
 		return new UnimplementedMechanicException(cause, () -> prefix + x + "," + y + "," + z + suffix);
 	}
 
+	/** The message, building a deferred one on the first call. */
 	@Override
 	public String getMessage() {
 		String built = this.message;

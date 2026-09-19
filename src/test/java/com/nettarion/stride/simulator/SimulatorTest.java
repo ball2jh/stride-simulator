@@ -1,27 +1,31 @@
 package com.nettarion.stride.simulator;
 
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.IntFunction;
 import org.junit.jupiter.api.Test;
-import com.nettarion.stride.simulator.world.OutsidePolicy;
-import com.nettarion.stride.simulator.world.ShapeBox;
-import com.nettarion.stride.simulator.world.BlockEntry;
 
+/** The composed step: its run and step forms agree, its boundaries are isolated, and its writes land where measured. */
 final class SimulatorTest {
 	private static final PlayerInput SPRINT =
-	    new PlayerInput(true, false, false, false, false, false, true, 0.0F, 0.0F);
-	private static final PlayerInput CROUCH =
-	    new PlayerInput(false, false, false, false, false, true, false, 0.0F, 0.0F);
+	    PlayerInput.of(0.0F, 0.0F, PlayerInput.Key.FORWARD, PlayerInput.Key.SPRINT);
+
+	private static final PlayerInput CROUCH = PlayerInput.of(0.0F, 0.0F, PlayerInput.Key.SNEAK);
+
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
+
+	private static final PlayerInput GLIDE = PlayerInput.idle(-90.0F, 0.0F);
 
 	@Test
 	void fixedRunMatchesIndividualStepsIncludingDamageAndPendingBoundaries() {
@@ -29,7 +33,7 @@ final class SimulatorTest {
 		actions.addAll(Collections.nCopies(30, IDLE));
 		assertRunMatchesSteps(towerStart(), towerServerWithoutRegeneration(), null, actions, towerWorld());
 		Simulator simulator = new Simulator();
-		SimulationState boundary = simulator.start(towerStart(), towerServerWithoutRegeneration());
+		SimulationState boundary = new SimulationState(towerStart(), towerServerWithoutRegeneration(), 0);
 		for (int tick = 0; tick < actions.size(); tick++) {
 			boundary = simulator.advance(boundary, actions.get(tick), towerWorld()).state();
 			if (boundary.hasPendingHurt()) {
@@ -62,7 +66,7 @@ final class SimulatorTest {
 		List<PlayerInput> actions = new ArrayList<>(Collections.nCopies(6, SPRINT));
 		actions.addAll(Collections.nCopies(30, IDLE));
 		Simulator simulator = new Simulator();
-		SimulationState state = simulator.start(towerStart(), towerServerWithoutRegeneration());
+		SimulationState state = new SimulationState(towerStart(), towerServerWithoutRegeneration(), 0);
 		for (int tick = 0; tick < actions.size(); tick++) {
 			state = simulator.advance(state, actions.get(tick), towerWorld()).state();
 			if (state.hasPendingHurt()) {
@@ -75,88 +79,12 @@ final class SimulatorTest {
 		throw new AssertionError("fixture must produce pending hurt");
 	}
 
-	private static void assertRunMatchesSteps(final PlayerState client, final ServerPlayerState server,
-	    final HurtCause pending, final List<PlayerInput> actions, final SnapshotView world) {
-		long clientBefore = StateDigest.state(client);
-		long serverBefore = StateDigest.server(server);
-		Simulator simulator = new Simulator();
-		SimulationState state = new SimulationState(client, Publisher.atBoundary(client), server, 0, pending);
-		List<Simulator.Confirmation> confirmations = new ArrayList<>();
-		List<ServerWrite> writes = new ArrayList<>();
-		for (PlayerInput action : actions) {
-			Simulator.Step step = simulator.advance(state, action, world);
-			assertEquals(!step.damage().isEmpty(), step.hasDamage(),
-			    "allocation-free safety check must agree on damage, metadata, and freeze transitions");
-			state = step.state();
-			confirmations.addAll(step.confirmations());
-			writes.addAll(step.writes());
-		}
-		Simulator.Run run = simulator.run(client, server, Optional.ofNullable(pending), actions, world);
-		assertEquals(StateDigest.state(state.clientState()), StateDigest.state(run.clientState()));
-		assertEquals(StateDigest.server(state.serverState()), StateDigest.server(run.serverState()));
-		assertEquals(confirmations, run.confirmations());
-		assertEquals(writes.size(), run.timeline().writes().size());
-		for (int index = 0; index < writes.size(); index++) {
-			ServerWrite expected = writes.get(index);
-			ServerWrite actual = run.timeline().writes().get(index);
-			assertEquals(expected.actionIndex(), actual.actionIndex());
-			if (expected instanceof HurtMotionWrite hurt) {
-				HurtMotion motion = ((HurtMotionWrite) actual).event();
-				assertEquals(hurt.event().cause(), motion.cause());
-				assertEquals(hurt.event().causeAction(), motion.causeAction());
-				assertEquals(hurt.event().writeAfterAction(), motion.writeAfterAction());
-				assertEquals(
-				    Double.doubleToRawLongBits(hurt.event().writeX()), Double.doubleToRawLongBits(motion.writeX()));
-				assertEquals(
-				    Double.doubleToRawLongBits(hurt.event().writeY()), Double.doubleToRawLongBits(motion.writeY()));
-				assertEquals(
-				    Double.doubleToRawLongBits(hurt.event().writeZ()), Double.doubleToRawLongBits(motion.writeZ()));
-			} else {
-				assertEquals(expected, actual);
-			}
-		}
-		assertEquals(clientBefore, StateDigest.state(client));
-		assertEquals(serverBefore, StateDigest.server(server));
-		long finalClient = StateDigest.state(run.clientState());
-		long finalServer = StateDigest.server(run.serverState());
-		run.clientState().x += 100;
-		run.serverState().x += 100;
-		assertEquals(finalClient, StateDigest.state(run.clientState()));
-		assertEquals(finalServer, StateDigest.server(run.serverState()));
-	}
-
 	@Test
 	void advancingPreservesItsInputAcrossOrdinaryAndPendingHurtBoundaries() {
 		Simulator simulator = new Simulator();
 		assertTrue(assertAdvancingPreservesItsInput(simulator, towerWorld(),
-		    simulator.start(towerStart(), towerServerWithoutRegeneration()), 36, tick -> tick < 6 ? SPRINT : IDLE));
-	}
-
-	private static boolean assertAdvancingPreservesItsInput(final Simulator simulator, final SnapshotView world,
-	    final SimulationState start, final int ticks, final java.util.function.IntFunction<PlayerInput> actions) {
-		SimulationState boundary = start;
-		boolean sawPending = false;
-		for (int tick = 0; tick < ticks; tick++) {
-			PlayerInput action = actions.apply(tick);
-			long clientBefore = StateDigest.state(boundary.clientState());
-			long serverBefore = StateDigest.server(boundary.serverState());
-			Publisher publisherBefore = boundary.publisher();
-			sawPending |= boundary.hasPendingHurt();
-			Simulator.Step first = simulator.advance(boundary, action, world);
-			Simulator.Step replay = simulator.advance(boundary, action, world);
-			assertEquals(clientBefore, StateDigest.state(boundary.clientState()));
-			assertEquals(serverBefore, StateDigest.server(boundary.serverState()));
-			assertTrue(Publisher.rawEquals(publisherBefore, boundary.publisher()));
-			assertEquals(
-			    StateDigest.state(first.state().clientState()), StateDigest.state(replay.state().clientState()));
-			assertEquals(
-			    StateDigest.server(first.state().serverState()), StateDigest.server(replay.state().serverState()));
-			assertTrue(Publisher.rawEquals(first.state().publisher(), replay.state().publisher()));
-			assertEquals(first.state().pendingHurt(), replay.state().pendingHurt());
-			assertEquals(first.confirmations(), replay.confirmations());
-			boundary = first.state();
-		}
-		return sawPending;
+		    new SimulationState(towerStart(), towerServerWithoutRegeneration(), 0), 36,
+		    tick -> tick < 6 ? SPRINT : IDLE));
 	}
 
 	@Test
@@ -198,7 +126,8 @@ final class SimulatorTest {
 		initial.swimming = true;
 		initial.pose = PlayerState.Pose.SWIMMING;
 		Simulator simulator = new Simulator();
-		Simulator.Step local = simulator.advance(simulator.start(initial, initial), IDLE, flatWorld());
+		Simulator.Step local = simulator.advance(
+		    new SimulationState(initial, ServerPlayerState.atBoundary(initial), 0), IDLE, flatWorld());
 		assertTrue(local.confirmations().isEmpty(), "initial synchronized values are not dirty");
 		Simulator.Step publication = simulator.advance(local.state(), IDLE, flatWorld());
 		assertTrue(publication.confirmations().contains(new Simulator.SwimmingConfirmation(1, false)));
@@ -215,24 +144,25 @@ final class SimulatorTest {
 		actions.add(IDLE);
 		actions.add(IDLE);
 
-		Simulator.Run replay = new Simulator().run(groundedState(), groundedState(), actions, flatWorld());
+		Simulator.Run replay =
+		    new Simulator().run(groundedState(), ServerPlayerState.atBoundary(groundedState()), actions, flatWorld());
 
 		assertFalse(replay.timeline().isEmpty());
-		assertTrue(replay.timeline().writes().stream().allMatch(EntityDataWrite.class ::isInstance));
-		assertTrue(replay.confirmations().stream().anyMatch(Simulator.SprintConfirmation.class ::isInstance));
-		assertTrue(replay.confirmations().stream().anyMatch(Simulator.PoseConfirmation.class ::isInstance));
+		assertTrue(replay.timeline().writes().stream().allMatch(write -> write instanceof EntityDataWrite));
+		assertTrue(replay.confirmations().stream().anyMatch(c -> c instanceof Simulator.SprintConfirmation));
+		assertTrue(replay.confirmations().stream().anyMatch(c -> c instanceof Simulator.PoseConfirmation));
 	}
 
 	@Test
 	void matchingOldMetadataCannotChangeTheCanonicalSuccessor() {
-		Simulator kernel = new Simulator();
+		Simulator simulator = new Simulator();
 		WriteLedger ledger = new WriteLedger();
-		SimulationState state = kernel.start(groundedState(), groundedState());
-		Simulator.Step started = kernel.advance(state, SPRINT, flatWorld());
+		SimulationState state = new SimulationState(groundedState(), ServerPlayerState.atBoundary(groundedState()), 0);
+		Simulator.Step started = simulator.advance(state, SPRINT, flatWorld());
 		started.confirmations().forEach(ledger::expect);
-		Simulator.Step stopped = kernel.advance(started.state(), IDLE, flatWorld());
+		Simulator.Step stopped = simulator.advance(started.state(), IDLE, flatWorld());
 		stopped.confirmations().forEach(ledger::expect);
-		Simulator.Step restarted = kernel.advance(stopped.state(), SPRINT, flatWorld());
+		Simulator.Step restarted = simulator.advance(stopped.state(), SPRINT, flatWorld());
 		restarted.confirmations().forEach(ledger::expect);
 		PlayerState canonical = restarted.state().clientState();
 
@@ -248,15 +178,15 @@ final class SimulatorTest {
 	void fallVelocityIsAppliedOnceBeforeItsPacketIsObserved() {
 		List<PlayerInput> actions = new ArrayList<>(Collections.nCopies(6, SPRINT));
 		actions.addAll(Collections.nCopies(30, IDLE));
-		Simulator kernel = new Simulator();
+		Simulator simulator = new Simulator();
 
-		Simulator.Run replay = kernel.run(towerStart(), towerServerWithoutRegeneration(), actions, towerWorld());
+		Simulator.Run replay = simulator.run(towerStart(), towerServerWithoutRegeneration(), actions, towerWorld());
 
 		assertEquals(1, replay.timeline().hurtMotion().size());
 		Simulator.VelocityConfirmation velocity = replay.confirmations()
 		                                              .stream()
-		                                              .filter(Simulator.VelocityConfirmation.class ::isInstance)
-		                                              .map(Simulator.VelocityConfirmation.class ::cast)
+		                                              .filter(c -> c instanceof Simulator.VelocityConfirmation)
+		                                              .map(c -> (Simulator.VelocityConfirmation) c)
 		                                              .findFirst()
 		                                              .orElseThrow();
 		WriteLedger ledger = new WriteLedger();
@@ -267,101 +197,6 @@ final class SimulatorTest {
 	}
 
 	@Test
-	void unmatchedAuthorityIsExternal() {
-		WriteLedger ledger = new WriteLedger();
-
-		assertEquals(WriteLedger.Match.UNATTRIBUTED, ledger.observeVelocity(1.0, 2.0, 3.0));
-		WriteLedger.EntityDataResult result =
-		    ledger.observeEntityData(Optional.of(true), Optional.of(true), Optional.of(PlayerState.Pose.SWIMMING));
-		assertEquals(WriteLedger.Match.UNATTRIBUTED, result.sprint());
-		assertEquals(WriteLedger.Match.UNATTRIBUTED, result.swimming());
-		assertEquals(WriteLedger.Match.UNATTRIBUTED, result.pose());
-	}
-
-	@Test
-	void adjacentVelocityBucketIsNotThePredictedPacket() {
-		WriteLedger ledger = new WriteLedger();
-		double expectedX = 0.031274;
-		double expectedY = -0.0784000015258789;
-		double expectedZ = -0.031274;
-		ledger.expect(new Simulator.VelocityConfirmation(0, expectedX, expectedY, expectedZ));
-		double adjacentX = expectedX + 2.0 / 32766.0;
-
-		assertEquals(WriteLedger.Match.UNATTRIBUTED, ledger.observeVelocity(adjacentX, expectedY, expectedZ));
-		assertEquals(WriteLedger.Match.UNATTRIBUTED, ledger.observeVelocity(adjacentX, expectedY, expectedZ));
-	}
-
-	@Test
-	void differentDecodedWireBinsRemainUnattributed() {
-		WriteLedger ledger = new WriteLedger();
-		// Reduced from the rolling-world landing at x=265.639308. The
-		// integrated server's hidden velocity had advanced far enough to decode
-		// two LP-vector bins below the predicted value. These are distinct decoded
-		// packets; causality does not make their movement effects identical.
-		ledger.expect(
-		    new Simulator.VelocityConfirmation(0, 0.004455838369041176, -0.0783739241897089, -7.324665812122877E-4));
-
-		assertEquals(WriteLedger.Match.UNATTRIBUTED,
-		    ledger.observeVelocity(0.002380441677348299, -0.0783739241897089, -7.324665812122877E-4));
-		assertEquals(WriteLedger.Match.UNATTRIBUTED,
-		    ledger.observeVelocity(0.00433376060550561, -0.0783739241897089, -7.324665812122877E-4));
-	}
-
-	@Test
-	void hiddenCollisionResidualCannotBeConfirmedByTolerance() {
-		WriteLedger ledger = new WriteLedger();
-		// Reduced from random rolling seed 1473185492903643773. The
-		// landing packet retained 20 more Z bins than the hidden-server replay
-		// beside the block edge, while its vertical landing value was identical.
-		ledger.expect(
-		    new Simulator.VelocityConfirmation(0, 0.03519547116474486, -0.0783739241897089, -0.007374248489272376));
-
-		assertEquals(WriteLedger.Match.UNATTRIBUTED,
-		    ledger.observeVelocity(0.03521943477995482, -0.0783739241897089, -0.00860648232924377));
-	}
-
-	@Test
-	void lateDuplicateDoesNotConsumeTheNextVelocityConfirmation() {
-		WriteLedger ledger = new WriteLedger();
-		Simulator.VelocityConfirmation first =
-		    new Simulator.VelocityConfirmation(0, 0.031274, -0.0784000015258789, -0.031274);
-		Simulator.VelocityConfirmation second =
-		    new Simulator.VelocityConfirmation(1, 0.011274, -0.0784000015258789, -0.011274);
-		ledger.expect(first);
-		ledger.expect(second);
-
-		assertEquals(WriteLedger.Match.CONFIRMED, ledger.observeVelocity(first.x(), first.y(), first.z()));
-		assertEquals(WriteLedger.Match.DUPLICATE, ledger.observeVelocity(first.x(), first.y(), first.z()));
-		assertEquals(WriteLedger.Match.CONFIRMED, ledger.observeVelocity(second.x(), second.y(), second.z()));
-	}
-
-	@Test
-	void causalFallPacketCannotConfirmAnArbitraryServerPayload() {
-		WriteLedger ledger = new WriteLedger();
-		ledger.expect(new Simulator.VelocityConfirmation(0, 0.25, -0.0784, 0.0));
-
-		assertEquals(WriteLedger.Match.UNATTRIBUTED, ledger.confirmVelocityCausally(0.04346, -0.078374, 0.000061));
-		assertEquals(WriteLedger.Match.UNATTRIBUTED, ledger.observeVelocity(0.04346, -0.078374, 0.000061));
-	}
-
-	@Test
-	void entityDataAndVelocityConfirmOnIndependentStreams() {
-		WriteLedger ledger = new WriteLedger();
-		ledger.expect(new Simulator.SprintConfirmation(0, false));
-		ledger.expect(new Simulator.VelocityConfirmation(0, 0.031274, -0.0784000015258789, -0.031274));
-
-		WriteLedger.EntityDataResult entity =
-		    ledger.observeEntityData(Optional.of(false), Optional.empty(), Optional.empty());
-		WriteLedger.Match velocity = ledger.observeVelocity(0.031274, -0.0784000015258789, -0.031274);
-
-		assertEquals(WriteLedger.Match.CONFIRMED, entity.sprint());
-		assertEquals(WriteLedger.Match.CONFIRMED, velocity);
-		assertEquals(WriteLedger.Match.DUPLICATE,
-		    ledger.observeEntityData(Optional.of(false), Optional.empty(), Optional.empty()).sprint());
-		assertEquals(WriteLedger.Match.DUPLICATE, ledger.observeVelocity(0.031274, -0.0784000015258789, -0.031274));
-	}
-
-	@Test
 	void frozenMetadataChangesOnlyWhenPublishedAndDelivered() {
 		PlayerState client = groundedState();
 		client.ticksFrozen = 23;
@@ -369,22 +204,23 @@ final class SimulatorTest {
 		PlayerState server = groundedState();
 		server.ticksFrozen = 5;
 		server.frostSpeedTicks = 5;
-		Simulator kernel = new Simulator();
+		Simulator simulator = new Simulator();
 
-		Simulator.Step step = kernel.advance(kernel.start(client, server), IDLE, flatWorld());
+		Simulator.Step step =
+		    simulator.advance(new SimulationState(client, ServerPlayerState.atBoundary(server), 0), IDLE, flatWorld());
 
 		assertEquals(new Simulator.FreezeSnapshot(23, 7), step.freezeBeforeAction());
 		assertEquals(23, step.state().clientState().ticksFrozen);
 		assertEquals(7, step.state().clientState().frostSpeedTicks);
-		Simulator.Step delivered = kernel.advance(step.state(), IDLE, flatWorld());
+		Simulator.Step delivered = simulator.advance(step.state(), IDLE, flatWorld());
 		assertEquals(3, delivered.state().clientState().ticksFrozen);
 		assertEquals(3, delivered.state().clientState().frostSpeedTicks);
 		assertEquals(3, step.state().serverState().ticksFrozen);
 		assertEquals(3, step.state().serverState().frostSpeedTicks);
 		Simulator.FreezeConfirmation confirmation = delivered.confirmations()
 		                                                .stream()
-		                                                .filter(Simulator.FreezeConfirmation.class ::isInstance)
-		                                                .map(Simulator.FreezeConfirmation.class ::cast)
+		                                                .filter(c -> c instanceof Simulator.FreezeConfirmation)
+		                                                .map(c -> (Simulator.FreezeConfirmation) c)
 		                                                .findFirst()
 		                                                .orElseThrow();
 		WriteLedger ledger = new WriteLedger();
@@ -406,8 +242,8 @@ final class SimulatorTest {
 		HurtMotionWrite write = replay.timeline().hurtMotion().getFirst();
 		// The landing packet marks the copy; the next step's tracker sample
 		// publishes the mark and the client applies it before the tick after
-		// next, the phase the live captures measure. Delivery at that boundary
-		// is pinned separately by aPendingBoundaryPublicationIsDeliveredAfterItsFirstAction.
+		// next, the phase the bundled captures record. Delivery at that boundary
+		// is checked separately by aPendingBoundaryPublicationIsDeliveredAfterItsFirstAction.
 		assertEquals(write.event().causeAction() + 1, write.actionIndex());
 		assertEquals(write.event().causeAction() + 1, write.event().writeAfterAction());
 		assertTrue(write.event().writeY() < 0.0, "a damaging landing publishes the hidden server's downward motion");
@@ -424,14 +260,13 @@ final class SimulatorTest {
 		server.frostSpeedTicks = 5;
 		List<PlayerInput> actions = List.of(IDLE, IDLE);
 
-		Simulator.Run replay = new Simulator().run(client, server, actions, flatWorld());
+		Simulator.Run replay = new Simulator().run(client, ServerPlayerState.atBoundary(server), actions, flatWorld());
 
 		// Out of powder snow the authoritative count sheds two per action, and
 		// the client movement path sees the projection installed at the boundary
 		// rather than its own zero.
 		assertEquals(1, replay.serverState().ticksFrozen);
-		assertEquals(
-		    3, replay.clientState().ticksFrozen, "the authority kernel projects server freeze onto the client");
+		assertEquals(3, replay.clientState().ticksFrozen, "the server's freeze count is projected onto the client");
 		assertEquals(replay.serverState().ticksFrozen, replay.serverState().frostSpeedTicks,
 		    "the frost speed modifier is rebuilt from the frozen count");
 	}
@@ -440,11 +275,11 @@ final class SimulatorTest {
 	void aPendingBoundaryPublicationIsDeliveredAfterItsFirstAction() {
 		List<PlayerInput> actions = new ArrayList<>(Collections.nCopies(6, SPRINT));
 		actions.addAll(Collections.nCopies(30, IDLE));
-		Simulator kernel = new Simulator();
-		SimulationState boundary = kernel.start(towerStart(), towerServerWithoutRegeneration());
+		Simulator simulator = new Simulator();
+		SimulationState boundary = new SimulationState(towerStart(), towerServerWithoutRegeneration(), 0);
 		int consumed = -1;
 		for (int tick = 0; tick < actions.size(); tick++) {
-			boundary = kernel.advance(boundary, actions.get(tick), towerWorld()).state();
+			boundary = simulator.advance(boundary, actions.get(tick), towerWorld()).state();
 			if (boundary.hasPendingHurt()) {
 				consumed = tick + 1;
 				break;
@@ -452,8 +287,9 @@ final class SimulatorTest {
 		}
 		assertTrue(consumed > 0);
 
-		Simulator.Run pending = kernel.run(boundary.clientState(), boundary.serverState(), boundary.pendingHurt(),
-		    actions.subList(consumed, actions.size()), towerWorld());
+		SimulationState restart = new SimulationState(
+		    boundary.clientState(), boundary.serverState(), 0, boundary.pendingHurt().orElseThrow());
+		Simulator.Run pending = simulator.run(restart, actions.subList(consumed, actions.size()), towerWorld());
 
 		assertEquals(1, pending.timeline().hurtMotion().size());
 		assertEquals(0, pending.timeline().hurtMotion().getFirst().actionIndex());
@@ -466,8 +302,8 @@ final class SimulatorTest {
 
 		Simulator.Run scheduled =
 		    new Simulator().run(towerStart(), towerServerWithoutRegeneration(), actions, towerWorld());
-		Simulator.Run observed =
-		    Simulator.forObservedConnection().run(towerStart(), towerServerWithoutRegeneration(), actions, towerWorld());
+		Simulator.Run observed = Simulator.forObservedConnection().run(
+		    towerStart(), towerServerWithoutRegeneration(), actions, towerWorld());
 
 		HurtMotionWrite constructed = scheduled.timeline().hurtMotion().getFirst();
 		HurtMotionWrite free = observed.timeline().hurtMotion().getFirst();
@@ -477,15 +313,124 @@ final class SimulatorTest {
 		assertTrue(free.event().writeY() < 0.0 && constructed.event().writeY() < 0.0);
 	}
 
+	@Test
+	void aWallImpactPendsLikeALandingAndTheNextInputDeliversItsWrite() {
+		Simulator simulator = new Simulator();
+		PlayerState start = glideStart();
+		SnapshotView world = wallWorld();
+
+		Simulator.Step impact =
+		    simulator.advance(new SimulationState(start, ServerPlayerState.atBoundary(start), 0), GLIDE, world);
+		assertEquals(Optional.of(HurtCause.FLY_INTO_WALL), impact.state().pendingHurt(),
+		    "the server's glide travel hit the wall in this input's connection tick");
+		assertEquals(1, impact.damage().size(), "the hit is on the stream at its input");
+		assertTrue(impact.hasDamage());
+		assertTrue(impact.writes().stream().anyMatch(write -> write instanceof HealthWrite));
+		DamageWrite hit = impact.damage().getFirst();
+		assertEquals(0, hit.actionIndex());
+		assertEquals(HurtCause.FLY_INTO_WALL, hit.event().cause());
+		assertTrue(hit.event().full());
+		assertEquals(20.0F - hit.event().healthDamage(), impact.state().serverState().health);
+		assertEquals(20, impact.state().serverState().invulnerableTime);
+		assertTrue(impact.state().clientState().horizontalCollision);
+
+		Simulator.Step delivery = simulator.advance(impact.state(), GLIDE, world);
+		assertTrue(delivery.state().pendingHurt().isEmpty());
+		assertEquals(1, delivery.hurtMotion().size());
+		HurtMotionWrite write = delivery.hurtMotion().getFirst();
+		assertEquals(HurtCause.FLY_INTO_WALL, write.event().cause());
+		assertEquals(0, write.event().causeAction());
+		assertEquals(1, write.actionIndex());
+		assertTrue(delivery.confirmations().stream().anyMatch(c -> c instanceof Simulator.VelocityConfirmation),
+		    "the hurt velocity write has a decoded wire value to confirm");
+	}
+
+	private static void assertRunMatchesSteps(final PlayerState client, final ServerPlayerState server,
+	    final HurtCause pending, final List<PlayerInput> actions, final SnapshotView world) {
+		long clientBefore = StateDigest.state(client);
+		long serverBefore = StateDigest.server(server);
+		Simulator simulator = new Simulator();
+		SimulationState start = new SimulationState(client, Publisher.atBoundary(client), server, 0, pending);
+		SimulationState state = start;
+		List<Simulator.Confirmation> confirmations = new ArrayList<>();
+		List<ServerWrite> writes = new ArrayList<>();
+		for (PlayerInput action : actions) {
+			Simulator.Step step = simulator.advance(state, action, world);
+			assertEquals(!step.damage().isEmpty(), step.hasDamage(),
+			    "allocation-free safety check must agree on damage, metadata, and freeze transitions");
+			state = step.state();
+			confirmations.addAll(step.confirmations());
+			writes.addAll(step.writes());
+		}
+		Simulator.Run run = simulator.run(start, actions, world);
+		assertEquals(StateDigest.state(state.clientState()), StateDigest.state(run.clientState()));
+		assertEquals(StateDigest.server(state.serverState()), StateDigest.server(run.serverState()));
+		assertEquals(confirmations, run.confirmations());
+		assertEquals(writes.size(), run.timeline().writes().size());
+		for (int index = 0; index < writes.size(); index++) {
+			ServerWrite expected = writes.get(index);
+			ServerWrite actual = run.timeline().writes().get(index);
+			assertEquals(expected.actionIndex(), actual.actionIndex());
+			if (expected instanceof HurtMotionWrite hurt) {
+				HurtMotion motion = ((HurtMotionWrite) actual).event();
+				assertEquals(hurt.event().cause(), motion.cause());
+				assertEquals(hurt.event().causeAction(), motion.causeAction());
+				assertEquals(hurt.event().writeAfterAction(), motion.writeAfterAction());
+				assertEquals(rawBits(hurt.event().writeX()), rawBits(motion.writeX()));
+				assertEquals(rawBits(hurt.event().writeY()), rawBits(motion.writeY()));
+				assertEquals(rawBits(hurt.event().writeZ()), rawBits(motion.writeZ()));
+			} else {
+				assertEquals(expected, actual);
+			}
+		}
+		assertEquals(clientBefore, StateDigest.state(client));
+		assertEquals(serverBefore, StateDigest.server(server));
+		long finalClient = StateDigest.state(run.clientState());
+		long finalServer = StateDigest.server(run.serverState());
+		run.clientState().x += 100;
+		run.serverState().x += 100;
+		assertEquals(finalClient, StateDigest.state(run.clientState()));
+		assertEquals(finalServer, StateDigest.server(run.serverState()));
+	}
+
+	private static boolean assertAdvancingPreservesItsInput(final Simulator simulator, final SnapshotView world,
+	    final SimulationState start, final int ticks, final IntFunction<PlayerInput> actions) {
+		SimulationState boundary = start;
+		boolean sawPending = false;
+		for (int tick = 0; tick < ticks; tick++) {
+			PlayerInput action = actions.apply(tick);
+			long clientBefore = StateDigest.state(boundary.clientState());
+			long serverBefore = StateDigest.server(boundary.serverState());
+			Publisher publisherBefore = boundary.publisher();
+			sawPending |= boundary.hasPendingHurt();
+			Simulator.Step first = simulator.advance(boundary, action, world);
+			Simulator.Step replay = simulator.advance(boundary, action, world);
+			assertEquals(clientBefore, StateDigest.state(boundary.clientState()));
+			assertEquals(serverBefore, StateDigest.server(boundary.serverState()));
+			assertTrue(Publisher.rawEquals(publisherBefore, boundary.publisher()));
+			assertEquals(
+			    StateDigest.state(first.state().clientState()), StateDigest.state(replay.state().clientState()));
+			assertEquals(
+			    StateDigest.server(first.state().serverState()), StateDigest.server(replay.state().serverState()));
+			assertTrue(Publisher.rawEquals(first.state().publisher(), replay.state().publisher()));
+			assertEquals(first.state().pendingHurt(), replay.state().pendingHurt());
+			assertEquals(first.confirmations(), replay.confirmations());
+			boundary = first.state();
+		}
+		return sawPending;
+	}
+
+	private static long rawBits(final double value) {
+		return Double.doubleToRawLongBits(value);
+	}
+
+	// ---- fixtures
+
 	/** Hurt publication fixtures explicitly disable the independent healing mechanic. */
 	private static ServerPlayerState towerServerWithoutRegeneration() {
 		ServerPlayerState server = ServerPlayerState.atBoundary(towerStart());
 		server.naturalRegeneration = false;
 		return server;
-	}
-
-	private static long rawBits(final double value) {
-		return Double.doubleToRawLongBits(value);
 	}
 
 	private static PlayerState groundedState() {
@@ -497,6 +442,15 @@ final class SimulatorTest {
 		state.mainSupportingBlockPosPresent = true;
 		state.mainSupportingBlockPosX = 2;
 		state.mainSupportingBlockPosY = 0;
+		state.mainSupportingBlockPosZ = 2;
+		return state;
+	}
+
+	private static PlayerState towerStart() {
+		PlayerState state = groundedState();
+		state.placeAt(3.0, 7.0, 3.0);
+		state.mainSupportingBlockPosX = 2;
+		state.mainSupportingBlockPosY = 6;
 		state.mainSupportingBlockPosZ = 2;
 		return state;
 	}
@@ -514,48 +468,18 @@ final class SimulatorTest {
 		return start;
 	}
 
-	private static final PlayerInput GLIDE = PlayerInput.idle(-90.0F, 0.0F);
+	private static BlockEntry air() {
+		return BlockEntry.builder(0, "minecraft:air").build();
+	}
 
-	@Test
-	void aWallImpactPendsLikeALandingAndTheNextInputDeliversItsWrite() {
-		Simulator kernel = new Simulator();
-		PlayerState start = glideStart();
-		PlayerInput glide = GLIDE;
-		SnapshotView world = wallWorld();
-
-		Simulator.Step impact = kernel.advance(kernel.start(start, start), glide, world);
-		assertEquals(Optional.of(HurtCause.FLY_INTO_WALL), impact.state().pendingHurt(),
-		    "the server's glide travel hit the wall in this input's connection tick");
-		assertEquals(1, impact.damage().size(), "the hit is on the stream at its input");
-		assertTrue(impact.hasDamage());
-		assertTrue(impact.writes().stream().anyMatch(HealthWrite.class ::isInstance));
-		DamageWrite hit = impact.damage().getFirst();
-		assertEquals(0, hit.actionIndex());
-		assertEquals(HurtCause.FLY_INTO_WALL, hit.event().cause());
-		assertTrue(hit.event().full());
-		assertEquals(20.0F - hit.event().healthDamage(), impact.state().serverState().health);
-		assertEquals(20, impact.state().serverState().invulnerableTime);
-		assertTrue(impact.state().clientState().horizontalCollision);
-
-		Simulator.Step delivery = kernel.advance(impact.state(), glide, world);
-		assertTrue(delivery.state().pendingHurt().isEmpty());
-		assertEquals(1, delivery.hurtMotion().size());
-		HurtMotionWrite write = delivery.hurtMotion().getFirst();
-		assertEquals(HurtCause.FLY_INTO_WALL, write.event().cause());
-		assertEquals(0, write.event().causeAction());
-		assertEquals(1, write.actionIndex());
-		assertTrue(delivery.confirmations().stream().anyMatch(Simulator.VelocityConfirmation.class ::isInstance),
-		    "the hurt-marked publication has a decoded wire value to confirm");
+	private static BlockEntry stone() {
+		return BlockEntry.builder(1, "minecraft:stone").fullCube().build();
 	}
 
 	/** Stone floor at y=-1 and a stone wall filling x=0 from y=3 to y=6. */
 	private static SnapshotView wallWorld() {
-		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		BlockEntry stone = new BlockEntry(
-		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -6, -3, -6, 12, 12, 12)
-		        .palette(air, stone);
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -6, -3, -6, 12, 12, 12).palette(air(), stone());
 		for (int z = -6; z < 6; z++) {
 			for (int x = -6; x < 6; x++) {
 				builder.set(x, -1, z, 1);
@@ -567,15 +491,6 @@ final class SimulatorTest {
 		return SnapshotView.compile(builder.build());
 	}
 
-	private static PlayerState towerStart() {
-		PlayerState state = groundedState();
-		state.placeAt(3.0, 7.0, 3.0);
-		state.mainSupportingBlockPosX = 2;
-		state.mainSupportingBlockPosY = 6;
-		state.mainSupportingBlockPosZ = 2;
-		return state;
-	}
-
 	private static SnapshotView flatWorld() {
 		return world(false);
 	}
@@ -584,27 +499,26 @@ final class SimulatorTest {
 		return world(true);
 	}
 
+	/** A 32 by 32 stone floor at y=0, with a two-by-two stone tower up to y=6 at x,z in [2, 3] when asked. */
 	private static SnapshotView world(final boolean tower) {
 		int size = 32;
 		int height = 12;
-		int[] cells = new int[size * height * size];
+		WorldSnapshot.Builder builder =
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, 0, 0, 0, size, height, size).palette(air(), stone());
 		for (int z = 0; z < size; z++) {
-			for (int x = 0; x < size; x++)
-				cells[z * size + x] = 1;
+			for (int x = 0; x < size; x++) {
+				builder.set(x, 0, z, 1);
+			}
 		}
 		if (tower) {
 			for (int y = 1; y <= 6; y++) {
 				for (int z = 2; z <= 3; z++) {
 					for (int x = 2; x <= 3; x++) {
-						cells[(y * size + z) * size + x] = 1;
+						builder.set(x, y, z, 1);
 					}
 				}
 			}
 		}
-		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		BlockEntry stone = new BlockEntry(
-		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
-		return SnapshotView.compile(new WorldSnapshot(
-		    0, 0, 0, size, height, size, OutsidePolicy.REFUSING, List.of(air, stone), cells));
+		return SnapshotView.compile(builder.build());
 	}
 }

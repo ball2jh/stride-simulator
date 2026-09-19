@@ -1,30 +1,25 @@
 package com.nettarion.stride.simulator;
 
 /**
- * Why the simulator refused a transition: one stable name per boundary of the
- * admitted slice, so a consumer can count and compare refusals without
- * parsing the sentence that explains one.
+ * Why the simulator refused a transition: one stable name per limit of the admitted domain, so a
+ * consumer can count and compare refusals without parsing the message that explains one.
  *
- * <p>Every refusal the simulator throws carries exactly one cause, reached
- * through {@link RefusalException#cause()}. A cause names the boundary, not the site:
- * every query that leaves the captured region shares {@link #OUTSIDE_REGION}
- * whichever fact asked. The message beside it stays the human explanation
- * with the coordinates and values of the one call, and its text is a stable
- * part of the recorded evidence; a cause is added when a boundary is, never
- * renamed, so a histogram keyed on it reads the same across revisions.
+ * <p>Every refusal carries exactly one cause, reached through {@link RefusalException#cause()}. A
+ * cause names the limit, not the site: every query that leaves the captured region shares
+ * {@link #OUTSIDE_REGION} whichever fact asked. Only the cause is stable across releases; a cause is
+ * added when a limit is, never renamed, so a histogram keyed on it reads the same across revisions.
+ * The message beside it is a human explanation with the coordinates and values of the one call and
+ * may change in any release; do not parse it.
  *
- * <p>The groups follow the refusal types. The simulator does not model a
- * mechanic ({@code UNMODELED_*}); the state or world offered is outside the
- * admitted slice ({@code INADMISSIBLE_*}); the world cannot answer
- * ({@code OUTSIDE_REGION}, {@code UNDECLARED_*}); the server outcome is not
- * determined by the composed state ({@code PENDING_*}); the server corrects
- * the client ({@code CORRECTED_*}); or a predicted write met a state it was
- * not derived from ({@link #STALE_WRITE}).
+ * <p>Groups: {@code UNMODELED_*} (a mechanic this library lacks), {@code INADMISSIBLE_*} (state or
+ * world outside the admitted domain), {@code OUTSIDE_REGION} and {@code UNDECLARED_*} (the world cannot
+ * answer), {@code PENDING_*} (the server outcome is undetermined), {@code CORRECTED_*} (the server
+ * corrects the client), {@link #STALE_WRITE} (a write met a state it was not derived from).
  */
 public enum RefusalCause {
-	/** A block body, fluid or listener effect the slice does not model. */
+	/** A block body, fluid or listener effect the simulator does not model. */
 	UNMODELED_BLOCK,
-	/** A world write the slice does not make: cauldron levels, melted snow, block updates. */
+	/** A world write the simulator does not make: cauldron levels, melted snow, block updates. */
 	UNMODELED_WORLD_WRITE,
 	/** Death, respawn, disconnection, or another session-ending transition. */
 	UNMODELED_SESSION_END,
@@ -33,7 +28,7 @@ public enum RefusalCause {
 	/** An external displacement not reducible to a velocity write. */
 	UNMODELED_IMPULSE,
 
-	/** A player field holds a value the admitted slice does not carry. */
+	/** A player field holds a value outside the admitted domain. */
 	INADMISSIBLE_STATE,
 	/** A movement attribute or modifier outside the supported inputs. */
 	INADMISSIBLE_ATTRIBUTE,
