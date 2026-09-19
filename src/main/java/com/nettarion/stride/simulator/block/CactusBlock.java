@@ -24,7 +24,9 @@ final class CactusBlock extends BlockBehavior {
 	@Override
 	void entityInside(final PlayerState state, final int x, final int y, final int z, final boolean isPrecise,
 	    final WorldView world, final Scratch scratch) {
-		if (!scratch.authority.isServer()) return;
+		if (!scratch.authority.isServer()) {
+			return;
+		}
 		scratch.authority.survival().hurtServer(HurtCause.CACTUS, 1.0F);
 	}
 

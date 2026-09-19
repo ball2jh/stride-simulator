@@ -1,37 +1,37 @@
 package com.nettarion.stride.simulator.block;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.nettarion.stride.simulator.DamageEvent;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.DamageEvent;
 import com.nettarion.stride.simulator.server.TickAuthority;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** Ordering and reuse contracts for the retained inside-block effect collector. */
-class InsideBlockEffectCollectorTest {
+final class InsideBlockEffectCollectorTest {
 	@Test
-	void stepChangesQueueEffectsUntilAllImmediateBlockBodiesHaveRun() {
+	void stepChangesQueueEffectsUntilAllImmediateBlockHooksHaveRun() {
 		TickAuthority authority = TickAuthority.server();
 		ServerPlayerState state = new ServerPlayerState();
 		state.remainingFireTicks = -1;
 		authority.begin(state);
-		var effects = new InsideBlockEffectCollector(authority);
+		InsideBlockEffectCollector effects = new InsideBlockEffectCollector(authority);
 		effects.begin();
 		effects.advanceStep(0);
-		effects.collectFireContact(1);
+		effects.collectFireContact(1.0F);
 		effects.advanceStep(1);
-		assertEquals(20, state.health, "advanceStep queues; it does not apply");
-		authority.survival().hurtServer(HurtCause.CACTUS, 1);
+		assertEquals(20.0F, state.health, "advanceStep queues; it does not apply");
+		authority.survival().hurtServer(HurtCause.CACTUS, 1.0F);
 		effects.applyAndClear(state);
 		assertEquals(HurtCause.CACTUS, authority.survival().marked().orElseThrow());
-		assertEquals(19, state.health);
+		assertEquals(19.0F, state.health);
 	}
 
 	@Test
@@ -161,5 +161,29 @@ class InsideBlockEffectCollectorTest {
 		effects.collectFreeze();
 		effects.applyAndClear(next);
 		assertEquals(1, next.ticksFrozen);
+	}
+
+	@Test
+	void anAmbiguousCauldronOrPowderSnowContactQueuesNothingBeforeRefusing() {
+		// The ambiguity check runs before the runBefore(EXTINGUISH) closure is
+		// queued, so a refused collect leaves no closure behind for the flush.
+		TickAuthority authority = TickAuthority.server();
+		ServerPlayerState state = new ServerPlayerState();
+		state.remainingFireTicks = 100;
+		authority.begin(state);
+		InsideBlockEffectCollector effects = new InsideBlockEffectCollector(authority);
+		effects.begin();
+		effects.beginSweep();
+		effects.advanceStep(2);
+		effects.collectFreeze();
+		effects.beginSweep();
+		assertThrows(UnimplementedMechanicException.class, effects::collectPowderSnowContact);
+
+		effects.begin();
+		effects.beginSweep();
+		effects.advanceStep(0);
+		effects.collectFreeze();
+		effects.applyAndClear(state);
+		assertEquals(100, state.remainingFireTicks, "no melt refusal and no extinguish leaked from the refused step");
 	}
 }
