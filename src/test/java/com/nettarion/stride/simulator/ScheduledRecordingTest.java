@@ -10,6 +10,7 @@ import com.nettarion.stride.simulator.trace.ScheduledRecording;
 import com.nettarion.stride.simulator.trace.SimulationCheckpoint;
 import com.nettarion.stride.simulator.trace.TraceProducer;
 import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.Suffocation;
 import com.nettarion.stride.simulator.world.BlockStateCatalog;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
@@ -85,7 +86,7 @@ final class ScheduledRecordingTest {
 		Path path = this.directory.resolve("walk.recording");
 		walkThreeTicks().write(path);
 		BlockStateCatalog.Source source =
-		    new BlockStateCatalog.Source(VERSION, world -> new BlockStateCatalog(VERSION, world.palette(), List.of()));
+		    new BlockStateCatalog.Source(VERSION, world -> new BlockStateCatalog(VERSION, world.palette()));
 
 		assertThrows(IOException.class, () -> ScheduledRecording.read(path, "wrong", null));
 		assertThrows(IllegalArgumentException.class, () -> ScheduledRecording.read(path, VERSION, null).replay(source));
@@ -118,7 +119,7 @@ final class ScheduledRecordingTest {
 	void aVerifiedRecordingNeedsItsCatalogSourceAndRefusesADifferentCatalog() throws IOException {
 		WorldSnapshot world = floor();
 		BlockStateCatalog.Source source = new BlockStateCatalog.Source(
-		    VERSION, snapshot -> new BlockStateCatalog(VERSION, snapshot.palette(), List.of()));
+		    VERSION, snapshot -> new BlockStateCatalog(VERSION, snapshot.palette()));
 		ScheduledRecording recording = new ScheduledRecording(start(), world, VERSION, Interaction.DENIED, source);
 		recording.append(SimulationEvent.Phase.LEVEL_TICK);
 		Path path = this.directory.resolve("verified.recording");
@@ -136,9 +137,8 @@ final class ScheduledRecordingTest {
 		        List.of(snapshot.palette().getFirst(),
 		            BlockEntry.builder(1, "minecraft:stone")
 		                .fullCube()
-		                .suffocation(com.nettarion.stride.simulator.world.Suffocation.YES)
-		                .build()),
-		        List.of()));
+		                .suffocation(Suffocation.YES)
+		                .build())));
 		assertThrows(IOException.class, () -> ScheduledRecording.read(path, VERSION, other));
 	}
 

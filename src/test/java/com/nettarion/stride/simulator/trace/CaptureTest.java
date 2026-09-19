@@ -47,7 +47,7 @@ final class CaptureTest {
 	@Test
 	void aCatalogIsWrittenAndVerifiedOnRead() throws IOException {
 		WorldSnapshot world = TraceFixtures.oneCellWorld();
-		BlockStateCatalog catalog = new BlockStateCatalog(TraceFixtures.MINECRAFT_VERSION, world.palette(), List.of());
+		BlockStateCatalog catalog = new BlockStateCatalog(TraceFixtures.MINECRAFT_VERSION, world.palette());
 		Path base = Capture.basePath(this.temporaryDirectory, TraceProducer.LIVE_GAME, "verified");
 
 		Capture.write(base, Capture.of(TraceFixtures.oneTickTrace("verified"), world, null, null, catalog));
@@ -125,7 +125,7 @@ final class CaptureTest {
 	void nullComponentsAreRefusedBeforeAnyVerification() {
 		Trace trace = TraceFixtures.oneTickTrace("null");
 		BlockStateCatalog catalog =
-		    new BlockStateCatalog(TraceFixtures.MINECRAFT_VERSION, TraceFixtures.oneCellWorld().palette(), List.of());
+		    new BlockStateCatalog(TraceFixtures.MINECRAFT_VERSION, TraceFixtures.oneCellWorld().palette());
 		// A present catalog with an absent world used to reach verify() before the null checks ran.
 		assertThrows(NullPointerException.class,
 		    () -> new Capture(trace, null, new WorldEventTrace(List.of()), Optional.empty(), Optional.of(catalog)));
