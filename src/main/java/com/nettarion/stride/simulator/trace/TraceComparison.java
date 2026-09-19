@@ -3,43 +3,60 @@ package com.nettarion.stride.simulator.trace;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
- * Raw-bit trace equality, implemented once.
+ * Raw-bit equality of two traces, tick by tick.
  *
- * <p>Raw-bit equality on the audited state vector, for every tick, with no
- * re-anchoring. There is deliberately no tolerance parameter: a tolerance would
- * hide exactly the near-miss transitions the consumers exist to find, so if a
- * mode cannot reach bit-exactness the mode is scoped out rather than the
- * relation weakened.
- *
- * <p>Only the first diverging tick is reported. Without re-anchoring every
- * later tick is computed from an already-wrong state, so listing them would
- * bury the one fact that localizes the bug.
+ * <p>There is deliberately no tolerance parameter: a tolerance would hide exactly the near-miss
+ * transitions a consumer compares traces to find. Only the first diverging tick is reported;
+ * without re-anchoring, every later tick is computed from an already-wrong state, so listing
+ * them would bury the one fact that localizes the disagreement.
  */
 public sealed interface TraceComparison {
-	/** A comparison in which every compared tick agreed bit for bit. */
+	/**
+	 * Every compared tick agreed bit for bit.
+	 *
+	 * @param ticks the number of ticks compared
+	 */
 	record Agreement(int ticks) implements TraceComparison {}
 
-	/** The first differing tick and its per-field differences. */
+	/**
+	 * The first differing tick and its per-field differences.
+	 *
+	 * @param tick the first tick at which any compared field differed
+	 * @param fields every differing field of that tick, in {@link StateField} order
+	 */
 	record Divergence(int tick, List<FieldDivergence> fields) implements TraceComparison {}
 
-	/** The traces cannot be meaningfully compared at all. Never a physics result. */
+	/**
+	 * The traces describe different runs and cannot be compared: different scenarios, Minecraft
+	 * versions, tick counts, tick numbering, actions, or initial states. Never a physics result.
+	 *
+	 * @param reason a sentence naming what differs
+	 */
 	record Incomparable(String reason) implements TraceComparison {}
 
-	/** One differing state field, rendered from the reference and candidate raw values. */
+	/**
+	 * One differing field, rendered from the reference and candidate raw values.
+	 *
+	 * @param field the differing field
+	 * @param reference the reference value, raw bits first and decoded value second
+	 * @param candidate the candidate value in the same form
+	 */
 	record FieldDivergence(StateField field, String reference, String candidate) {}
 
+	/** Compares every field of every tick; see {@link #compare(Trace, Trace, Set)}. */
 	static TraceComparison compare(final Trace reference, final Trace candidate) {
 		return compare(reference, candidate, EnumSet.noneOf(StateField.class));
 	}
 
 	/**
-	 * @param excluded fields declared inert or unreachable
-	 *                 requires this list to be named, versioned and reviewed —
-	 *                 it is a parameter rather than a default so that no
-	 *                 exclusion can be inherited silently.
+	 * Compares {@code candidate} against {@code reference}, ignoring {@code excluded} fields.
+	 *
+	 * <p>The exclusion set is a parameter rather than a default so that no exclusion can be
+	 * inherited silently; a caller that excludes a field should be able to say why.
 	 */
 	static TraceComparison compare(final Trace reference, final Trace candidate, final Set<StateField> excluded) {
 		EnumSet<StateField> effectiveExcluded = EnumSet.noneOf(StateField.class);
@@ -60,8 +77,8 @@ public sealed interface TraceComparison {
 		List<FieldDivergence> initial =
 		    diverging(reference.initialState(), candidate.initialState(), effectiveExcluded);
 		if (!initial.isEmpty()) {
-			// The implementations did not start from the same state, so any later
-			// agreement or disagreement says nothing about the transition.
+			// The producers did not start from the same state, so any later agreement or
+			// disagreement says nothing about the transition.
 			return new Incomparable("initial states differ: " + describe(initial));
 		}
 
@@ -98,15 +115,15 @@ public sealed interface TraceComparison {
 	}
 
 	/**
-	 * Renders a field for a human. Bits first, because bits are what diverged;
-	 * the decoded value second, because that is what makes the bug obvious.
+	 * Renders a field for a human. Bits first, because bits are what diverged; the decoded value
+	 * second, because that is what makes the difference obvious.
 	 */
 	private static String render(final StateField field, final StateVector state) {
 		long bits = state.rawBits(field);
 		return switch (field.kind()) {
-			case DOUBLE -> String.format("0x%016x (%s)", bits, Double.longBitsToDouble(bits));
-			case FLOAT -> String.format("0x%08x (%s)", bits, Float.intBitsToFloat((int) bits));
-			case BYTE_FLAGS -> String.format("0x%02x", bits);
+			case DOUBLE -> String.format(Locale.ROOT, "0x%016x (%s)", bits, Double.longBitsToDouble(bits));
+			case FLOAT -> String.format(Locale.ROOT, "0x%08x (%s)", bits, Float.intBitsToFloat((int) bits));
+			case BYTE_FLAGS -> String.format(Locale.ROOT, "0x%02x", bits);
 			case BOOLEAN -> bits != 0L ? "true" : "false";
 			case INT -> Integer.toString((int) bits);
 			case ENUM -> bits + ":" + state.label(field);

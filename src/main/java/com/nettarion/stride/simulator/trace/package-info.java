@@ -1,47 +1,43 @@
 /**
- * The simulator's own serialization: what one implementation observed the
- * player doing, tick by tick, written so any other implementation can be held
- * to it.
+ * File formats for recorded player movement: what a producer observed the player doing, tick by
+ * tick, written so that any other producer's recording can be compared with it bit for bit.
  *
- * <p>This package claims the audited state vector
- * ({@link StateVector} over
- * {@link com.nettarion.stride.simulator.trace.StateField}), the per-tick
- * {@link com.nettarion.stride.simulator.trace.Trace}, its tab-separated raw-bit
- * codec and raw-bit comparison, the world snapshot codec, the block and
- * server-state event sidecars, and the
- * {@link com.nettarion.stride.simulator.trace.Capture} bundle that ties one
- * recording's files together. A live capture, a headless replay, and the
- * simulator all write this format, which is what makes the differential gate
- * a bit-exact assertion rather than a judgment.
+ * <p>A {@link com.nettarion.stride.simulator.trace.Capture} bundles the files of one recorded
+ * session behind one base path. The formats, each with its own version:
+ * <ul>
+ * <li>trace, {@code .tsv}, magic {@code #stride-trace}, version 13, read and written by
+ * {@link com.nettarion.stride.simulator.trace.TraceCodec}: one
+ * {@link com.nettarion.stride.simulator.trace.StateVector} of raw-bit
+ * {@link com.nettarion.stride.simulator.trace.StateField} columns per tick;</li>
+ * <li>world, {@code .world}, magic {@code #stride-world}, version 15 (reads 13 and up), by
+ * {@link com.nettarion.stride.simulator.trace.WorldSnapshotCodec};</li>
+ * <li>world events, {@code .events}, magic {@code #stride-world-events}, version 3 (reads 1 and
+ * up), by {@link com.nettarion.stride.simulator.trace.WorldEventTrace};</li>
+ * <li>state events, {@code .state-events}, magic {@code #stride-state-events}, version 2, by
+ * {@link com.nettarion.stride.simulator.trace.StateEventTrace};</li>
+ * <li>block catalog, {@code .catalog}, binary, magic {@code stride-block-source}, version 1, by
+ * {@link com.nettarion.stride.simulator.trace.BlockStateCatalogCodec};</li>
+ * <li>simulation state, binary, schema 2 (reads 1), by
+ * {@link com.nettarion.stride.simulator.trace.SimulationStateCodec}, embedded in checkpoints and
+ * recordings;</li>
+ * <li>scheduled recording, gzip, magic {@code stride-scheduled-recording}, version 3, by
+ * {@link com.nettarion.stride.simulator.trace.ScheduledRecording}, holding one
+ * {@link com.nettarion.stride.simulator.trace.SimulationCheckpoint} per event.</li>
+ * </ul>
+ * Every layout is specified for readers in other languages in {@code docs/trace-formats.md}.
  *
- * <p>It refuses to know where captures are kept or which are required; that
- * is validation's.
+ * <p>Every scalar is stored as raw bits, never as a decimal rendering: floating-point columns are
+ * hexadecimal IEEE 754 bits, and {@link com.nettarion.stride.simulator.trace.TraceComparison}
+ * compares those bits. Nothing rounds, widens or normalizes, so {@code -0.0} and NaN payloads
+ * survive a round trip and a comparison.
  *
- * <p>Traces before version 13 carry no sprint speed modifier and no client
- * food level; readers admit them under the prior assumptions, the sprint
- * modifier following the sprint flag and food sufficient (20). World tuples
- * must identify one admitted block behavior; incompatible legacy tuples
- * require explicit migration or recapture.
+ * <p>Producers are identified by {@link com.nettarion.stride.simulator.trace.TraceProducer}. This
+ * library reads every producer's files and writes its own; it ships no tool that records a live
+ * game. The two bundled captures under {@code src/test/resources/captures} were recorded by a
+ * live 26.2 client and are the reference for the trace, world, state-event and catalog formats.
  *
- * <p>{@link Capture}, {@link CaptureFormat}, {@link Trace}, {@link TraceCodec},
- * {@link TraceComparison}, {@link TraceProducer}, {@link StateVector},
- * {@link StateField}, {@link StateEventTrace}, {@link WorldEventTrace} and
- * {@link WorldSnapshotCodec} are portable conformance artifacts, not
- * replacements for vanilla entities, save formats, packet classes or codecs.
- * Their raw-bit encoding and explicit field inventory are what let independent
- * implementations be compared. A schema field keeps an explicit upstream
- * mapping when the production representation is renamed; changing a wire name
- * is a deliberate capture migration. {@link SharedFlagBits} maps the admitted
- * Entity.DATA_SHARED_FLAGS_ID bits and preserves residual bits rather than
- * clearing unmodeled flags; unknown movement-affecting flag combinations
- * still require admission checks.
- *
- * <p>{@link com.nettarion.stride.simulator.trace.ScheduledRecording} stores initial state/world,
- * atomic events and exact {@link com.nettarion.stride.simulator.trace.SimulationCheckpoint} evidence.
- * {@link com.nettarion.stride.simulator.trace.BoundaryCodec} preserves raw scalar schema and retained movements.
- * {@link com.nettarion.stride.simulator.trace.BlockStateCatalogCodec} persists independently extracted
- * source evidence. Normal Capture imports require its catalog; synthetic/legacy imports must explicitly
- * choose readUnverified. Recorded simulator checkpoints prove consistency; only independently observed
- * checkpoints can support Minecraft fidelity. Verified scheduled imports require the pinned source.
+ * <p>{@link com.nettarion.stride.simulator.trace.CaptureFormat} reads the version of each file
+ * without decoding it, so a consumer can refuse a capture recorded before a column was added
+ * rather than compare it with that column missing.
  */
 package com.nettarion.stride.simulator.trace;

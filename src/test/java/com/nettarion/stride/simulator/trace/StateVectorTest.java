@@ -1,14 +1,14 @@
 package com.nettarion.stride.simulator.trace;
 
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.PlayerState;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.PlayerState;
+
 import org.junit.jupiter.api.Test;
 
-class StateVectorTest {
+final class StateVectorTest {
 	@Test
 	void retainedSupportingBlockRoundTripsThroughPortableState() {
 		PlayerState source = new PlayerState();
@@ -39,5 +39,32 @@ class StateVectorTest {
 		PlayerState malformed = valid.copy();
 		malformed.boundingBoxMinZ = Math.nextDown(malformed.boundingBoxMinZ);
 		assertThrows(IllegalStateException.class, () -> StateVector.of(malformed).toPlayerStateForTransition());
+	}
+
+	@Test
+	void poseIsRestoredFromItsVanillaIdNotItsLabel() {
+		// The label is a diagnostic aid outside the equality relation; the id is the fact.
+		StateVector mislabeled = TraceFixtures.zeroStateBuilder()
+		                             .setEnum(StateField.POSE, PlayerState.Pose.CROUCHING.id, "STANDING")
+		                             .build();
+
+		assertEquals(PlayerState.Pose.CROUCHING, mislabeled.toPlayerState().pose);
+		assertEquals(PlayerState.Pose.CROUCHING.id, mislabeled.getEnumId(StateField.POSE));
+	}
+
+	@Test
+	void anUnknownPoseIdRefuses() {
+		StateVector unknown = TraceFixtures.zeroStateBuilder().setEnum(StateField.POSE, 2, "SLEEPING").build();
+
+		assertThrows(IllegalArgumentException.class, unknown::toPlayerState);
+	}
+
+	@Test
+	void everyPoseRoundTripsThroughItsId() {
+		for (PlayerState.Pose pose : PlayerState.Pose.values()) {
+			PlayerState state = new PlayerState();
+			state.pose = pose;
+			assertEquals(pose, StateVector.of(state).toPlayerState().pose, pose.name());
+		}
 	}
 }

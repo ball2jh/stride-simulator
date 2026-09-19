@@ -1,44 +1,56 @@
 package com.nettarion.stride.simulator.trace;
 
 /**
- * The bit layout of {@code Entity}'s synchronized shared-flags byte, and the
- * one place that splits it into audited fields.
+ * The bit layout of vanilla {@code Entity}'s synchronized shared-flags byte, and the one place
+ * that splits it into recorded fields.
  *
- * <p>Bit numbers are read from the {@code Entity.setSharedFlag} call sites in
- * the pinned tree, not from memory.
+ * <p>Bit numbers are those of the {@code Entity.setSharedFlag} call sites in vanilla 26.2.
  *
- * <p><b>Read the raw byte, never the accessors.</b> It is tempting to fill
- * these fields with {@code isSprinting()}, {@code isShiftKeyDown()} and
- * friends. For {@code shiftKeyDown} that is actively wrong:
- * {@code LocalPlayer} overrides {@code isShiftKeyDown()} to return
- * {@code input.keyPresses.sneak()}, so the accessor answers a different
- * question than the flag does, and the two disagree by exactly the round-trip
- * latency this field is excluded for. Deriving every bit from the byte keeps
- * all implementations auditing the same fact.
+ * <p>A producer must read the raw byte, never the accessors. For {@code shiftKeyDown} the
+ * accessor is wrong: {@code LocalPlayer.isShiftKeyDown()} returns
+ * {@code input.keyPresses.sneak()}, which answers a different question than the flag does, and
+ * the two disagree by exactly the round-trip latency the field is excluded for. Deriving every
+ * bit from the byte keeps all producers recording the same fact.
  */
 public final class SharedFlagBits {
+	/** Bit 0: the entity is on fire. Residual; no named field. */
 	public static final int ON_FIRE = 0;
+
+	/** Bit 1: the server-owned sneak flag, recorded as {@link StateField#SHIFT_KEY_DOWN}. */
 	public static final int SHIFT_KEY_DOWN = 1;
+
+	/** Bit 3: sprinting, recorded as {@link StateField#SPRINTING}. */
 	public static final int SPRINTING = 3;
+
+	/** Bit 4: swimming, recorded as {@link StateField#SWIMMING}. */
 	public static final int SWIMMING = 4;
+
+	/** Bit 6: glowing. Residual; no named field. */
 	public static final int GLOWING = 6;
+
+	/** Bit 7: fall flying, recorded as {@link StateField#FALL_FLYING}. */
 	public static final int FALL_FLYING = 7;
 
-	/** Bits with no named field yet: 0, 2, 5 and 6. */
+	/**
+	 * The bits without a named field: 0 (on fire), 2, 5 (invisible) and 6 (glowing). They are
+	 * carried together as {@link StateField#SHARED_FLAGS_RESIDUAL}.
+	 */
 	public static final int RESIDUAL_MASK =
 	    0xFF & ~((1 << SHIFT_KEY_DOWN) | (1 << SPRINTING) | (1 << SWIMMING) | (1 << FALL_FLYING));
 
 	private SharedFlagBits() {}
 
+	/** Whether {@code bit} (0 through 7) is set in {@code flags}. */
 	public static boolean isSet(final byte flags, final int bit) {
 		return (flags & (1 << bit)) != 0;
 	}
 
+	/** The bits of {@code flags} that have no named field, per {@link #RESIDUAL_MASK}. */
 	public static byte residual(final byte flags) {
 		return (byte) (flags & RESIDUAL_MASK);
 	}
 
-	/** Writes the audited bits of one shared-flags byte into a state builder. */
+	/** Writes the named bits and the residual of one shared-flags byte into {@code builder}. */
 	public static void decompose(final StateVector.Builder builder, final byte flags) {
 		builder.set(StateField.SPRINTING, isSet(flags, SPRINTING));
 		builder.set(StateField.SWIMMING, isSet(flags, SWIMMING));
@@ -47,7 +59,7 @@ public final class SharedFlagBits {
 		builder.setFlags(StateField.SHARED_FLAGS_RESIDUAL, residual(flags));
 	}
 
-	/** Rebuilds the byte from the audited fields, for restoring a implementation. */
+	/** Rebuilds the shared-flags byte from the named fields and the residual of {@code state}. */
 	public static byte compose(final StateVector state) {
 		int flags = Byte.toUnsignedInt(state.getFlags(StateField.SHARED_FLAGS_RESIDUAL));
 		flags |= state.getBoolean(StateField.SPRINTING) ? 1 << SPRINTING : 0;

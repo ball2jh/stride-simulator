@@ -1,5 +1,7 @@
 package com.nettarion.stride.simulator.trace;
 
+import com.nettarion.stride.simulator.world.FluidEntry;
+import com.nettarion.stride.simulator.world.FluidKind;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 
 import java.io.BufferedReader;
@@ -9,45 +11,57 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import com.nettarion.stride.simulator.world.FluidKind;
-import com.nettarion.stride.simulator.world.FluidEntry;
+import java.util.Locale;
 
 /**
- * Ordered block and resolved-fluid changes published before a movement tick.
+ * Ordered block and resolved-fluid changes a capture observed arriving before movement ticks.
  *
- * <p>Block state ids and exact fluid entries must resolve through the
- * accompanying {@link WorldSnapshot} palettes. Fluid facts are independent
- * events because a block write can alter neighboring height or flow without
- * changing those neighbors' state IDs. This contract records an observed or
- * predicted world successor; it says nothing about the interaction, redstone,
- * entity, or scheduled-tick rules that produced it.
+ * <p>Block state ids and fluid entries must resolve through the palettes of the accompanying
+ * {@link WorldSnapshot}. Fluid facts are separate events because a block write can alter a
+ * neighbor's height or flow without changing that neighbor's state id. The trace records an
+ * observed world successor; it says nothing about the interaction, redstone, entity or
+ * scheduled-tick rules that produced it. The file layout is specified in
+ * {@code docs/trace-formats.md}. Instances are immutable.
+ *
+ * @param blockEvents block-cell changes in nondecreasing tick order
+ * @param fluidEvents fluid-cell changes in nondecreasing tick order, applied after the tick's block events
  */
-public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> fluidEvents) {
+public record WorldEventTrace(List<BlockCellEvent> blockEvents, List<FluidCellEvent> fluidEvents) {
+	/** The world-event file format this library writes. */
+	public static final int FORMAT_VERSION = 3;
+
+	/** The oldest format still read: version 1 lacks fluid state ids, version 2 lacks fluid events. */
+	public static final int OLDEST_FORMAT_VERSION = 1;
+
 	private static final String MAGIC = "#stride-world-events";
-	static final int FORMAT_VERSION = 3;
 	private static final String[] BLOCK_COLUMNS = {"tick", "x", "y", "z", "state_id", "fluid_state_id"};
 	private static final String[] V1_COLUMNS = {"tick", "x", "y", "z", "state_id"};
 	private static final String[] FLUID_COLUMNS = {"tick", "x", "y", "z", "fluid_state_id", "fluid_name", "fluid_kind",
 	    "height_bits", "flow_x_bits", "flow_y_bits", "flow_z_bits", "source"};
 
+	/** Copies both lists; refuses negative or decreasing ticks with {@link IllegalArgumentException}. */
 	public WorldEventTrace {
-		events = List.copyOf(events);
+		blockEvents = List.copyOf(blockEvents);
 		fluidEvents = List.copyOf(fluidEvents);
-		validateTicks(events.stream().mapToInt(CellStateEvent::tick).toArray());
+		validateTicks(blockEvents.stream().mapToInt(BlockCellEvent::tick).toArray());
 		validateTicks(fluidEvents.stream().mapToInt(FluidCellEvent::tick).toArray());
 	}
 
-	public WorldEventTrace(final List<CellStateEvent> events) {
-		this(events, List.of());
+	/** Block events only, with no fluid events. */
+	public WorldEventTrace(final List<BlockCellEvent> blockEvents) {
+		this(blockEvents, List.of());
 	}
 
+	/** Whether the trace holds no event of either kind. */
 	public boolean isEmpty() {
-		return this.events.isEmpty() && this.fluidEvents.isEmpty();
+		return this.blockEvents.isEmpty() && this.fluidEvents.isEmpty();
 	}
 
+	/** The number of block and fluid events together. */
 	public int eventCount() {
-		return this.events.size() + this.fluidEvents.size();
+		return this.blockEvents.size() + this.fluidEvents.size();
 	}
 
 	private static void validateTicks(final int[] ticks) {
@@ -60,6 +74,7 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 		}
 	}
 
+	/** Writes {@code trace} to {@code path} as UTF-8 in {@link #FORMAT_VERSION}, replacing any existing file. */
 	public static void write(final WorldEventTrace trace, final Path path) throws IOException {
 		try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
 			write(trace, writer);
@@ -68,9 +83,9 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 
 	static void write(final WorldEventTrace trace, final Writer writer) throws IOException {
 		writer.write(MAGIC + "\t" + FORMAT_VERSION + "\n");
-		writer.write("#block-events\t" + trace.events().size() + "\n");
+		writer.write("#block-events\t" + trace.blockEvents().size() + "\n");
 		writer.write(String.join("\t", BLOCK_COLUMNS) + "\n");
-		for (CellStateEvent event : trace.events()) {
+		for (BlockCellEvent event : trace.blockEvents()) {
 			writer.write(event.tick() + "\t" + event.x() + "\t" + event.y() + "\t" + event.z() + "\t"
 			    + event.blockStateId() + "\t" + event.fluidStateId() + "\n");
 		}
@@ -85,13 +100,17 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 		}
 	}
 
+	/**
+	 * Reads the world events at {@code path}, migrating versions {@link #OLDEST_FORMAT_VERSION}
+	 * through {@link #FORMAT_VERSION}. Refuses a malformed file with an {@link IOException}.
+	 */
 	public static WorldEventTrace read(final Path path) throws IOException {
 		try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
 			return read(reader);
 		}
 	}
 
-	/** The format version a written world-event trace carries, without decoding it. */
+	/** The format version the file at {@code path} carries, read from its first line only. */
 	public static int formatVersion(final Path path) throws IOException {
 		try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
 			String[] magic = require(reader, "magic").split("\t", -1);
@@ -108,12 +127,13 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 			throw new IOException("not a stride world-event trace");
 		}
 		int version = parseInt(magic[1], "format version");
-		if (version < 1 || version > FORMAT_VERSION) {
-			throw new IOException("world-event format version " + version + ", expected 1 through " + FORMAT_VERSION);
+		if (version < OLDEST_FORMAT_VERSION || version > FORMAT_VERSION) {
+			throw new IOException("world-event format version " + version + ", expected " + OLDEST_FORMAT_VERSION
+			    + " through " + FORMAT_VERSION);
 		}
 
-		if (version == 3) {
-			return readV3(reader);
+		if (version == FORMAT_VERSION) {
+			return readCurrent(reader);
 		}
 		return readLegacy(reader, version);
 	}
@@ -132,7 +152,7 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 			}
 		}
 
-		List<CellStateEvent> events = new ArrayList<>();
+		List<BlockCellEvent> events = new ArrayList<>();
 		int previousTick = -1;
 		String line;
 		int lineNumber = 2;
@@ -152,26 +172,26 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 				    + " at line " + lineNumber);
 			}
 			previousTick = tick;
-			events.add(new CellStateEvent(tick, parseInt(values[1], "x at line " + lineNumber),
+			events.add(new BlockCellEvent(tick, parseInt(values[1], "x at line " + lineNumber),
 			    parseInt(values[2], "y at line " + lineNumber), parseInt(values[3], "z at line " + lineNumber),
 			    parseInt(values[4], "state_id at line " + lineNumber),
 			    version >= 2 ? parseInt(values[5], "fluid_state_id at line " + lineNumber)
-			                 : CellStateEvent.KEEP_EXISTING_FLUID));
+			                 : BlockCellEvent.KEEP_EXISTING_FLUID));
 		}
 		return new WorldEventTrace(events);
 	}
 
-	private static WorldEventTrace readV3(final BufferedReader reader) throws IOException {
+	private static WorldEventTrace readCurrent(final BufferedReader reader) throws IOException {
 		int blockCount = readSectionCount(reader, "#block-events");
 		requireColumns(reader, BLOCK_COLUMNS, "block-event");
-		List<CellStateEvent> blocks = new ArrayList<>(blockCount);
+		List<BlockCellEvent> blocks = new ArrayList<>(blockCount);
 		for (int i = 0; i < blockCount; i++) {
 			String[] values = require(reader, "block event " + i).split("\t", -1);
 			if (values.length != BLOCK_COLUMNS.length) {
 				throw new IOException(
 				    "world block-event " + i + " has " + values.length + " columns, expected " + BLOCK_COLUMNS.length);
 			}
-			blocks.add(new CellStateEvent(parseInt(values[0], "block tick " + i), parseInt(values[1], "block x " + i),
+			blocks.add(new BlockCellEvent(parseInt(values[0], "block tick " + i), parseInt(values[1], "block x " + i),
 			    parseInt(values[2], "block y " + i), parseInt(values[3], "block z " + i),
 			    parseInt(values[4], "block state id " + i), parseInt(values[5], "block fluid state id " + i)));
 		}
@@ -225,7 +245,7 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 	private static void requireColumns(final BufferedReader reader, final String[] expected, final String section)
 	    throws IOException {
 		String[] actual = require(reader, section + " columns").split("\t", -1);
-		if (!java.util.Arrays.equals(expected, actual)) {
+		if (!Arrays.equals(expected, actual)) {
 			throw new IOException(section + " columns do not match format " + FORMAT_VERSION);
 		}
 	}
@@ -247,7 +267,7 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 	}
 
 	private static String hex64(final double value) {
-		return String.format(java.util.Locale.ROOT, "%016x", Double.doubleToRawLongBits(value));
+		return String.format(Locale.ROOT, "%016x", Double.doubleToRawLongBits(value));
 	}
 
 	private static double parseHexDouble(final String value, final String what) throws IOException {
@@ -268,18 +288,37 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 		throw new IOException("invalid " + what + ": " + value);
 	}
 
-	/** One effective block-state publication at the head of {@code tick}. */
-	public record CellStateEvent(int tick, int x, int y, int z, int blockStateId, int fluidStateId) {
-		/** V1 migration marker. The old protocol did not publish a fluid change. */
+	/**
+	 * One block-cell change that takes effect at the head of {@code tick}.
+	 *
+	 * @param tick the zero-based client tick before which the change is visible
+	 * @param x the block x coordinate
+	 * @param y the block y coordinate
+	 * @param z the block z coordinate
+	 * @param blockStateId the new vanilla block state id, resolved through the snapshot palette
+	 * @param fluidStateId the new fluid state id, or {@link #KEEP_EXISTING_FLUID}
+	 */
+	public record BlockCellEvent(int tick, int x, int y, int z, int blockStateId, int fluidStateId) {
+		/** Leaves the cell's fluid unchanged; the only value a format-1 file can express. */
 		public static final int KEEP_EXISTING_FLUID = -1;
 
-		public CellStateEvent(final int tick, final int x, final int y, final int z, final int blockStateId) {
+		/** A block change that keeps the cell's existing fluid. */
+		public BlockCellEvent(final int tick, final int x, final int y, final int z, final int blockStateId) {
 			this(tick, x, y, z, blockStateId, KEEP_EXISTING_FLUID);
 		}
 	}
 
-	/** One fully resolved fluid fact published after all block changes for a tick. */
+	/**
+	 * One fully resolved fluid fact that takes effect after the block changes of {@code tick}.
+	 *
+	 * @param tick the zero-based client tick before which the change is visible
+	 * @param x the block x coordinate
+	 * @param y the block y coordinate
+	 * @param z the block z coordinate
+	 * @param fluid the resolved fluid, which must be in the snapshot's fluid palette
+	 */
 	public record FluidCellEvent(int tick, int x, int y, int z, FluidEntry fluid) {
+		/** Refuses a null fluid with {@link IllegalArgumentException}. */
 		public FluidCellEvent {
 			if (fluid == null) {
 				throw new IllegalArgumentException("fluid event requires resolved facts");

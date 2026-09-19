@@ -6,27 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-class SharedFlagBitsTest {
+final class SharedFlagBitsTest {
 	private static StateVector decomposed(final byte flags) {
-		StateVector.Builder builder = StateVector.builder();
-		for (StateField field : StateField.ALL) {
-			switch (field.kind()) {
-				case DOUBLE -> builder.set(field, 0.0);
-				case FLOAT -> builder.set(field, 0.0F);
-				case BOOLEAN -> builder.set(field, false);
-				case INT -> builder.set(field, 0);
-				case BYTE_FLAGS -> builder.setFlags(field, (byte) 0);
-				case ENUM -> builder.setEnum(field, 0, "STANDING");
-			}
-		}
+		StateVector.Builder builder = TraceFixtures.zeroStateBuilder();
 		SharedFlagBits.decompose(builder, flags);
 		return builder.build();
 	}
 
 	@Test
 	void residualCoversEveryBitThatHasNoNamedField() {
-		// If a bit is ever promoted to its own field, this is the test that
-		// fails if it is not also removed from the residual mask.
+		// If a bit is ever promoted to its own field, this is the test that fails if it is not
+		// also removed from the residual mask.
 		int named = (1 << SharedFlagBits.SHIFT_KEY_DOWN) | (1 << SharedFlagBits.SPRINTING)
 		    | (1 << SharedFlagBits.SWIMMING) | (1 << SharedFlagBits.FALL_FLYING);
 		assertEquals(0xFF, named | SharedFlagBits.RESIDUAL_MASK, "every bit is named or residual");
@@ -49,8 +39,8 @@ class SharedFlagBitsTest {
 		assertTrue(state.getBoolean(StateField.SHIFT_KEY_DOWN));
 		assertFalse(state.getBoolean(StateField.SWIMMING));
 		assertFalse(state.getBoolean(StateField.FALL_FLYING));
-		// The whole point of the split: excluding the server-owned bit must not
-		// touch the client-computed ones.
+		// The whole point of the split: excluding the server-owned bit must not touch the
+		// client-computed ones.
 		assertEquals((byte) 0, state.getFlags(StateField.SHARED_FLAGS_RESIDUAL));
 	}
 

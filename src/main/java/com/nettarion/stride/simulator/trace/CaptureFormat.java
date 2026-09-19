@@ -5,72 +5,65 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
- * The format each file of one capture was recorded at, so a reader can refuse a
- * recording older than the one a live client writes today.
+ * The format version each file of one capture carries, read without decoding the files.
  *
- * <p>The readers migrate older formats deliberately: a research replay of an
- * archived recording needs them to, and every one of them is a transcription
- * that still decodes correctly. That is also what lets a corpus go stale
- * invisibly. A capture four versions behind loses whole columns and the
- * remaining ones still match, so a differential gate replaying it stays green
- * while the fields added since were never compared once — it proves agreement
- * with a client that no longer exists, which is the one thing such a gate must
- * not be able to do quietly.
+ * <p>The world and world-event readers migrate older formats, so a capture recorded before a
+ * column was added still reads: the missing column takes a derived value and every other column
+ * still compares. That is exactly how a capture goes stale invisibly, because the fields added
+ * since are never compared at all. {@link #staleness} names every file behind the current
+ * format so a consumer can refuse the capture by name instead of trusting a comparison that
+ * omits fields.
  *
- * <p>This type is the difference between "readable" and "current". It reads the
- * version off each artifact without decoding it and {@link #staleness} turns a
- * capture behind the recorder into one sentence naming which file, the version
- * it carries, the version a recording writes now, and how to re-record it. What
- * to do with that sentence belongs to the caller; the differential gate fails
- * the capture by name.
+ * <p>The trace and state-event files are compared too, although their readers accept only the
+ * current version, so a stale one already fails to read.
  *
- * <p>The state-event sidecar is absent from this comparison because it cannot
- * be stale: {@code StateEventTrace} accepts its current version and no other,
- * so an old one already fails to read at all.
+ * @param trace the {@code .tsv} format version
+ * @param world the {@code .world} format version, or empty when the file is absent
+ * @param worldEvents the {@code .events} format version, or empty when the file is absent
  */
-public record CaptureFormat(int trace, int world, int worldEvents) {
-	/** Absent from a capture, and never compared against the current version. */
-	public static final int MISSING = -1;
-
-	/** What a recording made by the live client writes today. */
+public record CaptureFormat(int trace, OptionalInt world, OptionalInt worldEvents) {
+	/** The versions this library writes today. */
 	public static CaptureFormat current() {
-		return new CaptureFormat(
-		    Trace.FORMAT_VERSION, WorldSnapshotCodec.FORMAT_VERSION, WorldEventTrace.FORMAT_VERSION);
+		return new CaptureFormat(Trace.FORMAT_VERSION, OptionalInt.of(WorldSnapshotCodec.FORMAT_VERSION),
+		    OptionalInt.of(WorldEventTrace.FORMAT_VERSION));
 	}
 
-	/** Reads the version off each file of the capture at this base path. */
+	/** Reads the version off each present file of the capture at {@code basePath}. */
 	public static CaptureFormat of(final Path basePath) throws IOException {
 		Path world = Capture.companion(basePath, ".world");
 		Path worldEvents = Capture.companion(basePath, ".events");
 		return new CaptureFormat(TraceCodec.formatVersion(Capture.companion(basePath, ".tsv")),
-		    Files.exists(world) ? WorldSnapshotCodec.formatVersion(world) : MISSING,
-		    Files.exists(worldEvents) ? WorldEventTrace.formatVersion(worldEvents) : MISSING);
+		    Files.exists(world) ? OptionalInt.of(WorldSnapshotCodec.formatVersion(world)) : OptionalInt.empty(),
+		    Files.exists(worldEvents) ? OptionalInt.of(WorldEventTrace.formatVersion(worldEvents))
+		                              : OptionalInt.empty());
 	}
 
 	/**
-	 * One sentence naming every artifact recorded before the current format, or
-	 * null when the capture is what a recording writes today.
+	 * One sentence naming every file of the capture recorded before the current format, or empty
+	 * when the capture is what this library writes today. Absent files are never stale.
 	 */
-	public String staleness(final String scenario) {
+	public Optional<String> staleness(final String scenario) {
 		CaptureFormat now = current();
 		List<String> behind = new ArrayList<>(3);
-		describe(behind, "trace", this.trace, now.trace());
-		describe(behind, "world", this.world, now.world());
-		describe(behind, "world events", this.worldEvents, now.worldEvents());
+		describe(behind, "trace", OptionalInt.of(this.trace), now.trace());
+		describe(behind, "world", this.world, now.world().orElseThrow());
+		describe(behind, "world events", this.worldEvents, now.worldEvents().orElseThrow());
 		if (behind.isEmpty()) {
-			return null;
+			return Optional.empty();
 		}
-		return "capture '" + scenario + "' was recorded at " + String.join(", ", behind)
-		    + "; it is read by migration, not by agreement, so replaying it proves"
-		    + " nothing about the fields added since. Re-record the scenario using"
-		    + " a compatible external capture producer.";
+		return Optional.of("capture '" + scenario + "' was recorded at " + String.join(", ", behind)
+		    + "; the fields added since are not compared when it is read by migration, so the capture"
+		    + " must be re-recorded with a producer writing the current format");
 	}
 
-	private static void describe(final List<String> behind, final String what, final int recorded, final int now) {
-		if (recorded != MISSING && recorded < now) {
-			behind.add(what + " format " + recorded + " against " + now);
+	private static void describe(
+	    final List<String> behind, final String what, final OptionalInt recorded, final int now) {
+		if (recorded.isPresent() && recorded.getAsInt() < now) {
+			behind.add(what + " format " + recorded.getAsInt() + " against " + now);
 		}
 	}
 }

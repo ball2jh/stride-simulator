@@ -1,30 +1,29 @@
 package com.nettarion.stride.simulator.trace;
 
-import com.nettarion.stride.simulator.world.WorldSnapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.nettarion.stride.simulator.world.FluidEntry;
+import com.nettarion.stride.simulator.world.FluidKind;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.List;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
 import org.junit.jupiter.api.Test;
-import com.nettarion.stride.simulator.world.FluidKind;
-import com.nettarion.stride.simulator.world.FluidEntry;
 
-class WorldEventTraceTest {
+final class WorldEventTraceTest {
 	@Test
 	void roundTripPreservesSameTickSourceOrder() throws IOException {
-		FluidEntry flowingWater = new FluidEntry(
-		    12, "minecraft:flowing_water", FluidKind.WATER, 0.625, 0.25, 0.0, -0.5, false);
-		FluidEntry neighborDependentWater = new FluidEntry(
-		    12, "minecraft:flowing_water", FluidKind.WATER, 0.375, -0.25, 0.0, 0.5, false);
-		WorldEventTrace original = new WorldEventTrace(List.of(new WorldEventTrace.CellStateEvent(8, 1, 2, 3, 100, 200),
-		                                                   new WorldEventTrace.CellStateEvent(8, -4, 5, 6, 101, 201),
-		                                                   new WorldEventTrace.CellStateEvent(27, 1, 2, 3, 102, 202)),
+		FluidEntry flowingWater =
+		    new FluidEntry(12, "minecraft:flowing_water", FluidKind.WATER, 0.625, 0.25, 0.0, -0.5, false);
+		FluidEntry neighborDependentWater =
+		    new FluidEntry(12, "minecraft:flowing_water", FluidKind.WATER, 0.375, -0.25, 0.0, 0.5, false);
+		WorldEventTrace original = new WorldEventTrace(List.of(new WorldEventTrace.BlockCellEvent(8, 1, 2, 3, 100, 200),
+		                                                   new WorldEventTrace.BlockCellEvent(8, -4, 5, 6, 101, 201),
+		                                                   new WorldEventTrace.BlockCellEvent(27, 1, 2, 3, 102, 202)),
 		    List.of(new WorldEventTrace.FluidCellEvent(8, 1, 2, 3, flowingWater),
 		        new WorldEventTrace.FluidCellEvent(8, 2, 2, 3, neighborDependentWater)));
 		StringWriter writer = new StringWriter();
@@ -43,7 +42,8 @@ class WorldEventTraceTest {
 
 		WorldEventTrace decoded = WorldEventTrace.read(new BufferedReader(new StringReader(legacy)));
 
-		assertEquals(WorldEventTrace.CellStateEvent.KEEP_EXISTING_FLUID, decoded.events().getFirst().fluidStateId());
+		assertEquals(
+		    WorldEventTrace.BlockCellEvent.KEEP_EXISTING_FLUID, decoded.blockEvents().getFirst().fluidStateId());
 	}
 
 	@Test
@@ -54,7 +54,7 @@ class WorldEventTraceTest {
 
 		WorldEventTrace decoded = WorldEventTrace.read(new BufferedReader(new StringReader(legacy)));
 
-		assertEquals(17, decoded.events().getFirst().fluidStateId());
+		assertEquals(17, decoded.blockEvents().getFirst().fluidStateId());
 		assertTrue(decoded.fluidEvents().isEmpty());
 	}
 
@@ -62,8 +62,8 @@ class WorldEventTraceTest {
 	void rejectsDecreasingTicksAndMalformedColumns() {
 		assertThrows(IllegalArgumentException.class,
 		    ()
-		        -> new WorldEventTrace(List.of(new WorldEventTrace.CellStateEvent(2, 0, 0, 0, 1),
-		            new WorldEventTrace.CellStateEvent(1, 0, 0, 0, 2))));
+		        -> new WorldEventTrace(List.of(new WorldEventTrace.BlockCellEvent(2, 0, 0, 0, 1),
+		            new WorldEventTrace.BlockCellEvent(1, 0, 0, 0, 2))));
 		assertThrows(IllegalArgumentException.class,
 		    ()
 		        -> new WorldEventTrace(List.of(),
