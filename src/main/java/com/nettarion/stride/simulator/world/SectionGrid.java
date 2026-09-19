@@ -3,7 +3,15 @@ package com.nettarion.stride.simulator.world;
 /**
  * The section coordinates a snapshot's bounds touch: the first section on
  * each axis and how many follow, so a section is found by
- * {@code (world >> 4) - origin} and numbered y outermost, then z, then x.
+ * {@code (world >> Section.SHIFT) - origin} and numbered y outermost, then z,
+ * then x.
+ *
+ * @param sectionOriginX the section coordinate of the first section along X
+ * @param sectionOriginY the section coordinate of the first section along Y
+ * @param sectionOriginZ the section coordinate of the first section along Z
+ * @param sectionsX how many sections the bounds touch along X
+ * @param sectionsY how many sections the bounds touch along Y
+ * @param sectionsZ how many sections the bounds touch along Z
  */
 record SectionGrid(
     int sectionOriginX, int sectionOriginY, int sectionOriginZ, int sectionsX, int sectionsY, int sectionsZ) {
@@ -26,6 +34,7 @@ record SectionGrid(
 		    && (sizeX & Section.MASK) == 0 && (sizeY & Section.MASK) == 0 && (sizeZ & Section.MASK) == 0;
 	}
 
+	/** How many sections the grid holds. */
 	int count() {
 		return this.sectionsX * this.sectionsY * this.sectionsZ;
 	}

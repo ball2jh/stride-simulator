@@ -1,29 +1,29 @@
 package com.nettarion.stride.simulator.world;
 
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.tick.Scratch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.List;
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.tick.Scratch;
 import org.junit.jupiter.api.Test;
 
 /**
- * An edit invalidates the section proofs it can reach, and no others .
+ * An edit invalidates the section-keyed cache entries it can reach, and no
+ * others.
  *
- * <p>Every test here carries the same negative control — the *global*
+ * <p>Every test here carries the same negative control: the global
  * {@code collisionVersion} is asserted to have changed. That is the behavior
  * being replaced, so a passing locality assertion cannot be explained by the
  * edit having quietly done nothing.
  */
-class SectionVersionStampTest {
-	private static final int AIR = 0;
+final class SectionVersionStampTest {
 	private static final int STONE = 1;
 
 	private static final int SIZE = 48;
+
 	/** Three sections away from the player, in every axis. */
 	private static final int FAR = 40;
 
@@ -64,7 +64,7 @@ class SectionVersionStampTest {
 	}
 
 	@Test
-	void aDistantEditDoesNotDiscardAPoseFitProof() {
+	void aDistantEditDoesNotDiscardAPoseFitCache() {
 		SnapshotView world = world();
 		PlayerState state = standingAt(1.5, 1.0, 1.5);
 		state.cachePoseFit(world, PlayerState.Pose.STANDING);
@@ -73,19 +73,19 @@ class SectionVersionStampTest {
 		world.replaceCell(FAR, FAR, FAR, STONE);
 
 		assertNotEquals(
-		    0L, world.collisionVersion(), "control: a global-version certificate would have been discarded here");
+		    0L, world.collisionVersion(), "control: a global-version cache entry would have been discarded here");
 		assertTrue(state.hasCachedPoseFit(world, PlayerState.Pose.STANDING),
-		    "validation: a chunk arriving far away must not discard the player's local proof");
+		    "a chunk arriving far away must not discard the player's local pose-fit cache");
 	}
 
 	@Test
-	void aNearEditStillDiscardsThePoseFitProof() {
+	void aNearEditStillDiscardsThePoseFitCache() {
 		SnapshotView world = world();
 		PlayerState state = standingAt(1.5, 1.0, 1.5);
 		state.cachePoseFit(world, PlayerState.Pose.STANDING);
 		assertTrue(state.hasCachedPoseFit(world, PlayerState.Pose.STANDING));
 
-		// Inside the certified box's own span, so the proof is genuinely at risk.
+		// Inside the cached box's own span, so the entry is genuinely at risk.
 		world.replaceCell(1, 2, 1, STONE);
 
 		assertFalse(state.hasCachedPoseFit(world, PlayerState.Pose.STANDING));
@@ -100,7 +100,7 @@ class SectionVersionStampTest {
 
 		world.replaceCell(FAR, FAR, FAR, STONE);
 		assertTrue(scratch.span.covers(world, 1, 1, 1, 2, 2, 2),
-		    "validation's retained span must not be discarded by a distant chunk edit");
+		    "a retained span must not be discarded by a distant chunk edit");
 
 		world.replaceCell(2, 2, 2, STONE);
 		assertFalse(scratch.span.covers(world, 1, 1, 1, 2, 2, 2));
@@ -115,7 +115,7 @@ class SectionVersionStampTest {
 
 		assertNotEquals(0L, child.collisionVersionIn(0, 0, 0, 3, 3, 3));
 		assertEquals(0L, parent.collisionVersionIn(0, 0, 0, 3, 3, 3),
-		    "stamps must be per-instance, or a sibling rollout would invalidate this one");
+		    "stamps must be per-instance, or a sibling simulation would invalidate this one");
 	}
 
 	private static PlayerState standingAt(final double x, final double y, final double z) {
@@ -128,10 +128,10 @@ class SectionVersionStampTest {
 	}
 
 	private static SnapshotView world() {
-		return new SnapshotView(new WorldSnapshot(0, 0, 0, SIZE, SIZE, SIZE, OutsidePolicy.SEALED,
-		    List.of(new BlockEntry(AIR, "air", 0.6F, 1.0F, 1.0F, List.of()),
-		        new BlockEntry(
-		            STONE, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0, 0, 0, 1, 1, 1)))),
-		    new int[SIZE * SIZE * SIZE]));
+		return SnapshotView
+		    .compile(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, SIZE, SIZE, SIZE)
+		            .palette(BlockEntry.builder(0, "air").build(), BlockEntry.builder(1, "stone").solid().build())
+		            .build())
+		    .fork();
 	}
 }

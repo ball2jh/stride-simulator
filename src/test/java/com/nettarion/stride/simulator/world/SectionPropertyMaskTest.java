@@ -9,27 +9,33 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * validation: behaviors are answered per 16³ section, not per view.
+ * Behaviors are answered per 16-cube section, not per view.
  *
  * <p>The world is 48 cells on a side, so it is three sections wide in each
  * direction and a query near the origin and a query at the far corner land in
- * different sections. Each test carries its own negative control: the whole-view
- * predicate the kernel used to read stays *true* throughout, so a passing
- * assertion is about the mask discriminating and not about the fixture being
- * empty.
+ * different sections. Each test carries its own negative control: the
+ * whole-view predicate the tick used to read stays true throughout, so a
+ * passing assertion is about the mask discriminating and not about the
+ * fixture being empty.
  */
-class SectionPropertyMaskTest {
+final class SectionPropertyMaskTest {
 	private static final int AIR = 0;
+
 	private static final int STONE = 1;
+
 	private static final int ICE = 2;
+
 	private static final int VINE = 3;
+
 	private static final int BUBBLE = 4;
 
 	/** Fluid palette indexes of {@link #fluidWorld}. */
 	private static final int WATER = 1;
+
 	private static final int EMPTY_ALIAS = 2;
 
 	private static final int SIZE = 48;
+
 	/** Inside the last section, well clear of the section the player occupies. */
 	private static final int FAR = 40;
 
@@ -69,9 +75,8 @@ class SectionPropertyMaskTest {
 	void aDistantBehaviorDoesNotTurnOnTheLocalGate() {
 		SnapshotView world = world();
 
-		// The control: every whole-view flag the kernel used to gate on is true,
-		// so anything that reads them cannot skip a thing. This is validation's defect
-		// stated as an assertion.
+		// The control: every whole-view flag the tick used to gate on is true,
+		// so anything that reads them cannot skip a thing.
 		assertTrue(world.hasNonDefaultFriction(), "control: ice makes the view-wide flag true");
 		assertTrue(world.hasClimbables(), "control: the vine makes the view-wide flag true");
 		assertTrue(world.hasBubbleColumns(), "control: the column makes the view-wide flag true");
@@ -113,7 +118,7 @@ class SectionPropertyMaskTest {
 	void aSpanLeavingTheRegionFallsBackToTheWholeViewAnswer() {
 		SnapshotView world = world();
 
-		// Outside the region is unknown, and the accessors own that semantic —
+		// Outside the region is unknown, and the accessors own that semantic:
 		// answering zero here would skip the lookup that is supposed to refuse.
 		assertNotEquals(0, world.propertiesIn(WorldView.PROPERTY_CLIMBABLE, -4, 1, 1, 1, 1, 1),
 		    "a span reaching outside must not be answered empty");
@@ -146,12 +151,12 @@ class SectionPropertyMaskTest {
 
 		assertEquals(WorldView.PROPERTY_FRICTION, child.propertiesIn(WorldView.PROPERTY_FRICTION, 1, 1, 1, 1, 1, 1));
 		assertEquals(0, parent.propertiesIn(WorldView.PROPERTY_FRICTION, 1, 1, 1, 1, 1, 1),
-		    "the section mask must be per-instance, like collisionSectionCounts");
+		    "the section mask must be per-instance, like the collision counts");
 	}
 
 	@Test
 	void aViewWithoutSectionDetailKeepsTheWholeViewAnswer() {
-		// FlatFloorView is one block everywhere, so its answer is a constant --
+		// FlatFloorView is one block everywhere, so its answer is a constant,
 		// and an ordinary floor has no non-default coefficient to report.
 		assertEquals(0, FlatFloorView.ordinary(0, -64).propertiesIn(WorldView.PROPERTIES_ALL, 0, 0, 0, 0, 0, 0));
 		assertEquals(WorldView.PROPERTY_FRICTION,
@@ -187,49 +192,35 @@ class SectionPropertyMaskTest {
 	}
 
 	private static SnapshotView fluidWorld(final int fluidIndex) {
-		return new SnapshotView(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, SIZE, SIZE, SIZE)
-		        .palette(plain(AIR, "air", List.of()), plain(STONE, "stone", cube()))
-		        .fluidPalette(FluidEntry.EMPTY,
-		            new FluidEntry(
-		                1, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true),
-		            new FluidEntry(
-		                2, "stride:empty_alias", FluidKind.EMPTY, 0.0, 0.0, 0.0, 0.0, false))
-		        .setFluid(FAR, FAR, FAR, fluidIndex)
-		        .build());
+		return SnapshotView
+		    .compile(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, SIZE, SIZE, SIZE)
+		            .palette(plain(AIR, "air").build(), plain(STONE, "stone").solid().build())
+		            .fluidPalette(FluidEntry.EMPTY,
+		                new FluidEntry(1, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true),
+		                new FluidEntry(2, "stride:empty_alias", FluidKind.EMPTY, 0.0, 0.0, 0.0, 0.0, false))
+		            .setFluid(FAR, FAR, FAR, fluidIndex)
+		            .build())
+		    .fork();
 	}
 
 	private static SnapshotView world() {
-		int[] cells = new int[SIZE * SIZE * SIZE];
-		cells[cell(FAR, 1, 1)] = ICE;
-		cells[cell(1, FAR, 1)] = VINE;
-		cells[cell(1, 1, FAR)] = BUBBLE;
-		return new SnapshotView(new WorldSnapshot(0, 0, 0, SIZE, SIZE, SIZE, OutsidePolicy.SEALED,
-		    List.of(plain(AIR, "air", List.of()), plain(STONE, "stone", cube()),
-		        new BlockEntry(ICE, "ice", 0.98F, 1.0F, 1.0F, false, false,
-		            WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		            Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
-		            false, WorldView.Climbability.NONE, cube()),
-		        new BlockEntry(VINE, "vine", 0.6F, 1.0F, 1.0F, false, false,
-		            WorldView.BubbleColumnMode.NONE, true, WorldView.CollisionBehavior.ORDINARY,
-		            Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
-		            false, WorldView.Climbability.CLIMBABLE, List.of()),
-		        new BlockEntry(BUBBLE, "bubble_column", 0.6F, 1.0F, 1.0F, false, false,
-		            WorldView.BubbleColumnMode.PUSH_UP, false, WorldView.CollisionBehavior.ORDINARY,
-		            Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
-		            false, WorldView.Climbability.NONE, List.of())),
-		    cells));
+		return SnapshotView
+		    .compile(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, SIZE, SIZE, SIZE)
+		            .palette(plain(AIR, "air").build(), plain(STONE, "stone").solid().build(),
+		                plain(ICE, "ice").fullCube().friction(0.98F).build(),
+		                plain(VINE, "vine")
+		                    .fallDistanceResetting(true)
+		                    .climbability(WorldView.Climbability.CLIMBABLE)
+		                    .build(),
+		                plain(BUBBLE, "bubble_column").bubbleColumnMode(WorldView.BubbleColumnMode.PUSH_UP).build())
+		            .set(FAR, 1, 1, ICE)
+		            .set(1, FAR, 1, VINE)
+		            .set(1, 1, FAR, BUBBLE)
+		            .build())
+		    .fork();
 	}
 
-	private static BlockEntry plain(
-	    final int id, final String name, final List<ShapeBox> boxes) {
-		return new BlockEntry(id, name, 0.6F, 1.0F, 1.0F, boxes);
-	}
-
-	private static List<ShapeBox> cube() {
-		return List.of(new ShapeBox(0, 0, 0, 1, 1, 1));
-	}
-
-	private static int cell(final int x, final int y, final int z) {
-		return (y * SIZE + z) * SIZE + x;
+	private static BlockEntry.Builder plain(final int id, final String name) {
+		return BlockEntry.builder(id, name);
 	}
 }
