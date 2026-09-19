@@ -2,7 +2,7 @@ package com.nettarion.stride.simulator.block;
 
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.WorldView;
 
@@ -86,7 +86,7 @@ final class PowderSnowBlock extends BlockBehavior {
 
 	/** {@code PowderSnowBlock.fallOn}: a sound and no hit. */
 	@Override
-	public void fallOn(final double fallDistance, final int x, final int y, final int z, final Survival survival) {}
+	public void fallOn(final double fallDistance, final int x, final int y, final int z, final ServerDamage damage) {}
 
 	@Override
 	public String toString() {

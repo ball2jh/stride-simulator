@@ -27,7 +27,7 @@ final class CactusBlock extends BlockBehavior {
 		if (!scratch.authority.isServer()) {
 			return;
 		}
-		scratch.authority.survival().hurtServer(HurtCause.CACTUS, 1.0F);
+		scratch.authority.damage().hurtServer(HurtCause.CACTUS, 1.0F);
 	}
 
 	@Override

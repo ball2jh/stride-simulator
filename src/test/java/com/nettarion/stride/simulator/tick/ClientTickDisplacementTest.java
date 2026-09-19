@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
-import com.nettarion.stride.simulator.world.ShapeBox;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 
@@ -22,7 +21,7 @@ final class ClientTickDisplacementTest {
 		state.deltaMovementX = 0.7;
 		ClientTick simulator = new ClientTick();
 
-		Move.resolve(state, 0.1, 0.0, 0.0, false, new SnapshotView(flatWorld()), new Scratch());
+		Move.resolve(state, 0.1, 0.0, 0.0, false, SnapshotView.compile(flatWorld()), new Scratch());
 
 		assertEquals(0.6, state.x, 0.0, "collision resolution must consume the reported displacement");
 		assertEquals(
@@ -42,10 +41,10 @@ final class ClientTickDisplacementTest {
 				cells[(localY * size + localZ) * size + localX] = 1;
 			}
 		}
-		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		BlockEntry stone =
-		    new BlockEntry(1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
-		return new WorldSnapshot(
+		BlockEntry air = BlockEntry.builder(0, "air").build();
+		// The full cube alone: suffocation stays undeclared, as the player never touches this floor's column.
+		BlockEntry stone = BlockEntry.builder(1, "stone").fullCube().build();
+		return WorldSnapshot.owning(
 		    origin, originY, origin, size, size, size, OutsidePolicy.REFUSING, List.of(air, stone), cells);
 	}
 }

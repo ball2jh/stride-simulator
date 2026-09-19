@@ -3,7 +3,7 @@ package com.nettarion.stride.simulator.block;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.WorldView;
 
@@ -76,9 +76,9 @@ final class UnmodeledBlock extends BlockBehavior {
 	}
 
 	@Override
-	public void fallOn(final double fallDistance, final int x, final int y, final int z, final Survival survival) {
+	public void fallOn(final double fallDistance, final int x, final int y, final int z, final ServerDamage damage) {
 		if ((this.families & LANDING) == 0) {
-			super.fallOn(fallDistance, x, y, z, survival);
+			super.fallOn(fallDistance, x, y, z, damage);
 			return;
 		}
 		throw UnimplementedMechanicException.deferred(RefusalCause.UNMODELED_BLOCK,

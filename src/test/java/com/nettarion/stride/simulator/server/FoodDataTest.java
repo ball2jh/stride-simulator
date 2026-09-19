@@ -193,9 +193,9 @@ final class FoodDataTest {
 		server.foodLevel = 0;
 		server.health = health;
 		server.tickTimer = 79;
-		Survival survival = new Survival();
-		survival.begin(server);
-		FoodData.tick(server, survival);
+		ServerDamage damage = new ServerDamage();
+		damage.begin(server);
+		FoodData.tick(server, damage);
 		assertEquals(0, server.tickTimer, "the starvation timer wraps whether or not it hurt");
 		return server.health;
 	}

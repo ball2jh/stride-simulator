@@ -54,7 +54,7 @@ public enum RefusalCause {
 	PENDING_SERVER_RANDOM,
 	/** A run ended, or a correction awaits acknowledgement, while a write is still pending. */
 	PENDING_WRITE,
-	/** A survival fact the boundary did not supply: difficulty, authority, the food phase. */
+	/** A damage fact the boundary did not supply: difficulty, authority, the food phase. */
 	PENDING_SURVIVAL_FACT,
 
 	/** The listener corrects the reported movement instead of accepting it. */

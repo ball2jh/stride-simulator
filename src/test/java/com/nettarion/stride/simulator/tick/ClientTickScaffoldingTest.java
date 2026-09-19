@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator.tick;
 
 import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -188,7 +189,7 @@ final class ClientTickScaffoldingTest {
 		for (int y = 0; y < 3; y++) {
 			grid.set(0, y, 0, 2);
 		}
-		return new SnapshotView(grid.build());
+		return SnapshotView.compile(grid.build());
 	}
 
 	private static List<ShapeBox> stableScaffoldingBoxes() {

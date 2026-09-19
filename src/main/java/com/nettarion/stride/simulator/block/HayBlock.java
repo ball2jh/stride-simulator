@@ -1,7 +1,7 @@
 package com.nettarion.stride.simulator.block;
 
 import com.nettarion.stride.simulator.HurtCause;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 
 /** A hay bale: {@code HayBlock.fallOn}, the fall at multiplier one fifth. */
 final class HayBlock extends BlockBehavior {
@@ -15,8 +15,8 @@ final class HayBlock extends BlockBehavior {
 	}
 
 	@Override
-	public void fallOn(final double fallDistance, final int x, final int y, final int z, final Survival survival) {
-		survival.causeFallDamage(fallDistance, 0.2F, HurtCause.FALL);
+	public void fallOn(final double fallDistance, final int x, final int y, final int z, final ServerDamage damage) {
+		damage.causeFallDamage(fallDistance, 0.2F, HurtCause.FALL);
 	}
 
 	@Override

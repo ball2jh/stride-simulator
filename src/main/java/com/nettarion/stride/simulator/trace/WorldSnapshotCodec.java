@@ -429,10 +429,10 @@ public final class WorldSnapshotCodec {
 		    ? ShapeProvenance.valueOf(cell(cells, PaletteColumn.SHAPE_PROVENANCE, version))
 		    : ShapeProvenance.LEGACY_GEOMETRY;
 		WorldView.Contact contact = PaletteColumn.CONTACT.presentIn(version)
-		    ? WorldView.Contact.valueOf(cell(cells, PaletteColumn.CONTACT, version))
+		    ? WorldView.Contact.valueOf(unrecorded(cell(cells, PaletteColumn.CONTACT, version)))
 		    : BlockEntry.legacyContact(name);
 		WorldView.Landing landing = PaletteColumn.LANDING.presentIn(version)
-		    ? WorldView.Landing.valueOf(cell(cells, PaletteColumn.LANDING, version))
+		    ? WorldView.Landing.valueOf(unrecorded(cell(cells, PaletteColumn.LANDING, version)))
 		    : BlockEntry.legacyLanding(name);
 		return new BlockEntry(Integer.parseInt(cell(cells, PaletteColumn.BLOCK_STATE_ID, version)), name,
 		    unhex32(cell(cells, PaletteColumn.FRICTION, version)),
@@ -534,6 +534,11 @@ public final class WorldSnapshotCodec {
 			case "1" -> true;
 			default -> throw new IOException("invalid " + what + " flag: " + value);
 		};
+	}
+
+	/** Maps the pre-0.1 label {@code UNKNOWN} of the contact and landing columns to {@code UNRECORDED}. */
+	private static String unrecorded(final String label) {
+		return label.equals("UNKNOWN") ? "UNRECORDED" : label;
 	}
 
 	/** Decodes the outside policy label, accepting the pre-0.1 name {@code ROLLOUT_TERMINATING} for {@code REFUSING}. */

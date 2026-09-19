@@ -20,7 +20,7 @@ import java.util.Set;
  *
  * <p>A hit is {@code Player.hurtServer} through {@code LivingEntity.hurtServer} and {@code Player.actuallyHurt}: the
  * game rules, the ability gate, the cooldown branch, absorption before health, and the mark. The tick phases and the
- * block behaviors reach the instance through {@link TickAuthority#survival()}, so a body deals its hit where vanilla
+ * block behaviors reach the instance through {@link TickAuthority#damage()}, so a body deals its hit where vanilla
  * deals it; the block package also reads {@link #bodyVolume()} and {@link #suppressingBounce()} here because this is
  * the only server-side object a block behavior is handed. Amounts are in health points. Not thread-safe.
  *
@@ -28,7 +28,7 @@ import java.util.Set;
  * came with invulnerability is not a captured fact; a hit that kills; and a fire contact whose outcome depends on the
  * server's random increment.
  */
-public final class Survival {
+public final class ServerDamage {
 	/** Vanilla's {@code SAFE_FALL_DISTANCE} attribute at its player default, in blocks; no enchantment or effect. */
 	static final double SAFE_FALL_DISTANCE = 3.0;
 
@@ -63,7 +63,7 @@ public final class Survival {
 	private HurtCause marked;
 
 	/** An unbound sink; {@link #begin} binds it. */
-	public Survival() {}
+	public ServerDamage() {}
 
 	/** Bind to the server's copy for one transaction and forget the last one's hits. */
 	void begin(final ServerPlayerState server) {

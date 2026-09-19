@@ -8,7 +8,7 @@ import com.nettarion.stride.simulator.world.WorldView;
 /**
  * A lit campfire or soul campfire: {@code CampfireBlock.entityInside}, a hit on every visit of the server's copy.
  *
- * <p>The hit is dealt at the visit through the server's {@code Survival}: one point for a campfire, two for a
+ * <p>The hit is dealt at the visit through the server's {@code ServerDamage}: one point for a campfire, two for a
  * soul campfire. An unlit campfire has no hook and is captured as none; a capture that predates the lit fact
  * resolves to {@link UnrecordedStateBlock}.
  */
@@ -43,7 +43,7 @@ final class CampfireBlock extends BlockBehavior {
 		if (!scratch.authority.isServer()) {
 			return;
 		}
-		scratch.authority.survival().hurtServer(HurtCause.CAMPFIRE, this.fireDamage);
+		scratch.authority.damage().hurtServer(HurtCause.CAMPFIRE, this.fireDamage);
 	}
 
 	@Override

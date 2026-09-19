@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.SharedFlag;
 import com.nettarion.stride.simulator.EntityDataWrite;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.HurtMotion;
@@ -38,7 +39,7 @@ final class EntityDataWriteTest {
 	@Test
 	void sharedFlagMutationDoesNotInstallTheSprintAttribute() {
 		ServerPlayerState state = new ServerPlayerState();
-		state.setSharedFlag(ServerSharedFlags.SPRINTING, true);
+		state.setSharedFlag(SharedFlag.SPRINTING, true);
 		assertTrue(state.sprinting);
 		assertFalse(state.sprintingAttribute);
 		assertFalse(state.movementSpeedAttributeDirty);

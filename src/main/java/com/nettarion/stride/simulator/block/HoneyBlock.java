@@ -2,7 +2,7 @@ package com.nettarion.stride.simulator.block;
 
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.WorldView;
 
@@ -83,8 +83,8 @@ final class HoneyBlock extends BlockBehavior {
 
 	/** {@code HoneyBlock.fallOn}: the fall at multiplier one fifth. */
 	@Override
-	public void fallOn(final double fallDistance, final int x, final int y, final int z, final Survival survival) {
-		survival.causeFallDamage(fallDistance, 0.2F, HurtCause.FALL);
+	public void fallOn(final double fallDistance, final int x, final int y, final int z, final ServerDamage damage) {
+		damage.causeFallDamage(fallDistance, 0.2F, HurtCause.FALL);
 	}
 
 	@Override

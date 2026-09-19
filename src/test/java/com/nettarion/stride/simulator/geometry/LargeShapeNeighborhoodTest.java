@@ -9,7 +9,6 @@ import com.nettarion.stride.simulator.world.ShapeBox;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.Suffocation;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -260,7 +259,7 @@ final class LargeShapeNeighborhoodTest {
 			}
 		}
 		cells[(atY * SIZE + atZ) * SIZE + atX] = block;
-		SnapshotView world = new SnapshotView(new WorldSnapshot(0, 0, 0, SIZE, SIZE, SIZE, OutsidePolicy.SEALED,
+		SnapshotView world = SnapshotView.compile(WorldSnapshot.owning(0, 0, 0, SIZE, SIZE, SIZE, OutsidePolicy.SEALED,
 		    List.of(solid(AIR, "air", SHAPES[AIR], Suffocation.NO),
 		        solid(STONE, "stone", SHAPES[STONE], Suffocation.YES),
 		        solid(TALL, "tall", SHAPES[TALL], Suffocation.YES), solid(WIDE, "wide", SHAPES[WIDE], Suffocation.YES)),
@@ -275,8 +274,8 @@ final class LargeShapeNeighborhoodTest {
 			boxes.add(
 			    new ShapeBox(shape[at], shape[at + 1], shape[at + 2], shape[at + 3], shape[at + 4], shape[at + 5]));
 		}
-		return new BlockEntry(id, name, 0.6F, 1.0F, 1.0F, false, false, WorldView.BubbleColumnMode.NONE, false,
-		    WorldView.CollisionBehavior.ORDINARY, suffocation, WorldView.InsideEffect.NONE, 0.0F, false,
-		    WorldView.StepOn.NONE, false, WorldView.Climbability.NONE, boxes);
+		BlockEntry.Builder entry = BlockEntry.builder(id, name).suffocation(suffocation);
+		// The unit cube is the canonical full block, as the legacy geometry classifier took it to be.
+		return (boxes.equals(List.of(ShapeBox.FULL_CUBE)) ? entry.fullCube() : entry.boxes(boxes)).build();
 	}
 }

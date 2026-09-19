@@ -11,10 +11,10 @@ import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.block.LayeredCauldronBlock;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 
 /**
  * {@link SnapshotView#compile} yields one frozen view over a snapshot, forks
@@ -117,7 +117,8 @@ final class SnapshotViewCompileTest {
 		assertTrue(view.movementFactsImmutable());
 		assertTrue(view.hasSourceInsideShapes());
 		assertEquals(List.of(AIR, CAULDRON_3, CAULDRON_2), view.snapshot().palette(), "the successor is appended");
-		assertTrue(view.behaviorAt(0, 0, 0) instanceof LayeredCauldronBlock);
+		assertEquals(BlockBehavior.layeredCauldron(2, CAULDRON_3.boxes()).getClass(), view.behaviorAt(0, 0, 0).getClass(),
+		    "a layered-cauldron behavior is installed");
 		assertSame(view.behaviorAt(0, 0, 0), view.fork().behaviorAt(0, 0, 0), "a fork shares the installed behavior");
 		// A fork can publish the successor the catalog appended.
 		SnapshotView fork = view.fork();

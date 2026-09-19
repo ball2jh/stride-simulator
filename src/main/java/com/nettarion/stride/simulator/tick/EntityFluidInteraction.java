@@ -195,7 +195,8 @@ public final class EntityFluidInteraction {
 	}
 
 	/**
-	 * The kind of fluid in one cell, or {@code EMPTY}, refusing an unmodeled kind.
+	 * The kind of fluid in one cell, or {@code EMPTY}, refusing an unmodeled kind. As a side effect the
+	 * sample is left in {@code scratch.fluidCell}, whose height {@code BlockEffects.Contact} reads.
 	 *
 	 * @throws UnimplementedMechanicException when the cell holds a fluid other than water or lava
 	 */

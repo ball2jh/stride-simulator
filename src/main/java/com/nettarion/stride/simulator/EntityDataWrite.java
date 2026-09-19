@@ -33,12 +33,6 @@ public record EntityDataWrite(int actionIndex, long beforeDigest, int dirty, int
 
 	private static final int ALL_GROUPS = FLAGS | POSE | FROZEN | MOVEMENT_SPEED;
 
-	// The shared-flags byte's bits, numbered as vanilla's Entity.setSharedFlag
-	// call sites number them; server.ServerSharedFlags keeps the same numbers.
-	private static final int SPRINTING_BIT = 1 << 3;
-	private static final int SWIMMING_BIT = 1 << 4;
-	private static final int FALL_FLYING_BIT = 1 << 7;
-
 	/** Validates the action index, that the mask names at least one group, and the pose. */
 	public EntityDataWrite {
 		if (actionIndex < 0 || dirty == 0 || (dirty & ~ALL_GROUPS) != 0) {
@@ -65,9 +59,9 @@ public record EntityDataWrite(int actionIndex, long beforeDigest, int dirty, int
 	 */
 	public void applyUnchecked(final PlayerState state) {
 		if ((this.dirty & FLAGS) != 0) {
-			state.sprinting = (this.sharedFlags & SPRINTING_BIT) != 0;
-			state.swimming = (this.sharedFlags & SWIMMING_BIT) != 0;
-			state.fallFlying = (this.sharedFlags & FALL_FLYING_BIT) != 0;
+			state.sprinting = (this.sharedFlags & SharedFlag.SPRINTING_MASK) != 0;
+			state.swimming = (this.sharedFlags & SharedFlag.SWIMMING_MASK) != 0;
+			state.fallFlying = (this.sharedFlags & SharedFlag.FALL_FLYING_MASK) != 0;
 		}
 		if ((this.dirty & POSE) != 0) {
 			state.pose = this.pose;

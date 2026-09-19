@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.SharedFlag;
 import com.nettarion.stride.simulator.EntityDataWrite;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.MovementPacket;
@@ -160,7 +161,7 @@ final class ServerGlideTest {
 
 		// The same command on a copy that already glides is a stop as well.
 		ServerPlayerState already = ServerPlayerState.atBoundary(before);
-		already.setSharedFlag(ServerSharedFlags.FALL_FLYING, true);
+		already.setSharedFlag(SharedFlag.FALL_FLYING, true);
 		already.entityDataDirty = 0;
 		new ServerTick().handleStartFallFlying(already);
 		assertFalse(already.fallFlying, "tryToStartFallFlying refuses an already gliding copy");

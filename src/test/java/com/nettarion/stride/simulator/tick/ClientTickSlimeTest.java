@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator.tick;
 
 import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -129,6 +130,6 @@ final class ClientTickSlimeTest {
 				grid.set(x, -1, z, 1);
 			}
 		}
-		return new SnapshotView(grid.build());
+		return SnapshotView.compile(grid.build());
 	}
 }

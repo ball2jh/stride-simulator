@@ -3,7 +3,7 @@ package com.nettarion.stride.simulator.block;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.RefusalCause;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 
 /**
  * Farmland: {@code FarmlandBlock.fallOn}, the ordinary hit after a trample the simulator cannot make.
@@ -30,9 +30,9 @@ final class FarmlandBlock extends BlockBehavior {
 	}
 
 	@Override
-	public void fallOn(final double fallDistance, final int x, final int y, final int z, final Survival survival) {
+	public void fallOn(final double fallDistance, final int x, final int y, final int z, final ServerDamage damage) {
 		double trampleChance = fallDistance - 0.5;
-		if (trampleChance > 0.0 && survival.bodyVolume() > TRAMPLE_MIN_BODY_VOLUME) {
+		if (trampleChance > 0.0 && damage.bodyVolume() > TRAMPLE_MIN_BODY_VOLUME) {
 			if (trampleChance > LARGEST_NEXT_FLOAT) {
 				throw new PendingServerWriteException(RefusalCause.UNMODELED_WORLD_WRITE,
 				    "landing on farmland from " + fallDistance
@@ -41,7 +41,7 @@ final class FarmlandBlock extends BlockBehavior {
 			throw new PendingServerWriteException(RefusalCause.PENDING_SERVER_RANDOM,
 			    "landing on farmland from " + fallDistance + " blocks tramples it with a server-random chance");
 		}
-		survival.causeFallDamage(fallDistance, 1.0F, HurtCause.FALL);
+		damage.causeFallDamage(fallDistance, 1.0F, HurtCause.FALL);
 	}
 
 	@Override

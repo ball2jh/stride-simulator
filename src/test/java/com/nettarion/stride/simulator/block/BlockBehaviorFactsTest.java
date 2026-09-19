@@ -43,7 +43,7 @@ final class BlockBehaviorFactsTest {
 		// the contact unrecorded: the stuck vector is age-independent, the hit is not.
 		BlockEntry legacy = BlockEntry.builder(1, "minecraft:sweet_berry_bush")
 		                        .insideEffect(WorldView.InsideEffect.SWEET_BERRY_BUSH)
-		                        .contact(WorldView.Contact.UNKNOWN)
+		                        .contact(WorldView.Contact.UNRECORDED)
 		                        .build();
 		BlockBehavior behavior = BlockBehavior.of(legacy);
 		assertSame(SweetBerryBushBlock.UNRECORDED_AGE, behavior);

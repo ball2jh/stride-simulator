@@ -78,22 +78,22 @@ final class ClientTickLavaCauldronTest {
 	}
 
 	private static SnapshotView worldWithCells(final boolean powderBesideCauldron) {
-		BlockEntry air = new BlockEntry(0, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
-		BlockEntry lavaCauldron = new BlockEntry(1, "minecraft:lava_cauldron", 0.6F, 1.0F, 1.0F, false, false,
-		    WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY, Suffocation.NO,
-		    WorldView.InsideEffect.LAVA_CAULDRON, 0.0F, false, WorldView.StepOn.NONE, false,
-		    WorldView.Climbability.NONE, List.of());
-		BlockEntry powder =
-		    new BlockEntry(2, "minecraft:powder_snow", 0.6F, 1.0F, 1.0F, false, false, WorldView.BubbleColumnMode.NONE,
-		        false, WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS, Suffocation.NO, WorldView.InsideEffect.NONE,
-		        0.0F, false, WorldView.StepOn.NONE, false, WorldView.Climbability.NONE, List.of());
+		BlockEntry air = BlockEntry.builder(0, "minecraft:air").build();
+		BlockEntry lavaCauldron = BlockEntry.builder(1, "minecraft:lava_cauldron")
+		                              .suffocation(Suffocation.NO)
+		                              .insideEffect(WorldView.InsideEffect.LAVA_CAULDRON)
+		                              .build();
+		BlockEntry powder = BlockEntry.builder(2, "minecraft:powder_snow")
+		                        .collisionBehavior(WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS)
+		                        .suffocation(Suffocation.NO)
+		                        .build();
 		int size = 5;
 		int[] cells = new int[size * size * size];
 		cells[index(2, 2, 2, size)] = 1;
 		if (powderBesideCauldron) {
 			cells[index(1, 2, 2, size)] = 2;
 		}
-		return new SnapshotView(new WorldSnapshot(
+		return SnapshotView.compile(WorldSnapshot.owning(
 		    -2, -2, -2, size, size, size, OutsidePolicy.REFUSING, List.of(air, lavaCauldron, powder), cells));
 	}
 

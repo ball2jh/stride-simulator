@@ -8,7 +8,7 @@ import java.util.Objects;
  *
  * <p>The correction is a server authority decision, not movement physics, and the simulator does
  * not predict where a corrected client ends up. {@link #correction()} carries the decoded
- * transaction: the packet form, the reason, the target the client reported, the position the
+ * transaction: the packet kind, the reason, the target the client reported, the position the
  * server's collision resolved to, the residual it measured, and where it sent the client back
  * to. The {@link #cause()} is always {@link RefusalCause#CORRECTED_MOVEMENT}.
  */

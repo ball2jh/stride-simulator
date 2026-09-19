@@ -6,7 +6,7 @@ import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.world.WorldView;
 import java.util.HashSet;
 import java.util.Set;
@@ -32,7 +32,7 @@ public final class Freezing {
 	public static final Set<String> WRITES;
 
 	static {
-		Set<String> writes = new HashSet<>(Survival.HURT_WRITES);
+		Set<String> writes = new HashSet<>(ServerDamage.HURT_WRITES);
 		writes.addAll(Set.of("entityDataDirty", "ticksFrozen", "frostSpeedTicks", "movementSpeedAttributeDirty"));
 		WRITES = Set.copyOf(writes);
 	}
@@ -67,7 +67,7 @@ public final class Freezing {
 				        + " fortieth entity tick, and the entity tick count is not a captured fact");
 			}
 			if (server.tickCount % FREEZE_DAMAGE_INTERVAL == 0L) {
-				scratch.authority.survival().hurtServer(HurtCause.FREEZE, 1.0F);
+				scratch.authority.damage().hurtServer(HurtCause.FREEZE, 1.0F);
 			}
 		}
 	}

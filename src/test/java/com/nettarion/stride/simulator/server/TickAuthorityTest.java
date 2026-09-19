@@ -16,7 +16,7 @@ import com.nettarion.stride.simulator.world.FlatFloorView;
 import com.nettarion.stride.simulator.world.WorldView;
 import org.junit.jupiter.api.Test;
 
-/** Authority binding keeps movement and survival on the same server transaction. */
+/** Authority binding keeps movement and damage on the same server transaction. */
 final class TickAuthorityTest {
 	@Test
 	void rebindingMovesSurvivalAndSyncedInputTogetherAndClearsPreviousHits() {
@@ -26,15 +26,15 @@ final class TickAuthorityTest {
 		first.shiftKeyDown = true;
 		authority.begin(first);
 		assertTrue(PlayerTick.isShiftKeyDown(first, scratch));
-		authority.survival().hurtServer(HurtCause.CACTUS, 1.0F);
+		authority.damage().hurtServer(HurtCause.CACTUS, 1.0F);
 		assertEquals(19.0F, first.health);
 
 		ServerPlayerState second = new ServerPlayerState();
 		authority.begin(second);
 		assertSame(second, authority.serverState());
 		assertFalse(PlayerTick.isShiftKeyDown(second, scratch));
-		assertTrue(authority.survival().dealt().isEmpty());
-		authority.survival().hurtServer(HurtCause.LAVA, 4.0F);
+		assertTrue(authority.damage().dealt().isEmpty());
+		authority.damage().hurtServer(HurtCause.LAVA, 4.0F);
 		assertEquals(16.0F, second.health);
 		assertEquals(19.0F, first.health);
 	}
@@ -56,16 +56,16 @@ final class TickAuthorityTest {
 	@Test
 	void clientAuthorityCannotAcquireServerEffects() {
 		TickAuthority authority = TickAuthority.client();
-		assertThrows(IllegalStateException.class, authority::survival);
+		assertThrows(IllegalStateException.class, authority::damage);
 		assertThrows(IllegalStateException.class, () -> authority.begin(new ServerPlayerState()));
 	}
 
 	@Test
 	void anUnboundSinkRefusesEveryEffect() {
-		Survival survival = new Survival();
-		assertThrows(IllegalStateException.class, () -> survival.hurtServer(HurtCause.CACTUS, 1.0F));
-		assertThrows(IllegalStateException.class, survival::fireIgnite);
-		assertThrows(IllegalStateException.class, survival::bodyVolume);
-		assertTrue(survival.dealt().isEmpty());
+		ServerDamage damage = new ServerDamage();
+		assertThrows(IllegalStateException.class, () -> damage.hurtServer(HurtCause.CACTUS, 1.0F));
+		assertThrows(IllegalStateException.class, damage::fireIgnite);
+		assertThrows(IllegalStateException.class, damage::bodyVolume);
+		assertTrue(damage.dealt().isEmpty());
 	}
 }

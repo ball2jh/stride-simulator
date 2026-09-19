@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator.tick;
 
 import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -47,7 +48,7 @@ final class ClientTickOrderingTest {
 	void sprintJumpTakeoffUsesTickStartGroundForAccelerationAndDrag() {
 		PlayerState state = grounded(0.5, 0.5);
 
-		new ClientTick().tick(state, SPRINT_JUMP, new SnapshotView(iceFloor()));
+		new ClientTick().tick(state, SPRINT_JUMP, SnapshotView.compile(iceFloor()));
 
 		assertTrue(state.sprinting, "the sprint key starts sprinting before the jump");
 		assertFalse(state.onGround, "the jump left the ground during this tick");
@@ -72,7 +73,7 @@ final class ClientTickOrderingTest {
 
 	@Test
 	void glancingCollisionKeepsSprintingWhileHeadOnStopsItOneTickLater() {
-		SnapshotView wall = new SnapshotView(eastWall());
+		SnapshotView wall = SnapshotView.compile(eastWall());
 		PlayerInput glancing = sprintForward(-5.0F);
 		PlayerState alongWall = grounded(0.7, 0.5);
 		PlayerState firstTick = tick(alongWall, glancing, wall);
@@ -95,7 +96,7 @@ final class ClientTickOrderingTest {
 
 	@Test
 	void supportSearchRetriesBehindTheMoveOnlyWhenTheNoBlocksLatchWasClear() {
-		SnapshotView ledge = new SnapshotView(ledgeEndingAtZOne());
+		SnapshotView ledge = SnapshotView.compile(ledgeEndingAtZOne());
 		PlayerState retried = grounded(0.5, 1.1);
 		retried.deltaMovementY = GROUNDED_DELTA_Y;
 		retried.deltaMovementZ = 0.4;

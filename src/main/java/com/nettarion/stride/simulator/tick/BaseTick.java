@@ -7,7 +7,7 @@ import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.world.WorldView;
 import java.util.HashSet;
 import java.util.Set;
@@ -21,11 +21,11 @@ import java.util.Set;
  * feet block, and halves the fall distance in lava. The powder-snow latch rolls over here too,
  * before the block effects can set it again.
  *
- * <p>On the server's copy the survival branches of both base ticks are live, at the pre-movement
+ * <p>On the server's copy the damage branches of both base ticks are live, at the pre-movement
  * position and pose with the fluid facts this tick's refresh produced: the burning tick between the
  * fluid refresh and the lava fall halving, then {@code checkBelowWorld}, then
  * {@code LivingEntity.baseTick}'s suffocation and drowning. Each hit goes through
- * {@code TickAuthority.survival()}.
+ * {@code TickAuthority.damage()}.
  *
  * <p>Reads the box, the eye latch, the sprint and flight flags, and the previous powder-snow bit.
  * Writes the fields in {@link #WRITES} and {@link Scratch#wasUnderWaterAtTickStart}. Runs on both
@@ -41,7 +41,7 @@ public final class BaseTick {
 	public static final Set<String> WRITES;
 
 	static {
-		Set<String> writes = new HashSet<>(Survival.HURT_WRITES);
+		Set<String> writes = new HashSet<>(ServerDamage.HURT_WRITES);
 		writes.addAll(Set.of("entityDataDirty", "wasInPowderSnow", "isInPowderSnow", "waterHeight", "lavaHeight",
 		    "eyeInWater", "fallDistance", "deltaMovementX", "deltaMovementY", "deltaMovementZ", "swimming",
 		    "remainingFireTicks", "airSupply", "sharedFlagOnFire"));
@@ -65,16 +65,16 @@ public final class BaseTick {
 		EntityFluidInteraction.update(state, world, scratch);
 		updateSwimming(state, wasEyeInWater, world, scratch);
 		if (scratch.authority.isServer()) {
-			burn(scratch.authority.serverState(), scratch.authority.survival());
+			burn(scratch.authority.serverState(), scratch.authority.damage());
 		}
 		if (state.lavaHeight > 0.0) {
 			state.fallDistance *= 0.5;
 		}
 		if (scratch.authority.isServer()) {
 			ServerPlayerState server = scratch.authority.serverState();
-			checkBelowWorld(server, world, scratch.authority.survival());
+			checkBelowWorld(server, world, scratch.authority.damage());
 			server.setSharedFlag(0, server.remainingFireTicks > 0);
-			livingEntityBaseTick(server, world, scratch.authority.survival());
+			livingEntityBaseTick(server, world, scratch.authority.damage());
 		}
 	}
 
@@ -107,10 +107,10 @@ public final class BaseTick {
 	 * {@code Entity.baseTick} on a server level: a burning player is hurt every twentieth remaining
 	 * tick unless in lava, and the count runs down.
 	 */
-	private static void burn(final ServerPlayerState server, final Survival survival) {
+	private static void burn(final ServerPlayerState server, final ServerDamage damage) {
 		if (server.remainingFireTicks > 0) {
 			if (server.remainingFireTicks % 20 == 0 && !(server.lavaHeight > 0.0)) {
-				survival.hurtServer(HurtCause.ON_FIRE, 1.0F);
+				damage.hurtServer(HurtCause.ON_FIRE, 1.0F);
 			}
 			server.remainingFireTicks--;
 		}
@@ -118,21 +118,21 @@ public final class BaseTick {
 
 	/** {@code Entity.checkBelowWorld}: {@code onBelowWorld}'s hit past the floor. */
 	private static void checkBelowWorld(
-	    final ServerPlayerState server, final WorldView world, final Survival survival) {
+	    final ServerPlayerState server, final WorldView world, final ServerDamage damage) {
 		if (server.y < world.minY() - BELOW_WORLD) {
-			survival.hurtServer(HurtCause.FELL_OUT_OF_WORLD, 4.0F);
+			damage.hurtServer(HurtCause.FELL_OUT_OF_WORLD, 4.0F);
 		}
 	}
 
 	/**
-	 * The survival branches of {@code LivingEntity.baseTick}: suffocating in a wall, then drowning or
+	 * The damage branches of {@code LivingEntity.baseTick}: suffocating in a wall, then drowning or
 	 * the air refill, in that order.
 	 *
 	 * @throws PendingServerWriteException when the air of a player who may fly would count down,
 	 *         since whether the ability came with invulnerability is not a captured fact
 	 */
 	private static void livingEntityBaseTick(
-	    final ServerPlayerState server, final WorldView world, final Survival survival) {
+	    final ServerPlayerState server, final WorldView world, final ServerDamage damage) {
 		// LivingEntity.isInWall: a box of eight tenths of the width and a
 		// millionth of height at the eye, against suffocating collision.
 		// `width * 0.8F` is a float product, as vanilla's `float f = width * 0.8F`
@@ -141,7 +141,7 @@ public final class BaseTick {
 		double eyeY = server.y + server.pose.eyeHeight;
 		if (world.suffocatingShapeMeets(server.x - halfWidth, eyeY - 0.5E-6, server.z - halfWidth, server.x + halfWidth,
 		        eyeY + 0.5E-6, server.z + halfWidth)) {
-			survival.hurtServer(HurtCause.IN_WALL, 1.0F);
+			damage.hurtServer(HurtCause.IN_WALL, 1.0F);
 		}
 		boolean eyesInWater = server.eyeInWater
 		    && world.bubbleColumnModeAt(Mth.floor(server.x), Mth.floor(eyeY), Mth.floor(server.z))
@@ -156,7 +156,7 @@ public final class BaseTick {
 			server.airSupply--;
 			if (server.airSupply <= DROWNING_AIR) {
 				server.airSupply = 0;
-				survival.hurtServer(HurtCause.DROWN, 2.0F);
+				damage.hurtServer(HurtCause.DROWN, 2.0F);
 			}
 		} else if (server.airSupply < ServerPlayerState.DEFAULT_MAXIMUM_AIR) {
 			server.airSupply = Math.min(server.airSupply + 4, ServerPlayerState.DEFAULT_MAXIMUM_AIR);

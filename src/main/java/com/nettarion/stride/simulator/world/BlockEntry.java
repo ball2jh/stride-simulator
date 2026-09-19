@@ -160,7 +160,7 @@ public record BlockEntry(int blockStateId, String name, float friction, float sp
 			case "minecraft:soul_fire" -> WorldView.Contact.SOUL_FIRE;
 			case "minecraft:lava_cauldron" -> WorldView.Contact.LAVA_CAULDRON;
 			case "minecraft:campfire", "minecraft:soul_campfire", "minecraft:sweet_berry_bush" ->
-				WorldView.Contact.UNKNOWN;
+				WorldView.Contact.UNRECORDED;
 			case "minecraft:water_cauldron", "minecraft:powder_snow_cauldron", "minecraft:wither_rose",
 			    "minecraft:sculk_sensor", "minecraft:calibrated_sculk_sensor", "minecraft:sculk_shrieker",
 			    "minecraft:turtle_egg", "minecraft:big_dripleaf", "minecraft:end_gateway", "minecraft:end_portal",
@@ -181,7 +181,7 @@ public record BlockEntry(int blockStateId, String name, float friction, float sp
 			case "minecraft:slime_block" -> WorldView.Landing.SLIME;
 			case "minecraft:farmland" -> WorldView.Landing.FARMLAND;
 			case "minecraft:powder_snow" -> WorldView.Landing.POWDER_SNOW;
-			case "minecraft:pointed_dripstone" -> WorldView.Landing.UNKNOWN;
+			case "minecraft:pointed_dripstone" -> WorldView.Landing.UNRECORDED;
 			case "minecraft:turtle_egg" -> WorldView.Landing.UNMODELED;
 			default -> WorldView.Landing.ORDINARY;
 		};

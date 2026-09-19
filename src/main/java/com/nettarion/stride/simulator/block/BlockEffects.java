@@ -4,7 +4,7 @@ import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.tick.EntityFluidInteraction;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.tick.SupportingBlock;
@@ -42,10 +42,10 @@ public final class BlockEffects {
 	private static final double MIN_REPLAY_GAP_SQR = 1.0E-5F * 1.0E-5F;
 
 	/** The cap on movements a server tick records; the current movement is recorded once the cap is reached. */
-	private static final int MAX_ADDITIONAL_MOVEMENTS = 99;
+	private static final int MAX_ADDITIONAL_MOVEMENTS = ServerPlayerState.MAXIMUM_MOVEMENTS_THIS_TICK - 1;
 
 	static {
-		Set<String> writes = new HashSet<>(Survival.HURT_WRITES);
+		Set<String> writes = new HashSet<>(ServerDamage.HURT_WRITES);
 		writes.addAll(Set.of("entityDataDirty", "movementThisTickPresent", "movementAxisDependent", "movementFromX",
 		    "movementFromY", "movementFromZ", "movementToX", "movementToY", "movementToZ", "movementRequestedX",
 		    "movementRequestedZ", "deltaMovementX", "deltaMovementY", "deltaMovementZ", "fallDistance",
@@ -114,7 +114,7 @@ public final class BlockEffects {
 			    scratch.segmentRequestedX, scratch.segmentRequestedZ, true);
 		}
 		if (server != null) {
-			closeServerEffects(server, world, scratch.authority.survival(), previousFireTicks);
+			closeServerEffects(server, world, scratch.authority.damage(), previousFireTicks);
 		}
 	}
 
@@ -215,13 +215,13 @@ public final class BlockEffects {
 	 * not burning and was not ignited this tick is set to the immune window.
 	 */
 	private static void closeServerEffects(
-	    final ServerPlayerState server, final WorldView world, final Survival survival, final int previousFireTicks) {
+	    final ServerPlayerState server, final WorldView world, final ServerDamage damage, final int previousFireTicks) {
 		if (server.remainingFireTicks > 0) {
 			// Asked only while burning, which is when the answer changes the state.
 			int cellX = Mth.floor(server.x);
 			int cellZ = Mth.floor(server.z);
 			if (world.rainReaches(cellX, Mth.floor(server.y), cellZ, Mth.floor(server.boundingBoxMaxY))) {
-				survival.clearFire();
+				damage.clearFire();
 			}
 		}
 		boolean ignitedThisTick = server.remainingFireTicks > previousFireTicks;
@@ -257,7 +257,7 @@ public final class BlockEffects {
 		boolean insideEffects = (properties & WorldView.PROPERTY_INSIDE_EFFECT) != 0;
 		// Server-only contact hooks, and on the server's copy the fluid cells
 		// too: a lava or water cell the box sweeps through is a visit whose
-		// ignition, hit and extinguish only the server's survival state sees.
+		// ignition, hit and extinguish only the server's damage state sees.
 		boolean contacts = (properties & WorldView.PROPERTY_CONTACT) != 0 || server && fluids;
 		// LavaFluid.entityInside collects CLEAR_FREEZE on the client as well, and
 		// applyAndClear runs on both sides. The clear writes only when the
@@ -287,7 +287,7 @@ public final class BlockEffects {
 
 	/**
 	 * {@code WaterFluid} and {@code LavaFluid.entityInside}: the lava's CLEAR_FREEZE on both sides, the ignition,
-	 * hit and extinguish on the server's copy, whose survival state is the only one they write.
+	 * hit and extinguish on the server's copy, whose damage state is the only one they write.
 	 */
 	private static void visitFluid(final FluidSample.Kind fluid, final Scratch scratch) {
 		boolean server = scratch.authority.isServer();

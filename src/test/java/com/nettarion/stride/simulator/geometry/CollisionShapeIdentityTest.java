@@ -98,7 +98,7 @@ final class CollisionShapeIdentityTest {
 		                             .palette(air, entry)
 		                             .set(0, 0, 0, 1)
 		                             .build();
-		return new SnapshotView(snapshot);
+		return SnapshotView.compile(snapshot);
 	}
 
 	private static void assertCompositeGroup(final CollisionBuffer shapes) {

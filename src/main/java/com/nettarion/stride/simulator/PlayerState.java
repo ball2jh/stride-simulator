@@ -20,7 +20,7 @@ import java.util.OptionalInt;
  * failures throw {@link IllegalStateException}, a center outside the admitted coordinate domain
  * refuses with {@link UnimplementedMechanicException}.
  */
-public class PlayerState {
+public sealed class PlayerState permits ServerPlayerState {
 	private static final double MAX_HORIZONTAL_CENTER = 30_000_000.0;
 
 	private static final double MAX_VERTICAL_CENTER = 20_000_000.0;

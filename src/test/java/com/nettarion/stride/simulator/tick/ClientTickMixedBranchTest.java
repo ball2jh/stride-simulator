@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator.tick;
 
 import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -365,7 +366,7 @@ final class ClientTickMixedBranchTest {
 		Arrays.fill(cells, 0);
 		cells[index(size, 2, 1, 2)] = 1;
 		cells[index(size, 2, 2, 2)] = 2;
-		SnapshotView world = new SnapshotView(new WorldSnapshot(
+		SnapshotView world = SnapshotView.compile(WorldSnapshot.owning(
 		    -2, -2, -2, size, size, size, OutsidePolicy.REFUSING, List.of(air, ladder, trapdoor), cells));
 		PlayerState state = stateAt(0.5, 0.0, 0.5);
 		state.deltaMovementX = 0.5;
@@ -437,9 +438,11 @@ final class ClientTickMixedBranchTest {
 	}
 
 	private static BlockEntry block(final int id, final WorldView.Climbability climbability) {
-		return new BlockEntry(id, "test:" + id, 0.6F, 1.0F, 1.0F, false, false, WorldView.BubbleColumnMode.NONE,
-		    climbability != WorldView.Climbability.NONE, WorldView.CollisionBehavior.ORDINARY, Suffocation.NO,
-		    WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false, climbability, List.of());
+		return BlockEntry.builder(id, "test:" + id)
+		    .fallDistanceResetting(climbability != WorldView.Climbability.NONE)
+		    .suffocation(Suffocation.NO)
+		    .climbability(climbability)
+		    .build();
 	}
 
 	private static class AirWorld implements CompleteWorldView {

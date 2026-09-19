@@ -8,7 +8,7 @@ import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import java.util.Set;
 
 /**
- * Vanilla's {@code FoodData.tick} for a survival player on a non-peaceful difficulty: exhaustion spends saturation
+ * Vanilla's {@code FoodData.tick} for a damage player on a non-peaceful difficulty: exhaustion spends saturation
  * then food, natural regeneration heals, and starvation hurts.
  *
  * <p>Runs inside the connection tick after {@code Player.tick}. Food is in food points, exhaustion and saturation in
@@ -65,19 +65,19 @@ public final class FoodData {
 	/**
 	 * One food tick with nowhere to deal starvation: refuses when the tick would starve. For tests of the food
 	 * arithmetic alone ({@code PhaseWriteSetTest} in the root package uses it); the connection tick uses
-	 * {@link #tick(ServerPlayerState, Survival)}.
+	 * {@link #tick(ServerPlayerState, ServerDamage)}.
 	 */
 	public static void tick(final ServerPlayerState state) {
 		tick(state, null);
 	}
 
 	/**
-	 * {@code FoodData.tick} on the server's copy, dealing a starvation hit through {@code survival}.
+	 * {@code FoodData.tick} on the server's copy, dealing a starvation hit through {@code damage}.
 	 *
 	 * @throws PendingServerWriteException when the difficulty is undeclared, or when the tick starves and
-	 *     {@code survival} is {@code null}
+	 *     {@code damage} is {@code null}
 	 */
-	public static void tick(final ServerPlayerState state, final Survival survival) {
+	public static void tick(final ServerPlayerState state, final ServerDamage damage) {
 		requireSupported(state);
 		if (state.exhaustionLevel > EXHAUSTION_PER_POINT) {
 			state.exhaustionLevel -= EXHAUSTION_PER_POINT;
@@ -106,11 +106,11 @@ public final class FoodData {
 				// Starvation stops at 10 health on easy, at 1 on normal, and never on hard.
 				if (state.health > 10.0F || state.difficulty == ServerPlayerState.Difficulty.HARD
 				    || state.health > 1.0F && state.difficulty == ServerPlayerState.Difficulty.NORMAL) {
-					if (survival == null) {
+					if (damage == null) {
 						throw new PendingServerWriteException(
 						    RefusalCause.PENDING_SURVIVAL_FACT, "starvation needs a bound server transaction");
 					}
-					survival.hurtServer(HurtCause.STARVE, 1.0F);
+					damage.hurtServer(HurtCause.STARVE, 1.0F);
 				}
 				state.tickTimer = 0;
 			}

@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator.tick;
 
 import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -156,7 +157,7 @@ final class ClientTickHoneyTest {
 	}
 
 	private static SnapshotView column(final boolean honey) {
-		return new SnapshotView(columnGrid(honey).build());
+		return SnapshotView.compile(columnGrid(honey).build());
 	}
 
 	/** The honey column with a stone ledge at y = 0 under the player's column. */
@@ -166,6 +167,6 @@ final class ClientTickHoneyTest {
 			grid.set(1, 0, z, 2);
 			grid.set(2, 0, z, 2);
 		}
-		return new SnapshotView(grid.build());
+		return SnapshotView.compile(grid.build());
 	}
 }

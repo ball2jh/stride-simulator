@@ -85,7 +85,7 @@ final class ClientTickStepAndEdgeTest {
 		state.deltaMovementY = -0.08 * 0.98;
 		state.deltaMovementZ = 0.3;
 
-		new ClientTick().tick(state, IDLE, new SnapshotView(oneBlockGapWorld()));
+		new ClientTick().tick(state, IDLE, SnapshotView.compile(oneBlockGapWorld()));
 
 		assertEquals(Double.doubleToRawLongBits(0.0), Double.doubleToRawLongBits(state.y),
 		    "the zero-height candidate keeps the player at foot level over the gap");

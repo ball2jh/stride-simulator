@@ -53,20 +53,20 @@ final class BlockBehaviorRefusalTest {
 		BlockBehavior behavior = of(WorldView.Contact.UNMODELED, WorldView.Landing.UNMODELED);
 		Scratch server = server(new ServerPlayerState());
 		UnimplementedMechanicException refusal = assertThrows(
-		    UnimplementedMechanicException.class, () -> behavior.fallOn(5.0, 0, -1, 0, server.authority.survival()));
+		    UnimplementedMechanicException.class, () -> behavior.fallOn(5.0, 0, -1, 0, server.authority.damage()));
 		assertEquals(RefusalCause.UNMODELED_BLOCK, refusal.cause());
-		assertTrue(server.authority.survival().dealt().isEmpty(), "the refusal precedes any hit");
+		assertTrue(server.authority.damage().dealt().isEmpty(), "the refusal precedes any hit");
 	}
 
 	@Test
 	void anUnrecordedLandingRefusesInFallOnAndHasNoStepOn() {
-		BlockBehavior behavior = of(WorldView.Contact.UNKNOWN, WorldView.Landing.UNKNOWN);
+		BlockBehavior behavior = of(WorldView.Contact.UNRECORDED, WorldView.Landing.UNRECORDED);
 		Scratch server = server(new ServerPlayerState());
 		// None of the blocks whose hook depends on unrecorded state has a stepOn.
 		behavior.stepOn(server.authority.serverState(), 0, -1, 0, server);
 		assertEquals(RefusalCause.UNDECLARED_BLOCK_STATE,
 		    assertThrows(
-		        UnimplementedMechanicException.class, () -> behavior.fallOn(5.0, 0, -1, 0, server.authority.survival()))
+		        UnimplementedMechanicException.class, () -> behavior.fallOn(5.0, 0, -1, 0, server.authority.damage()))
 		        .cause());
 		assertEquals(RefusalCause.UNDECLARED_BLOCK_STATE,
 		    assertThrows(UnimplementedMechanicException.class,
@@ -81,9 +81,9 @@ final class BlockBehaviorRefusalTest {
 		BlockBehavior behavior = of(WorldView.Contact.UNMODELED, WorldView.Landing.ORDINARY);
 		assertTrue(behavior.hasContact());
 		Scratch server = server(new ServerPlayerState());
-		behavior.fallOn(5.0, 0, -1, 0, server.authority.survival());
+		behavior.fallOn(5.0, 0, -1, 0, server.authority.damage());
 		assertEquals(
-		    List.of(HurtCause.FALL), server.authority.survival().dealt().stream().map(DamageEvent::cause).toList());
+		    List.of(HurtCause.FALL), server.authority.damage().dealt().stream().map(DamageEvent::cause).toList());
 		assertEquals(18.0F, server.authority.serverState().health, "five blocks at multiplier one is two points");
 		assertEquals(RefusalCause.UNMODELED_BLOCK,
 		    assertThrows(UnimplementedMechanicException.class,
@@ -101,15 +101,15 @@ final class BlockBehaviorRefusalTest {
 		behavior.entityInside(server.authority.serverState(), 0, 0, 0, true, WORLD, server);
 		assertEquals(RefusalCause.UNMODELED_BLOCK,
 		    assertThrows(
-		        UnimplementedMechanicException.class, () -> behavior.fallOn(5.0, 0, -1, 0, server.authority.survival()))
+		        UnimplementedMechanicException.class, () -> behavior.fallOn(5.0, 0, -1, 0, server.authority.damage()))
 		        .cause());
 	}
 
 	@Test
 	void anUnrecordedContactBesideAnOrdinaryLandingLandsOrdinarily() {
-		BlockBehavior behavior = of(WorldView.Contact.UNKNOWN, WorldView.Landing.ORDINARY);
+		BlockBehavior behavior = of(WorldView.Contact.UNRECORDED, WorldView.Landing.ORDINARY);
 		Scratch server = server(new ServerPlayerState());
-		behavior.fallOn(5.0, 0, -1, 0, server.authority.survival());
+		behavior.fallOn(5.0, 0, -1, 0, server.authority.damage());
 		assertEquals(18.0F, server.authority.serverState().health);
 	}
 
@@ -120,7 +120,7 @@ final class BlockBehaviorRefusalTest {
 		assertSame(of(WorldView.Contact.UNMODELED, WorldView.Landing.UNMODELED),
 		    of(WorldView.Contact.UNMODELED, WorldView.Landing.UNMODELED));
 		assertEquals("unmodeled contact", of(WorldView.Contact.UNMODELED, WorldView.Landing.ORDINARY).toString());
-		assertEquals("unrecorded landing state", of(WorldView.Contact.NONE, WorldView.Landing.UNKNOWN).toString());
+		assertEquals("unrecorded landing state", of(WorldView.Contact.NONE, WorldView.Landing.UNRECORDED).toString());
 	}
 
 	@Test
@@ -128,7 +128,7 @@ final class BlockBehaviorRefusalTest {
 		// Two sentinels of different causes on one entry: refused as inconsistent
 		// facts rather than guessed, as before the sentinels carried families.
 		UnimplementedMechanicException refusal = assertThrows(
-		    UnimplementedMechanicException.class, () -> of(WorldView.Contact.UNMODELED, WorldView.Landing.UNKNOWN));
+		    UnimplementedMechanicException.class, () -> of(WorldView.Contact.UNMODELED, WorldView.Landing.UNRECORDED));
 		assertEquals(RefusalCause.INADMISSIBLE_BLOCK_FACTS, refusal.cause());
 	}
 
@@ -138,7 +138,7 @@ final class BlockBehaviorRefusalTest {
 		// a block update the simulator does not write, so not a random outcome.
 		Scratch server = server(new ServerPlayerState());
 		PendingServerWriteException refusal = assertThrows(PendingServerWriteException.class,
-		    () -> FarmlandBlock.INSTANCE.fallOn(1.5, 0, -1, 0, server.authority.survival()));
+		    () -> FarmlandBlock.INSTANCE.fallOn(1.5, 0, -1, 0, server.authority.damage()));
 		assertEquals(RefusalCause.UNMODELED_WORLD_WRITE, refusal.cause());
 	}
 
@@ -147,7 +147,7 @@ final class BlockBehaviorRefusalTest {
 		// nextFloat() < 1.0 - 0.5 is a coin the server flips.
 		Scratch server = server(new ServerPlayerState());
 		PendingServerWriteException refusal = assertThrows(PendingServerWriteException.class,
-		    () -> FarmlandBlock.INSTANCE.fallOn(1.0, 0, -1, 0, server.authority.survival()));
+		    () -> FarmlandBlock.INSTANCE.fallOn(1.0, 0, -1, 0, server.authority.damage()));
 		assertEquals(RefusalCause.PENDING_SERVER_RANDOM, refusal.cause());
 	}
 
@@ -155,8 +155,8 @@ final class BlockBehaviorRefusalTest {
 	void aShortFallOnFarmlandLandsOrdinarily() {
 		// nextFloat() < 0.5 - 0.5 never holds, and half a block is no hit.
 		Scratch server = server(new ServerPlayerState());
-		FarmlandBlock.INSTANCE.fallOn(0.5, 0, -1, 0, server.authority.survival());
-		assertTrue(server.authority.survival().dealt().isEmpty());
+		FarmlandBlock.INSTANCE.fallOn(0.5, 0, -1, 0, server.authority.damage());
+		assertTrue(server.authority.damage().dealt().isEmpty());
 		assertEquals(20.0F, server.authority.serverState().health);
 	}
 

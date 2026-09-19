@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.nettarion.stride.simulator.block.BlockEffects;
 import com.nettarion.stride.simulator.server.FoodData;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.server.TickAuthority;
 import com.nettarion.stride.simulator.tick.AiStep;
 import com.nettarion.stride.simulator.tick.BaseTick;
@@ -54,7 +54,7 @@ final class PhaseWriteSetTest {
 
 	/**
 	 * The server's copy runs the same sequence under server authority with
-	 * no input of its own and the synced shift flag, and the survival
+	 * no input of its own and the synced shift flag, and the damage
 	 * branches are live.
 	 */
 	@Test
@@ -80,7 +80,7 @@ final class PhaseWriteSetTest {
 		declared.addAll(BlockEffects.WRITES);
 		declared.addAll(Freezing.WRITES);
 		declared.addAll(PlayerPose.WRITES);
-		declared.addAll(Survival.HURT_WRITES);
+		declared.addAll(ServerDamage.HURT_WRITES);
 		declared.addAll(FoodData.WRITES);
 		for (String name : declared) {
 			ServerPlayerState.class.getField(name);

@@ -4,7 +4,7 @@ import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.ShapeBox;
@@ -90,7 +90,7 @@ public abstract class BlockBehavior {
 			case SWEET_BERRY_BUSH ->
 				switch (contact) {
 					case NONE -> SweetBerryBushBlock.YOUNG;
-					case UNKNOWN -> SweetBerryBushBlock.UNRECORDED_AGE;
+					case UNRECORDED -> SweetBerryBushBlock.UNRECORDED_AGE;
 					default -> SweetBerryBushBlock.INSTANCE;
 				};
 			case LAVA_CAULDRON -> LavaCauldronBlock.INSTANCE;
@@ -107,7 +107,7 @@ public abstract class BlockBehavior {
 			case SOUL_FIRE -> BaseFireBlock.SOUL_FIRE;
 			case LAVA_CAULDRON -> LavaCauldronBlock.INSTANCE;
 			// A bush captured before the age fact existed keeps its inside hook.
-			case UNKNOWN ->
+			case UNRECORDED ->
 				insideEffect == WorldView.InsideEffect.SWEET_BERRY_BUSH ? SweetBerryBushBlock.UNRECORDED_AGE : INERT;
 		};
 		BlockBehavior underfoot = switch (stepOn) {
@@ -115,7 +115,7 @@ public abstract class BlockBehavior {
 			case SLIME -> SlimeBlock.INSTANCE;
 		};
 		BlockBehavior landed = switch (landing) {
-			case ORDINARY, UNMODELED, UNKNOWN -> INERT;
+			case ORDINARY, UNMODELED, UNRECORDED -> INERT;
 			case HAY -> HayBlock.INSTANCE;
 			case HONEY -> HoneyBlock.INSTANCE;
 			case SLIME -> SlimeBlock.INSTANCE;
@@ -127,8 +127,8 @@ public abstract class BlockBehavior {
 		// The hook families the capture marked unmodeled, and those it left unrecorded.
 		int unmodeled = (contact == WorldView.Contact.UNMODELED ? CONTACT : 0)
 		    | (landing == WorldView.Landing.UNMODELED ? LANDING : 0);
-		int unrecorded = (contact == WorldView.Contact.UNKNOWN && contacting == INERT ? CONTACT : 0)
-		    | (landing == WorldView.Landing.UNKNOWN ? LANDING : 0);
+		int unrecorded = (contact == WorldView.Contact.UNRECORDED && contacting == INERT ? CONTACT : 0)
+		    | (landing == WorldView.Landing.UNRECORDED ? LANDING : 0);
 		BlockBehavior single = null;
 		for (BlockBehavior owner : new BlockBehavior[] {bubble, powder, inside, contacting, underfoot, landed}) {
 			if (owner == INERT) {
@@ -185,6 +185,15 @@ public abstract class BlockBehavior {
 		return single;
 	}
 
+	/** The bubble-column behavior for {@code mode}, or {@link #INERT} for {@code NONE}. */
+	public static BlockBehavior bubbleColumn(final WorldView.BubbleColumnMode mode) {
+		return switch (mode) {
+			case NONE -> INERT;
+			case DRAG_DOWN -> BubbleColumnBlock.DRAG_DOWN;
+			case PUSH_UP -> BubbleColumnBlock.PUSH_UP;
+		};
+	}
+
 	/**
 	 * The behavior of one layered water or powder-snow cauldron: its {@code entityInside} shape as the
 	 * {@code BlockStateCatalog} extracted it and the palette index of the state one level lower.
@@ -228,8 +237,8 @@ public abstract class BlockBehavior {
 	 * {@code Player.causeFallDamage}. The sentinel behaviors refuse here when the landing hook is unmodeled or
 	 * unrecorded.
 	 */
-	public void fallOn(final double fallDistance, final int x, final int y, final int z, final Survival survival) {
-		survival.causeFallDamage(fallDistance, 1.0F, HurtCause.FALL);
+	public void fallOn(final double fallDistance, final int x, final int y, final int z, final ServerDamage damage) {
+		damage.causeFallDamage(fallDistance, 1.0F, HurtCause.FALL);
 	}
 
 	/**
@@ -240,7 +249,7 @@ public abstract class BlockBehavior {
 	 * behind the player's own flying gate, so a flying player gets neither the vector nor the fall-distance reset,
 	 * and neither hook reads {@code isPrecise}. {@code tryResetCurrentImpulseContext} then runs whatever the gate
 	 * said, on the server's copy, where an imported state can carry a wind-charge impulse context that
-	 * {@code Survival.causeFallDamage} caps the next fall by. The Weaving effect's larger vector,
+	 * {@code ServerDamage.causeFallDamage} caps the next fall by. The Weaving effect's larger vector,
 	 * {@code (0.5, 0.25, 0.5)}, is outside the admitted domain and never proposed here.
 	 */
 	static void makeStuckInBlock(
@@ -304,7 +313,7 @@ public abstract class BlockBehavior {
 	 *
 	 * <p>May mutate the player's velocity, fall distance, stuck-speed multiplier and frozen count directly, and
 	 * may queue collected effects on {@code scratch.insideEffects}; it never moves the player or touches the
-	 * visited set. Server-only parts go through {@code scratch.authority.survival()} after checking
+	 * visited set. Server-only parts go through {@code scratch.authority.damage()} after checking
 	 * {@code scratch.authority.isServer()}. World queries stay within one cell of {@code x, y, z}, which is the
 	 * margin {@code BlockEffects} widens the traversal cover by.
 	 *

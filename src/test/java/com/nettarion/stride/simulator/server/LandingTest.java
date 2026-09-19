@@ -169,9 +169,9 @@ final class LandingTest {
 		new ServerTick().transact(server.copy(), MovementPacket.NONE, server, IDLE, floorWorld());
 		assertEquals(0, server.currentImpulseContextResetGraceTime);
 		assertTrue(server.currentImpulseImpactPosPresent);
-		Survival survival = new Survival();
-		survival.begin(server);
-		survival.causeFallDamage(20, 1, HurtCause.FALL);
+		ServerDamage damage = new ServerDamage();
+		damage.begin(server);
+		damage.causeFallDamage(20, 1, HurtCause.FALL);
 		assertEquals(20, server.health, "the declared impact height caps the damaging fall");
 		assertFalse(server.currentImpulseImpactPosPresent);
 	}

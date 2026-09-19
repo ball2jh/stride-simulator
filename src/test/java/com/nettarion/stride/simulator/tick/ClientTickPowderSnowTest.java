@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator.tick;
 
 import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -238,7 +239,7 @@ final class ClientTickPowderSnowTest {
 			}
 		}
 		grid.set(0, 0, 0, 2);
-		return new SnapshotView(grid.build());
+		return SnapshotView.compile(grid.build());
 	}
 
 	private static SnapshotView powderWallWorld() {
@@ -248,6 +249,6 @@ final class ClientTickPowderSnowTest {
 		for (int y = 1; y <= 3; y++) {
 			grid.set(0, y, 1, 1);
 		}
-		return new SnapshotView(grid.build());
+		return SnapshotView.compile(grid.build());
 	}
 }

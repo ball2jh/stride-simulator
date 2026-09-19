@@ -161,7 +161,7 @@ public interface WorldView extends SpanQueries {
 		/** A body outside the admitted domain; a visit refuses. */
 		UNMODELED,
 		/** A capture that predates this fact for a body that depends on block state; a visit refuses. */
-		UNKNOWN
+		UNRECORDED
 	}
 
 	/**
@@ -188,7 +188,7 @@ public interface WorldView extends SpanQueries {
 		/** A body outside the admitted domain; a landing refuses. */
 		UNMODELED,
 		/** A capture that predates this fact for a body that depends on block state; a landing refuses. */
-		UNKNOWN
+		UNRECORDED
 	}
 
 	/** The answer to {@link #airIn}: air is the block identity, not the absence of a shape. */

@@ -77,7 +77,7 @@ final class Transition {
 	/**
 	 * {@code ServerGamePacketListenerImpl.tickPlayer}: {@code doTick} on the
 	 * server's copy under server authority. The hits it deals are on the
-	 * survival ledger; the marking one is returned.
+	 * damage ledger; the marking one is returned.
 	 */
 	public ServerTick.Effects tickConnection(final ServerPlayerState server, final SnapshotView world) {
 		return this.serverTick.tickConnection(server, world);

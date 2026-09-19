@@ -21,20 +21,15 @@ import java.util.List;
  * <p>Public only until {@code BlockStateCatalog} constructs it through {@link BlockBehavior#layeredCauldron};
  * consumers never instantiate it.
  */
-public final class LayeredCauldronBlock extends BlockBehavior {
+final class LayeredCauldronBlock extends BlockBehavior {
 	private final int successor;
 
 	private final double[] insideShape;
 
 	/** The cauldron whose lowered state is palette index {@code successor} and whose inside shape is {@code boxes}. */
-	public LayeredCauldronBlock(final int successor, final List<ShapeBox> boxes) {
+	LayeredCauldronBlock(final int successor, final List<ShapeBox> boxes) {
 		this.successor = successor;
 		this.insideShape = flattenShape(boxes);
-	}
-
-	/** {@link BlockBehavior#flattenShape}, kept under this name for {@code BlockStateCatalog}. */
-	public static double[] compileShape(final List<ShapeBox> boxes) {
-		return flattenShape(boxes);
 	}
 
 	@Override

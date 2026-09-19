@@ -5,7 +5,7 @@ import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.server.TickAuthority;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import java.util.ArrayList;
@@ -21,7 +21,7 @@ import java.util.Objects;
  * and flushes the step when the traversal reaches a cell of a later step. FREEZE and CLEAR_FREEZE are counted
  * here and applied to the frozen count at the end; FIRE_IGNITE, LAVA_IGNITE and EXTINGUISH, with the fire and
  * lava hits that follow each ignition in their visit order and multiplicity, are queued per step and applied
- * through {@link TickAuthority#survival()} in {@code InsideBlockEffectType} order. A cell this traversal cannot
+ * through {@link TickAuthority#damage()} in {@code InsideBlockEffectType} order. A cell this traversal cannot
  * see would have flushed a step in vanilla, so a grouping that depends on such a cell refuses instead of merging
  * two steps, for every collected type alike.
  *
@@ -72,7 +72,7 @@ public final class InsideBlockEffectCollector {
 	/** The flushed steps' server-only effects, in step order, applied by {@link #applyAndClear}. */
 	private final ArrayList<StepServerEffects> finalServerEffects = new ArrayList<>();
 
-	/** A collector applying its server-only effects through {@code authority}'s survival state. */
+	/** A collector applying its server-only effects through {@code authority}'s damage state. */
 	public InsideBlockEffectCollector(final TickAuthority authority) {
 		this.authority = Objects.requireNonNull(authority, "authority");
 	}
@@ -98,7 +98,7 @@ public final class InsideBlockEffectCollector {
 	 *
 	 * <p>The freeze projection runs whenever a FREEZE or CLEAR_FREEZE was collected, on either side and from any
 	 * hook, block or fluid; a traversal that collected neither writes nothing here. The server-only effects then
-	 * run step by step through the survival state, which may refuse.
+	 * run step by step through the damage state, which may refuse.
 	 */
 	public void applyAndClear(final PlayerState state) {
 		flushStep();
@@ -270,25 +270,25 @@ public final class InsideBlockEffectCollector {
 		if (this.finalServerEffects.isEmpty()) {
 			return;
 		}
-		Survival survival = this.authority.survival();
+		ServerDamage damage = this.authority.damage();
 		for (StepServerEffects effects : this.finalServerEffects) {
 			if (effects.fireIgnite) {
-				survival.fireIgnite();
+				damage.fireIgnite();
 			}
 			for (float hurt : effects.fireHurts) {
-				survival.hurtServer(HurtCause.IN_FIRE, hurt);
+				damage.hurtServer(HurtCause.IN_FIRE, hurt);
 			}
 			if (effects.lavaIgnite) {
-				survival.lavaIgnite();
+				damage.lavaIgnite();
 			}
 			for (int i = 0; i < effects.lavaHurts; i++) {
-				survival.hurtServer(HurtCause.LAVA, LAVA_DAMAGE);
+				damage.hurtServer(HurtCause.LAVA, LAVA_DAMAGE);
 			}
 			for (Runnable before : effects.beforeExtinguish) {
 				before.run();
 			}
 			if (effects.extinguish) {
-				survival.clearFire();
+				damage.clearFire();
 			}
 		}
 		this.finalServerEffects.clear();

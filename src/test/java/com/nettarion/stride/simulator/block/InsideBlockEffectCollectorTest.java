@@ -28,9 +28,9 @@ final class InsideBlockEffectCollectorTest {
 		effects.collectFireContact(1.0F);
 		effects.advanceStep(1);
 		assertEquals(20.0F, state.health, "advanceStep queues; it does not apply");
-		authority.survival().hurtServer(HurtCause.CACTUS, 1.0F);
+		authority.damage().hurtServer(HurtCause.CACTUS, 1.0F);
 		effects.applyAndClear(state);
-		assertEquals(HurtCause.CACTUS, authority.survival().marked().orElseThrow());
+		assertEquals(HurtCause.CACTUS, authority.damage().marked().orElseThrow());
 		assertEquals(19.0F, state.health);
 	}
 
@@ -74,9 +74,9 @@ final class InsideBlockEffectCollectorTest {
 		assertEquals(0, state.remainingFireTicks);
 		assertEquals(16.0F, state.health);
 		assertEquals(List.of(HurtCause.IN_FIRE, HurtCause.IN_FIRE, HurtCause.LAVA),
-		    authority.survival().dealt().stream().map(DamageEvent::cause).toList());
+		    authority.damage().dealt().stream().map(DamageEvent::cause).toList());
 		assertEquals(
-		    List.of(1.0F, 2.0F, 4.0F), authority.survival().dealt().stream().map(DamageEvent::attempted).toList());
+		    List.of(1.0F, 2.0F, 4.0F), authority.damage().dealt().stream().map(DamageEvent::attempted).toList());
 	}
 
 	@Test
@@ -103,7 +103,7 @@ final class InsideBlockEffectCollectorTest {
 		assertEquals(8, next.ticksFrozen);
 		assertEquals(-20, next.remainingFireTicks);
 		assertEquals(20.0F, next.health);
-		assertTrue(authority.survival().dealt().isEmpty());
+		assertTrue(authority.damage().dealt().isEmpty());
 	}
 
 	@Test

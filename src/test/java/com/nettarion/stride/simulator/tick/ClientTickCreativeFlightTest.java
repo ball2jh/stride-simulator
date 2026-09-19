@@ -12,7 +12,6 @@ import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.block.BlockBehavior;
-import com.nettarion.stride.simulator.block.BubbleColumnBlock;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.world.CompleteWorldView;
 import com.nettarion.stride.simulator.world.FlatFloorView;
@@ -173,7 +172,7 @@ final class ClientTickCreativeFlightTest {
 		}
 		@Override
 		public BlockBehavior behaviorAt(final int x, final int y, final int z) {
-			return x == 0 && y == 0 && z == 0 ? BubbleColumnBlock.PUSH_UP : BlockBehavior.INERT;
+			return BlockBehavior.bubbleColumn(bubbleColumnModeAt(x, y, z));
 		}
 	}
 }

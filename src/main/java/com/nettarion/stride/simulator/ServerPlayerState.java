@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The server's copy of the player: the movement half it inherits from {@link PlayerState}, the survival
+ * The server's copy of the player: the movement half it inherits from {@link PlayerState}, the damage
  * facts only the server tracks ({@code LivingEntity}'s health, absorption, hit cooldown, fire, air and
  * tick count with {@code FoodData}), and the connection listener's facts between movement packets.
  *
@@ -21,7 +21,7 @@ import java.util.Objects;
  * {@link #setSharedFlag}) bypasses the entity-data dirty tracking the tracker sample reads; use the
  * setter when the change should reach the client.
  */
-public class ServerPlayerState extends PlayerState {
+public final class ServerPlayerState extends PlayerState {
 	/** Vanilla's default maximum health, in health points. */
 	public static final float DEFAULT_MAXIMUM_HEALTH = 20.0F;
 
@@ -215,7 +215,7 @@ public class ServerPlayerState extends PlayerState {
 	/** The level's {@code freezeDamage} rule. */
 	public boolean freezeDamage = true;
 
-	/** Non-peaceful level difficulty governing starvation thresholds. */
+	/** Level difficulty governing starvation thresholds; {@link Difficulty#PEACEFUL} refuses at the first food tick. */
 	public Difficulty difficulty = Difficulty.NORMAL;
 
 	/** {@code LivingEntity.health}, in health points; see {@link #dead()}. */
@@ -287,7 +287,7 @@ public class ServerPlayerState extends PlayerState {
 	 */
 	public int attachedRockets;
 
-	/** A server player with fresh survival and listener facts; prefer {@link #atBoundary}. */
+	/** A server player with fresh damage and listener facts; prefer {@link #atBoundary}. */
 	public ServerPlayerState() {}
 
 	/**
@@ -330,7 +330,7 @@ public class ServerPlayerState extends PlayerState {
 	 * start the simulator's prediction from what it can see.
 	 *
 	 * <p>Movement is client-authoritative, so the server's position, rotation and contact flags are the
-	 * publisher's last published values and the listener's anchors start there. The survival facts are
+	 * publisher's last published values and the listener's anchors start there. The damage facts are
 	 * {@code observed}'s, taken as sent. What no client can see (hunger phase, connection and entity
 	 * tick counters, movement records) keeps the constructed boundary's values. The result is validated
 	 * as any server state is.
@@ -651,7 +651,7 @@ public class ServerPlayerState extends PlayerState {
 	}
 
 	/**
-	 * Rejects out-of-range survival facts, non-finite known movement, or a negative grace, floating or
+	 * Rejects out-of-range damage facts, non-finite known movement, or a negative grace, floating or
 	 * rocket count. The movement half is validated by {@link #requireValidForTransition()}.
 	 *
 	 * @throws IllegalStateException when a field is outside the admitted domain
@@ -670,13 +670,13 @@ public class ServerPlayerState extends PlayerState {
 		}
 		if (!Float.isFinite(this.health) || !Float.isFinite(this.maximumHealth) || !Float.isFinite(this.absorption)
 		    || !Float.isFinite(this.lastHurt)) {
-			throw new IllegalStateException("survival values must be finite");
+			throw new IllegalStateException("damage values must be finite");
 		}
 		if (this.maximumHealth <= 0.0F || this.health < 0.0F || this.health > this.maximumHealth
 		    || this.absorption < 0.0F || this.invulnerableTime < 0 || this.lastHurt < 0.0F
 		    || this.tickCount != UNKNOWN_TICK_COUNT
 		        && (this.tickCount < Integer.MIN_VALUE || this.tickCount > Integer.MAX_VALUE)) {
-			throw new IllegalStateException("survival values are out of range");
+			throw new IllegalStateException("damage values are out of range");
 		}
 		if (!Double.isFinite(this.lastKnownClientMovementX) || !Double.isFinite(this.lastKnownClientMovementY)
 		    || !Double.isFinite(this.lastKnownClientMovementZ)) {
@@ -697,7 +697,12 @@ public class ServerPlayerState extends PlayerState {
 		/** Normal: starvation stops at 1 health. */
 		NORMAL,
 		/** Hard: starvation can kill. */
-		HARD
+		HARD,
+		/**
+		 * Peaceful: no starvation and passive regeneration; outside the admitted domain, so the first food
+		 * tick refuses. Declared last so the ordinals the state digest folds are unchanged.
+		 */
+		PEACEFUL
 	}
 
 	/**

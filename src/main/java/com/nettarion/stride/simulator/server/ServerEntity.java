@@ -8,6 +8,7 @@ import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.Simulator;
 import com.nettarion.stride.simulator.StateDigest;
 import java.util.List;
+import com.nettarion.stride.simulator.SharedFlag;
 
 /**
  * The entity tracker's sample of the server's copy: what vanilla's {@code ServerEntity.sendChanges} sends the
@@ -54,7 +55,7 @@ public final class ServerEntity {
 
 	/** The shared-flags byte of the server's copy, as the tracker samples it. */
 	public static int sharedFlags(final ServerPlayerState server) {
-		return ServerSharedFlags.of(server);
+		return sharedFlagsOf(server);
 	}
 
 	/**
@@ -73,7 +74,7 @@ public final class ServerEntity {
 			throw new PendingServerWriteException(
 			    RefusalCause.UNMODELED_SCHEDULE, "server write and client delivery schedule is unknown");
 		}
-		this.flags = ServerSharedFlags.of(server);
+		this.flags = sharedFlagsOf(server);
 		this.pose = server.pose;
 		this.frozen = server.ticksFrozen;
 		this.frost = server.frostSpeedTicks;
@@ -112,6 +113,14 @@ public final class ServerEntity {
 		this.frostDirty = false;
 	}
 
+	/** The server copy's shared-flags byte as vanilla's {@code Entity} packs it. */
+	static int sharedFlagsOf(final ServerPlayerState server) {
+		return (server.sharedFlagOnFire ? SharedFlag.ON_FIRE_MASK : 0)
+		    | (server.shiftKeyDown ? SharedFlag.SHIFT_KEY_DOWN_MASK : 0)
+		    | (server.sprinting ? SharedFlag.SPRINTING_MASK : 0) | (server.swimming ? SharedFlag.SWIMMING_MASK : 0)
+		    | (server.fallFlying ? SharedFlag.FALL_FLYING_MASK : 0);
+	}
+
 	/**
 	 * Append the sample's confirmations, one per value the client may see change. The glide flag has no
 	 * confirmation of its own: a caller attributes a glide echo through the flags byte of the
@@ -120,9 +129,9 @@ public final class ServerEntity {
 	void recordChanges(final int action, final List<Simulator.Confirmation> output) {
 		if (this.flagsDirty) {
 			output.add(
-			    new Simulator.SprintConfirmation(action, (this.flags & (1 << ServerSharedFlags.SPRINTING)) != 0));
+			    new Simulator.SprintConfirmation(action, (this.flags & SharedFlag.SPRINTING_MASK) != 0));
 			output.add(
-			    new Simulator.SwimmingConfirmation(action, (this.flags & (1 << ServerSharedFlags.SWIMMING)) != 0));
+			    new Simulator.SwimmingConfirmation(action, (this.flags & SharedFlag.SWIMMING_MASK) != 0));
 		}
 		if (this.poseDirty) {
 			output.add(new Simulator.PoseConfirmation(action, this.pose));

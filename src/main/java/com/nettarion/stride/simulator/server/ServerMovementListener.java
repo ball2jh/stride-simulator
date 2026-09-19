@@ -19,6 +19,7 @@ import com.nettarion.stride.simulator.tick.SupportingBlock;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.SupportCell;
 import com.nettarion.stride.simulator.world.WorldView;
+import com.nettarion.stride.simulator.SharedFlag;
 
 /**
  * The packet handlers of vanilla's {@code ServerGamePacketListenerImpl} that the admitted domain reaches: the input
@@ -28,7 +29,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  * <p>{@link #handleMovePlayer} collision-resolves the packet's displacement on the server's copy and applies the
  * moved-too-quickly, moved-wrongly and new-collision tests in vanilla's order; acceptance snaps to the target and
  * lands the descent, a correction sends the client back and awaits the acknowledgement. Every method advances the
- * server's copy in place; a landing's hit goes to {@link TickAuthority#survival()}, which {@link ServerTick} bound
+ * server's copy in place; a landing's hit goes to {@link TickAuthority#damage()}, which {@link ServerTick} bound
  * to the copy. Positions are in blocks, rotations in degrees.
  */
 public final class ServerMovementListener {
@@ -110,7 +111,7 @@ public final class ServerMovementListener {
 
 	/** {@code handlePlayerInput} for an already loaded client: the sneak key becomes the synced shift flag. */
 	static void handlePlayerInput(final ServerPlayerState server, final PlayerInput input) {
-		server.setSharedFlag(ServerSharedFlags.SHIFT_KEY_DOWN, input.sneak());
+		server.setSharedFlag(SharedFlag.SHIFT_KEY_DOWN, input.sneak());
 	}
 
 	/** {@code handlePlayerCommand}'s {@code START_SPRINTING} and {@code STOP_SPRINTING} cases. */
@@ -123,7 +124,7 @@ public final class ServerMovementListener {
 	 *
 	 * @param clientAfter the client's copy after its tick, which the packet was encoded from
 	 * @param kind the packet kind the client's publisher selected for that tick, never {@link MovementPacket#NONE}
-	 * @param scratch the server copy's scratch, carrying the bound {@link Survival}
+	 * @param scratch the server copy's scratch, carrying the bound {@link ServerDamage}
 	 * @throws UnimplementedMechanicException when the packet carries a NaN coordinate or a non-finite angle, which
 	 *     disconnects the client
 	 */
@@ -135,7 +136,7 @@ public final class ServerMovementListener {
 			throw new UnimplementedMechanicException(
 			    RefusalCause.UNMODELED_SESSION_END, "invalid movement packet disconnects the client");
 		}
-		Survival survival = scratch.authority.survival();
+		ServerDamage damage = scratch.authority.damage();
 		if (server.connectionTickCount == 0) {
 			resetPosition(server);
 		}
@@ -143,7 +144,7 @@ public final class ServerMovementListener {
 		float targetYRot = Mth.wrapDegrees(kind.hasRotation() ? clientAfter.yRot : server.yRot);
 		float targetXRot = Mth.wrapDegrees(kind.hasRotation() ? clientAfter.xRot : server.xRot);
 		if (server.correctionPending) {
-			return awaitingCorrection(kind, server, targetYRot, targetXRot, survival);
+			return awaitingCorrection(kind, server, targetYRot, targetXRot, damage);
 		}
 		server.awaitingTeleportTime = server.connectionTickCount;
 		double targetX = Mth.clamp(
@@ -176,7 +177,7 @@ public final class ServerMovementListener {
 			// the copy's own rotation, read after awaitTeleport canonicalized it.
 			return corrected(kind, CorrectionReason.MOVED_TOO_QUICKLY, target,
 			    new MovementCorrection.Resolved(startX, startY, startZ, movedDist),
-			    new MovementCorrection.Teleport(startX, startY, startZ, server.yRot, server.xRot), survival);
+			    new MovementCorrection.Teleport(startX, startY, startZ, server.yRot, server.xRot), damage);
 		}
 		xDist = targetX - server.lastGoodX;
 		yDist = targetY - server.lastGoodY;
@@ -227,10 +228,10 @@ public final class ServerMovementListener {
 			return correct(kind, newCollision ? CorrectionReason.NEW_COLLISION : CorrectionReason.MOVED_WRONGLY,
 			    clientAfter, server, world, scratch, target,
 			    new MovementCorrection.Resolved(resolvedX, resolvedY, resolvedZ, residualSquared),
-			    new MovementCorrection.Teleport(startX, startY, startZ, targetYRot, targetXRot), survival);
+			    new MovementCorrection.Teleport(startX, startY, startZ, targetYRot, targetXRot), damage);
 		}
 		return accept(kind, clientAfter, server, world, scratch, target, targetYRot, targetXRot, startX, startY, startZ,
-		    yDist, standsOnSomething, residualSquared, fail && !oldBoxFree, survival);
+		    yDist, standsOnSomething, residualSquared, fail && !oldBoxFree, damage);
 	}
 
 	/**
@@ -238,7 +239,7 @@ public final class ServerMovementListener {
 	 * than twenty connection ticks late resends the correction.
 	 */
 	private static ServerTick.Transaction awaitingCorrection(final MovementPacket kind, final ServerPlayerState server,
-	    final float targetYRot, final float targetXRot, final Survival survival) {
+	    final float targetYRot, final float targetXRot, final ServerDamage damage) {
 		ServerTick.Transaction result;
 		if (server.connectionTickCount - server.awaitingTeleportTime > TELEPORT_RETRY_TICKS) {
 			server.placeAt(server.awaitingPositionX, server.awaitingPositionY, server.awaitingPositionZ);
@@ -249,9 +250,9 @@ public final class ServerMovementListener {
 			MovementCorrection.Target target = new MovementCorrection.Target(server.x, server.y, server.z);
 			result = corrected(kind, CorrectionReason.TELEPORT_RETRY, target,
 			    new MovementCorrection.Resolved(server.x, server.y, server.z, 0),
-			    new MovementCorrection.Teleport(server.x, server.y, server.z, server.yRot, server.xRot), survival);
+			    new MovementCorrection.Teleport(server.x, server.y, server.z, server.yRot, server.xRot), damage);
 		} else {
-			result = new ServerTick.AwaitingTeleport(kind, survival.effects());
+			result = new ServerTick.AwaitingTeleport(kind, damage.effects());
 		}
 		installRotation(server, targetYRot, targetXRot);
 		return result;
@@ -264,7 +265,7 @@ public final class ServerMovementListener {
 	private static ServerTick.Corrected correct(final MovementPacket kind, final CorrectionReason reason,
 	    final PlayerState clientAfter, final ServerPlayerState server, final SnapshotView world, final Scratch scratch,
 	    final MovementCorrection.Target target, final MovementCorrection.Resolved resolved,
-	    final MovementCorrection.Teleport teleport, final Survival survival) {
+	    final MovementCorrection.Teleport teleport, final ServerDamage damage) {
 		if (scratch.hasMovementSegment) {
 			server.removeLatestMovementRecording();
 		}
@@ -277,7 +278,7 @@ public final class ServerMovementListener {
 		SupportingBlock.checkSupportingBlockWithGround(
 		    server, clientAfter.onGround, 0.0, 0.0, server.shiftKeyDown, world, scratch);
 		checkFallDamage(server, 0.0, clientAfter.onGround, world, scratch);
-		return corrected(kind, reason, target, resolved, teleport, survival);
+		return corrected(kind, reason, target, resolved, teleport, damage);
 	}
 
 	/**
@@ -288,7 +289,7 @@ public final class ServerMovementListener {
 	    final ServerPlayerState server, final SnapshotView world, final Scratch scratch,
 	    final MovementCorrection.Target target, final float targetYRot, final float targetXRot, final double startX,
 	    final double startY, final double startZ, final double yDist, final boolean standsOnSomething,
-	    final double residualSquared, final boolean forgivenByOccupiedStart, final Survival survival) {
+	    final double residualSquared, final boolean forgivenByOccupiedStart, final ServerDamage damage) {
 		snapTo(server, target.x(), target.y(), target.z());
 		installRotation(server, targetYRot, targetXRot);
 		boolean airborneCandidate = yDist >= FLOATING_DESCENT_ALLOWANCE && !standsOnSomething && !server.allowFlight
@@ -324,14 +325,14 @@ public final class ServerMovementListener {
 		server.lastGoodY = server.y;
 		server.lastGoodZ = server.z;
 		return new ServerTick.Accepted(kind, target.x(), target.y(), target.z(), residualSquared,
-		    forgivenByOccupiedStart, server.clientIsFloating, server.floatingUnknown, survival.effects());
+		    forgivenByOccupiedStart, server.clientIsFloating, server.floatingUnknown, damage.effects());
 	}
 
 	private static ServerTick.Corrected corrected(final MovementPacket kind, final CorrectionReason reason,
 	    final MovementCorrection.Target target, final MovementCorrection.Resolved resolved,
-	    final MovementCorrection.Teleport teleport, final Survival survival) {
+	    final MovementCorrection.Teleport teleport, final ServerDamage damage) {
 		return new ServerTick.Corrected(
-		    new MovementCorrection(kind, reason, target, resolved, teleport), survival.effects());
+		    new MovementCorrection(kind, reason, target, resolved, teleport), damage.effects());
 	}
 
 	/**
@@ -404,7 +405,7 @@ public final class ServerMovementListener {
 		SupportingBlock.getOnPosLegacy(server, world, scratch);
 		SupportCell cell = scratch.support;
 		world.behaviorAt(cell.x, cell.y, cell.z)
-		    .fallOn(server.fallDistance, cell.x, cell.y, cell.z, scratch.authority.survival());
+		    .fallOn(server.fallDistance, cell.x, cell.y, cell.z, scratch.authority.damage());
 	}
 
 	/**

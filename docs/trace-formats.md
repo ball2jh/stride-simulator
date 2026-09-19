@@ -168,8 +168,8 @@ Palette rows (`p`) are numbered `0..n-1` in order. Columns by index in a version
 | 17 | retains support pos | bit | |
 | 18 | climbability | enum | `NONE`, `CLIMBABLE`, `GLIDE_THROUGH`, `LADDER_NORTH`, `LADDER_EAST`, `LADDER_SOUTH`, `LADDER_WEST`, `OPEN_TRAPDOOR_NORTH`, `OPEN_TRAPDOOR_EAST`, `OPEN_TRAPDOOR_SOUTH`, `OPEN_TRAPDOOR_WEST` |
 | 19 | shape provenance | enum | since 14: `GENERAL`, `CANONICAL_FULL`, `LEGACY_GEOMETRY`; absent in 13, read as `LEGACY_GEOMETRY` |
-| 20 | contact | enum | since 15: `NONE`, `CACTUS`, `SWEET_BERRY_BUSH`, `HOT_FLOOR`, `CAMPFIRE`, `SOUL_CAMPFIRE`, `FIRE`, `SOUL_FIRE`, `LAVA_CAULDRON`, `UNMODELED`, `UNKNOWN`; absent before 15, derived from the name |
-| 21 | landing | enum | since 15: `ORDINARY`, `HAY`, `HONEY`, `SLIME`, `BED`, `STALAGMITE`, `FARMLAND`, `POWDER_SNOW`, `UNMODELED`, `UNKNOWN`; absent before 15, derived from the name |
+| 20 | contact | enum | since 15: `NONE`, `CACTUS`, `SWEET_BERRY_BUSH`, `HOT_FLOOR`, `CAMPFIRE`, `SOUL_CAMPFIRE`, `FIRE`, `SOUL_FIRE`, `LAVA_CAULDRON`, `UNMODELED`, `UNRECORDED` (`UNKNOWN` is read as `UNRECORDED`); absent before 15, derived from the name |
+| 21 | landing | enum | since 15: `ORDINARY`, `HAY`, `HONEY`, `SLIME`, `BED`, `STALAGMITE`, `FARMLAND`, `POWDER_SNOW`, `UNMODELED`, `UNRECORDED` (`UNKNOWN` is read as `UNRECORDED`); absent before 15, derived from the name |
 | 22 | box count | int | `k`; the row ends after `k` more cells |
 | 23.. | box | 6 hex64 joined by `,` | `minX,minY,minZ,maxX,maxY,maxZ` in block-local coordinates |
 

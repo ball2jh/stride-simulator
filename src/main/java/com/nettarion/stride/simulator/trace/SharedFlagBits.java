@@ -1,5 +1,6 @@
 package com.nettarion.stride.simulator.trace;
 
+import com.nettarion.stride.simulator.SharedFlag;
 /**
  * The bit layout of vanilla {@code Entity}'s synchronized shared-flags byte, and the one place
  * that splits it into recorded fields.
@@ -14,22 +15,22 @@ package com.nettarion.stride.simulator.trace;
  */
 public final class SharedFlagBits {
 	/** Bit 0: the entity is on fire. Residual; no named field. */
-	public static final int ON_FIRE = 0;
+	public static final int ON_FIRE = SharedFlag.ON_FIRE;
 
 	/** Bit 1: the server-owned sneak flag, recorded as {@link StateField#SHIFT_KEY_DOWN}. */
-	public static final int SHIFT_KEY_DOWN = 1;
+	public static final int SHIFT_KEY_DOWN = SharedFlag.SHIFT_KEY_DOWN;
 
 	/** Bit 3: sprinting, recorded as {@link StateField#SPRINTING}. */
-	public static final int SPRINTING = 3;
+	public static final int SPRINTING = SharedFlag.SPRINTING;
 
 	/** Bit 4: swimming, recorded as {@link StateField#SWIMMING}. */
-	public static final int SWIMMING = 4;
+	public static final int SWIMMING = SharedFlag.SWIMMING;
 
 	/** Bit 6: glowing. Residual; no named field. */
-	public static final int GLOWING = 6;
+	public static final int GLOWING = SharedFlag.GLOWING;
 
 	/** Bit 7: fall flying, recorded as {@link StateField#FALL_FLYING}. */
-	public static final int FALL_FLYING = 7;
+	public static final int FALL_FLYING = SharedFlag.FALL_FLYING;
 
 	/**
 	 * The bits without a named field: 0 (on fire), 2, 5 (invisible) and 6 (glowing). They are

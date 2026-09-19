@@ -18,7 +18,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  * <p>The same phase sequence ticks both copies of the player. Under client authority the
  * {@code LocalPlayer} controls are live; under server authority the copy enters through
  * {@link #serverTick}, each phase's server-only branches are live, and their hits go through
- * {@code TickAuthority.survival()}. Flattened state and the phase pipeline avoid entity allocation.
+ * {@code TickAuthority.damage()}. Flattened state and the phase pipeline avoid entity allocation.
  * The player's own predicates ({@link #isShiftKeyDown}, {@link #hasInput}, {@link #onClimbable})
  * live here because the phases share them.
  */

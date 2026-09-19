@@ -171,13 +171,13 @@ final class ServerPlayerTickTest {
 		assertEquals(0.01F * 13 * 0.01F, server.exhaustionLevel);
 		server.exhaustionLevel = 0;
 		server.absorption = 1;
-		Survival survival = new Survival();
-		survival.begin(server);
-		survival.hurtServer(HurtCause.CACTUS, 1);
+		ServerDamage damage = new ServerDamage();
+		damage.begin(server);
+		damage.hurtServer(HurtCause.CACTUS, 1);
 		assertEquals(0.0F, server.exhaustionLevel, "absorbed hits cost no food");
-		survival.hurtServer(HurtCause.CACTUS, 1);
+		damage.hurtServer(HurtCause.CACTUS, 1);
 		assertEquals(0.0F, server.exhaustionLevel, "cooldown-blocked hits cost no food");
-		survival.hurtServer(HurtCause.LAVA, 4);
+		damage.hurtServer(HurtCause.LAVA, 4);
 		assertEquals(0.1F, server.exhaustionLevel, "a partial health hit costs the source amount");
 		PlayerTick.causeFoodExhaustion(server, 100);
 		assertEquals(40.0F, server.exhaustionLevel);

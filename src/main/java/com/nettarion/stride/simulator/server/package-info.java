@@ -50,7 +50,7 @@
  * {@link com.nettarion.stride.simulator.server.ServerEntity} is the sample of phase 2;
  * {@link com.nettarion.stride.simulator.server.ServerPlayerTick} and
  * {@link com.nettarion.stride.simulator.server.FoodData} are the server's parts of phase 4;
- * {@link com.nettarion.stride.simulator.server.Survival} is the damage and fire sink every phase deals through, reached
+ * {@link com.nettarion.stride.simulator.server.ServerDamage} is the damage and fire sink every phase deals through, reached
  * by the tick phases and the block behaviors via {@link com.nettarion.stride.simulator.server.TickAuthority}.
  *
  * <h2>Glossary</h2>
@@ -68,7 +68,7 @@
  * <h2>Hard-coded facts</h2>
  *
  * <ul>
- * <li>Survival game mode; no creative, spectator, sleeping or passenger movement.</li>
+ * <li>ServerDamage game mode; no creative, spectator, sleeping or passenger movement.</li>
  * <li>A non-peaceful difficulty; peaceful refuses at admission.</li>
  * <li>No enchantments and no status effects: no feather falling, fire resistance, levitation or slow falling.</li>
  * <li>Vanilla 26.2's damage-type tags: {@code no_knockback}, {@code no_impact}, {@code bypasses_invulnerability}

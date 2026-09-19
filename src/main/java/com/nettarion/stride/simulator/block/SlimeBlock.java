@@ -2,7 +2,7 @@ package com.nettarion.stride.simulator.block;
 
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.tick.PlayerTick;
 import com.nettarion.stride.simulator.tick.Scratch;
 
@@ -50,9 +50,9 @@ final class SlimeBlock extends BlockBehavior {
 	 * fall handling at all.
 	 */
 	@Override
-	public void fallOn(final double fallDistance, final int x, final int y, final int z, final Survival survival) {
-		if (!survival.suppressingBounce()) {
-			survival.causeFallDamage(fallDistance, 0.0F, HurtCause.FALL);
+	public void fallOn(final double fallDistance, final int x, final int y, final int z, final ServerDamage damage) {
+		if (!damage.suppressingBounce()) {
+			damage.causeFallDamage(fallDistance, 0.0F, HurtCause.FALL);
 		}
 	}
 

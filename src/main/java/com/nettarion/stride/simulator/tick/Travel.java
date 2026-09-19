@@ -9,7 +9,7 @@ import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.world.WorldView;
 import java.util.HashSet;
 import java.util.Set;
@@ -23,7 +23,7 @@ import java.util.Set;
  * water, lava, gliding, or air, each of which accelerates from the input, calls {@link Move}, and
  * applies its gravity and drag; creative flight then damps the vertical component.
  * {@code handleFallFlyingCollisions} runs after the glide move on the server's copy only and deals
- * its hit through {@code TickAuthority.survival()}.
+ * its hit through {@code TickAuthority.damage()}.
  *
  * <p>Reads the input vector, rotation, velocity, ground, support, the fluid heights, and the flags;
  * the shift state is the current input on the client and the synced flag on the server's copy.
@@ -44,7 +44,7 @@ public final class Travel {
 
 	static {
 		Set<String> writes = new HashSet<>(Move.WRITES);
-		writes.addAll(Survival.HURT_WRITES);
+		writes.addAll(ServerDamage.HURT_WRITES);
 		writes.addAll(Set.of(
 		    "entityDataDirty", "deltaMovementX", "deltaMovementY", "deltaMovementZ", "fallDistance", "fallFlying"));
 		WRITES = Set.copyOf(writes);
@@ -310,7 +310,7 @@ public final class Travel {
 			double diff = lastSpeed - newSpeed;
 			float damage = (float) (diff * 10.0 - 3.0);
 			if (damage > 0.0F) {
-				scratch.authority.survival().hurtServer(HurtCause.FLY_INTO_WALL, damage);
+				scratch.authority.damage().hurtServer(HurtCause.FLY_INTO_WALL, damage);
 			}
 		}
 	}

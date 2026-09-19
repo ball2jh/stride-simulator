@@ -29,21 +29,6 @@ import org.junit.jupiter.api.Test;
 final class SimulationStateCodecTest {
 	private static final String SCHEMA_ONE_FIXTURE = "/captures/schema-1-boundary.bin";
 
-	public static final class ExtendedPlayer extends PlayerState {
-		public int unrelated = 73;
-	}
-
-	@Test
-	void aJavaSubclassCannotChangeTheDeclaredClientSchema() throws Exception {
-		ExtendedPlayer extended = new ExtendedPlayer();
-		extended.placeAt(0.5, 2, 0.5);
-		PlayerState base = new PlayerState();
-		extended.copyInto(base);
-		ServerPlayerState server = ServerPlayerState.atBoundary(base);
-		assertArrayEquals(
-		    encode(new SimulationState(base, server, 0)), encode(new SimulationState(extended, server, 0)));
-	}
-
 	@Test
 	void everyPublicFieldBelongsToTheExplicitInventory() throws Exception {
 		PlayerState player = new PlayerState();

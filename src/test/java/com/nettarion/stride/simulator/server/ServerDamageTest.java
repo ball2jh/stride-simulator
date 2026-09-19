@@ -37,11 +37,11 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 /**
- * The server's survival phases in the composed step, rule by rule from {@code LivingEntity.hurtServer},
+ * The server's damage phases in the composed step, rule by rule from {@code LivingEntity.hurtServer},
  * {@code Player.actuallyHurt}, and the block bodies that call them: every hit is on the stream at its action, the
  * cooldown decides what a later hit does, and a body outside the admitted domain refuses inside the tick.
  */
-final class ServerSurvivalTest {
+final class ServerDamageTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 
 	private static final int STONE = 1;
@@ -159,9 +159,9 @@ final class ServerSurvivalTest {
 
 	@Test
 	void aLegacyPaletteLeavesStateDependentBodiesUnknownAndTheyRefuse() {
-		assertEquals(WorldView.Contact.UNKNOWN, BlockEntry.legacyContact("minecraft:campfire"));
+		assertEquals(WorldView.Contact.UNRECORDED, BlockEntry.legacyContact("minecraft:campfire"));
 		assertEquals(WorldView.Contact.CACTUS, BlockEntry.legacyContact("minecraft:cactus"));
-		assertEquals(WorldView.Landing.UNKNOWN, BlockEntry.legacyLanding("minecraft:pointed_dripstone"));
+		assertEquals(WorldView.Landing.UNRECORDED, BlockEntry.legacyLanding("minecraft:pointed_dripstone"));
 		assertEquals(WorldView.Landing.BED, BlockEntry.legacyLanding("minecraft:red_bed"));
 		SnapshotView world = world(builder -> builder.set(1, 0, 0, OLD_CAMPFIRE));
 		PlayerState start = standing(0.75, 0.0, 0.5);
@@ -226,20 +226,20 @@ final class ServerSurvivalTest {
 	void fireIgnitionWalksTheImmuneWindowAndRefusesTheRandomIncrement() {
 		ServerPlayerState server = ServerPlayerState.atBoundary(standing(0.5, 0.0, 0.5));
 		assertEquals(-20, server.remainingFireTicks, "the dry steady state");
-		Survival survival = new Survival();
-		survival.begin(server);
+		ServerDamage damage = new ServerDamage();
+		damage.begin(server);
 
-		survival.fireIgnite();
+		damage.fireIgnite();
 		assertEquals(-19, server.remainingFireTicks, "one tick through the immune window");
 		server.remainingFireTicks = -1;
-		survival.fireIgnite();
+		damage.fireIgnite();
 		assertEquals(160, server.remainingFireTicks, "reaching zero ignites for eight seconds");
 		server.remainingFireTicks = 100;
-		survival.fireIgnite();
+		damage.fireIgnite();
 		assertEquals(160, server.remainingFireTicks, "either random increment lands below the eight seconds");
 
 		server.remainingFireTicks = 159;
-		PendingServerWriteException refusal = assertThrows(PendingServerWriteException.class, survival::fireIgnite);
+		PendingServerWriteException refusal = assertThrows(PendingServerWriteException.class, damage::fireIgnite);
 		assertEquals(RefusalCause.PENDING_SERVER_RANDOM, refusal.cause());
 
 		// The step's flush runs the ignition, then the in-fire hit after it,
@@ -254,7 +254,7 @@ final class ServerSurvivalTest {
 		effects.applyAndClear(burned);
 		assertEquals(160, burned.remainingFireTicks);
 		assertEquals(
-		    List.of(HurtCause.IN_FIRE), authority.survival().dealt().stream().map(DamageEvent::cause).toList());
+		    List.of(HurtCause.IN_FIRE), authority.damage().dealt().stream().map(DamageEvent::cause).toList());
 		assertEquals(19.0F, burned.health);
 	}
 
@@ -339,20 +339,20 @@ final class ServerSurvivalTest {
 		ServerPlayerState flier = ServerPlayerState.atBoundary(standing(0.5, 0.0, 0.5));
 		flier.mayfly = true;
 		flier.exhaustionLevel = 0.5F;
-		Survival survival = new Survival();
-		survival.begin(flier);
-		survival.hurtServer(HurtCause.FELL_OUT_OF_WORLD, 4.0F);
+		ServerDamage damage = new ServerDamage();
+		damage.begin(flier);
+		damage.hurtServer(HurtCause.FELL_OUT_OF_WORLD, 4.0F);
 		assertEquals(16.0F, flier.health);
 		assertEquals(0.5F, flier.exhaustionLevel);
-		assertEquals(Optional.of(HurtCause.FELL_OUT_OF_WORLD), survival.marked());
+		assertEquals(Optional.of(HurtCause.FELL_OUT_OF_WORLD), damage.marked());
 
 		// A negative-zero level would come out positive without the ability
 		// and stay negative with it, so that charge still refuses.
 		ServerPlayerState signedZero = ServerPlayerState.atBoundary(standing(0.5, 0.0, 0.5));
 		signedZero.mayfly = true;
 		signedZero.exhaustionLevel = -0.0F;
-		survival.begin(signedZero);
-		assertThrows(PendingServerWriteException.class, () -> survival.hurtServer(HurtCause.FELL_OUT_OF_WORLD, 4.0F));
+		damage.begin(signedZero);
+		assertThrows(PendingServerWriteException.class, () -> damage.hurtServer(HurtCause.FELL_OUT_OF_WORLD, 4.0F));
 	}
 
 	@Test
@@ -403,10 +403,10 @@ final class ServerSurvivalTest {
 		for (HurtCause cause : HurtCause.values()) {
 			ServerPlayerState server = ServerPlayerState.atBoundary(standing(0.5, 0.0, 0.5));
 			rules.accept(server);
-			Survival survival = new Survival();
-			survival.begin(server);
-			survival.hurtServer(cause, 1.0F);
-			if (survival.dealt().isEmpty()) {
+			ServerDamage damage = new ServerDamage();
+			damage.begin(server);
+			damage.hurtServer(cause, 1.0F);
+			if (damage.dealt().isEmpty()) {
 				assertEquals(20.0F, server.health, cause.name());
 				dropped.add(cause);
 			} else {

@@ -29,7 +29,7 @@ final class PreMoveCollisionQueryTest {
 		    new WorldView.CollisionBehavior[] {WorldView.CollisionBehavior.SCAFFOLDING_SUPPORTED,
 		        WorldView.CollisionBehavior.SCAFFOLDING_UNSTABLE_BOTTOM,
 		        WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS}) {
-			SnapshotView world = new SnapshotView(oneBlock(behavior));
+			SnapshotView world = SnapshotView.compile(oneBlock(behavior));
 			Scratch scratch = new Scratch(TickAuthority.client());
 			// A box sunk into the top of the block, queried by a player whose
 			// feet were on its top, not descending, with boots and no fall.
@@ -41,7 +41,7 @@ final class PreMoveCollisionQueryTest {
 			    world, scratch, 0.5 - HALF, minY, 0.5 - HALF, 0.5 + HALF, minY + 1.8, 0.5 + HALF);
 			assertTrue(preMove.isEmpty(), behavior + " has no shape to placement");
 		}
-		SnapshotView stone = new SnapshotView(oneBlock(WorldView.CollisionBehavior.ORDINARY));
+		SnapshotView stone = SnapshotView.compile(oneBlock(WorldView.CollisionBehavior.ORDINARY));
 		assertFalse(CollisionCollector
 		                .collectPreMove(stone, new Scratch(TickAuthority.client()), 0.5 - HALF, 0.92, 0.5 - HALF,
 		                    0.5 + HALF, 2.72, 0.5 + HALF)

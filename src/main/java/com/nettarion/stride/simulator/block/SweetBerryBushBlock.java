@@ -13,7 +13,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  * server, a hit from a bush past age zero.
  *
  * <p>The hit is one point when the last known client movement is horizontal by at least the threshold, dealt at
- * the visit through the server's {@code Survival}. A bush whose age the capture did not record still holds the
+ * the visit through the server's {@code ServerDamage}. A bush whose age the capture did not record still holds the
  * client, since the stuck vector is age-independent, and refuses on the server's visit.
  */
 final class SweetBerryBushBlock extends BlockBehavior {
@@ -82,7 +82,7 @@ final class SweetBerryBushBlock extends BlockBehavior {
 			double kx = server.lastKnownClientMovementX;
 			double kz = server.lastKnownClientMovementZ;
 			if (kx * kx + kz * kz > 0.0 && (Math.abs(kx) >= MOVEMENT_THRESHOLD || Math.abs(kz) >= MOVEMENT_THRESHOLD)) {
-				scratch.authority.survival().hurtServer(HurtCause.SWEET_BERRY_BUSH, 1.0F);
+				scratch.authority.damage().hurtServer(HurtCause.SWEET_BERRY_BUSH, 1.0F);
 			}
 		}
 	}

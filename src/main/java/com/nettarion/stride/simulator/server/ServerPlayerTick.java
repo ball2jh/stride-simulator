@@ -19,7 +19,7 @@ public final class ServerPlayerTick {
 	/** {@code ServerPlayer.doTick}: the admitted {@code Player.tick} body, then the food tick. */
 	static void doTick(final ServerPlayerState state, final WorldView world, final Scratch scratch) {
 		PlayerTick.serverTick(state, world, scratch);
-		FoodData.tick(state, scratch.authority.survival());
+		FoodData.tick(state, scratch.authority.damage());
 	}
 
 	/** {@code ServerPlayer.jumpFromGround}: the shared impulse, then the jump's exhaustion. */

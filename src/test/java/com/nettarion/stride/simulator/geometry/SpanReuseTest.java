@@ -63,7 +63,7 @@ final class SpanReuseTest {
 
 	@Test
 	void expandedFaceContainmentMatchesIntegerCursorAtBoundariesAndAfterEdits() {
-		SnapshotView world = terrainWorld();
+		SnapshotView world = terrainWorld().fork();
 		Scratch scratch = new Scratch();
 		scratch.span.retain(world, -2, -2, -2, 2, 2, 2);
 		double[] faces = {-3.0, -2.0000001, Math.nextDown(-2.0), -2.0, Math.nextUp(-2.0), -1.0, -0.0, 0.0, 1.0, 2.0,
@@ -100,7 +100,7 @@ final class SpanReuseTest {
 				builder.set(x, -1, z, 1);
 			}
 		}
-		SnapshotView world = new SnapshotView(builder.build());
+		SnapshotView world = SnapshotView.compile(builder.build());
 		Scratch scratch = new Scratch();
 		assertTrue(world.collectSpanBoxes(-3, -2, -3, 2, 1, 2, scratch.span.boxes));
 		scratch.span.retain(world, -3, -2, -3, 2, 1, 2);
@@ -262,7 +262,7 @@ final class SpanReuseTest {
 	}
 
 	private static SnapshotView slabWorld() {
-		return new SnapshotView(WorldSnapshot.builder(OutsidePolicy.REFUSING, 0, 0, 0, 1, 1, 1)
+		return SnapshotView.compile(WorldSnapshot.builder(OutsidePolicy.REFUSING, 0, 0, 0, 1, 1, 1)
 		        .palette(BlockEntry.builder(0, "minecraft:stone_slab")
 		                .boxes(new ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0))
 		                .build())
@@ -297,7 +297,7 @@ final class SpanReuseTest {
 				}
 			}
 		}
-		return new SnapshotView(grid.build());
+		return SnapshotView.compile(grid.build());
 	}
 
 	/** A view that refuses span reuse, so the ordinary path can be compared to. */

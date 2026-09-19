@@ -11,37 +11,37 @@ import java.util.Objects;
  * is authoritative and alone deals damage and changes the world.
  *
  * <p>The tick phases are shared by both copies of the player and ask the authority which branches are live. A
- * server authority owns the transaction's {@link Survival} and binds it with the server copy through {@link #begin}
- * before any phase runs; a client authority has no server state and no survival effects. The server's synced shift
+ * server authority owns the transaction's {@link ServerDamage} and binds it with the server copy through {@link #begin}
+ * before any phase runs; a client authority has no server state and no damage effects. The server's synced shift
  * flag is read from the bound copy, so it cannot drift from a second copy in scratch. Not thread-safe.
  */
 public final class TickAuthority {
 	private static final TickAuthority CLIENT = new TickAuthority(null);
 
-	private final Survival survival;
+	private final ServerDamage damage;
 
 	private ServerPlayerState server;
 
 	/** The world writes of the branch that owns the server's world, or {@code null} until one is bound. */
 	WorldChanges worldChanges;
 
-	private TickAuthority(final Survival survival) {
-		this.survival = survival;
+	private TickAuthority(final ServerDamage damage) {
+		this.damage = damage;
 	}
 
-	/** The one client authority: no server state, no survival. */
+	/** The one client authority: no server state, no damage. */
 	public static TickAuthority client() {
 		return CLIENT;
 	}
 
-	/** A fresh server authority with its own {@link Survival}, to be bound with {@link #begin}. */
+	/** A fresh server authority with its own {@link ServerDamage}, to be bound with {@link #begin}. */
 	public static TickAuthority server() {
-		return new TickAuthority(new Survival());
+		return new TickAuthority(new ServerDamage());
 	}
 
 	/** Whether this is a server authority. */
 	public boolean isServer() {
-		return this.survival != null;
+		return this.damage != null;
 	}
 
 	/**
@@ -54,7 +54,7 @@ public final class TickAuthority {
 			throw new IllegalStateException("client authority cannot begin a server transaction");
 		}
 		this.server = Objects.requireNonNull(server, "server");
-		this.survival.begin(server);
+		this.damage.begin(server);
 	}
 
 	/**
@@ -74,11 +74,11 @@ public final class TickAuthority {
 	 *
 	 * @throws IllegalStateException when no transaction is bound
 	 */
-	public Survival survival() {
+	public ServerDamage damage() {
 		if (this.server == null) {
 			throw new IllegalStateException("no server transaction is bound");
 		}
-		return this.survival;
+		return this.damage;
 	}
 
 	/**

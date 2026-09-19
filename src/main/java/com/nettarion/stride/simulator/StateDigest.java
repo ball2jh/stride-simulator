@@ -2,7 +2,7 @@ package com.nettarion.stride.simulator;
 
 /**
  * Deterministic raw-bit digest of simulator state: the client copy through {@link #state}, the
- * server copy with its survival and listener facts through {@link #server}, the composed
+ * server copy with its damage and listener facts through {@link #server}, the composed
  * boundary through {@link #boundary}, and a chain over a run through {@link #chain}.
  *
  * <p>Each digest folds the raw bits of every public field in the order of
@@ -20,7 +20,7 @@ public final class StateDigest {
 	}
 
 	/**
-	 * The server copy: every client field, then the survival and listener
+	 * The server copy: every client field, then the damage and listener
 	 * facts only the server holds. Equal digests are a fast comparison signal,
 	 * not a substitute for {@link ServerPlayerState#rawEquals}.
 	 */

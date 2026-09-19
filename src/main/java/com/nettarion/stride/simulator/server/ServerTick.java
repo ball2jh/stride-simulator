@@ -30,6 +30,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
+import com.nettarion.stride.simulator.SharedFlag;
 
 /**
  * One server tick on the server's copy of the player, cut into the phases the two runners call; the package
@@ -50,7 +51,6 @@ public final class ServerTick {
 	 * {@code Entity.getMaximumFlyingTicks} for ordinary gravity: the connection kicks a floating client after this
 	 * many connection ticks. Levitation and slow falling, which raise it, are not modeled.
 	 */
-	private static final int MAXIMUM_FLOATING_TICKS = 80;
 
 	private final TickAuthority authority = TickAuthority.server();
 
@@ -222,7 +222,7 @@ public final class ServerTick {
 	public Effects tickConnection(final ServerPlayerState server, final SnapshotView world) {
 		begin(server, true);
 		connectionTick(server, world);
-		return this.authority.survival().effects();
+		return this.authority.damage().effects();
 	}
 
 	/**
@@ -264,10 +264,10 @@ public final class ServerTick {
 	 */
 	public void handleStartFallFlying(final ServerPlayerState server) {
 		if (!server.fallFlying && Travel.canGlide(server) && !(server.waterHeight > 0.0)) {
-			server.setSharedFlag(ServerSharedFlags.FALL_FLYING, true);
+			server.setSharedFlag(SharedFlag.FALL_FLYING, true);
 		} else {
-			server.setSharedFlag(ServerSharedFlags.FALL_FLYING, true);
-			server.setSharedFlag(ServerSharedFlags.FALL_FLYING, false);
+			server.setSharedFlag(SharedFlag.FALL_FLYING, true);
+			server.setSharedFlag(SharedFlag.FALL_FLYING, false);
 		}
 	}
 
@@ -323,7 +323,7 @@ public final class ServerTick {
 				return;
 			}
 			world.requireCauldronUpdateClosure(x, y, z);
-			List<DamageEvent> damage = this.authority.survival().dealt();
+			List<DamageEvent> damage = this.authority.damage().dealt();
 			while (this.emittedDamageCount < damage.size()) {
 				output.accept(new DamageWrite(action.getAsInt(), damage.get(this.emittedDamageCount++)));
 			}
@@ -363,7 +363,7 @@ public final class ServerTick {
 		    clientAfter, kind, server, action, world, true, true, clientAfter.fallFlying && !server.fallFlying);
 		levelTick(server);
 		connectionTick(server, world);
-		return transaction.withEffects(this.authority.survival().effects());
+		return transaction.withEffects(this.authority.damage().effects());
 	}
 
 	/**
@@ -426,7 +426,7 @@ public final class ServerTick {
 			handleStartFallFlying(server);
 		}
 		if (kind == MovementPacket.NONE) {
-			return new Unpublished(this.authority.survival().effects());
+			return new Unpublished(this.authority.damage().effects());
 		}
 		if (server.correctionPending) {
 			throw new PendingServerWriteException(RefusalCause.PENDING_WRITE,
@@ -451,7 +451,7 @@ public final class ServerTick {
 
 	/** Write the transaction's hits not yet written, at {@code tick}, and return the first marking one or null. */
 	private HurtCause writeNewHits(final int tick, final Consumer<? super ServerWrite> writes) {
-		List<DamageEvent> dealt = this.authority.survival().dealt();
+		List<DamageEvent> dealt = this.authority.damage().dealt();
 		HurtCause marked = null;
 		for (int index = this.emittedDamageCount; index < dealt.size(); index++) {
 			DamageEvent hit = dealt.get(index);
@@ -487,11 +487,11 @@ public final class ServerTick {
 		server.connectionTickCount++;
 		server.knownMovePacketCount = server.receivedMovePacketCount;
 		if (server.clientIsFloating || server.floatingUnknown) {
-			if (++server.aboveGroundTickCount > MAXIMUM_FLOATING_TICKS) {
+			if (++server.aboveGroundTickCount > ServerPlayerState.MAXIMUM_FLOATING_TICKS) {
 				throw new PendingServerWriteException(RefusalCause.UNMODELED_SESSION_END,
-				    server.clientIsFloating ? "the server kicks the client for floating after " + MAXIMUM_FLOATING_TICKS
+				    server.clientIsFloating ? "the server kicks the client for floating after " + ServerPlayerState.MAXIMUM_FLOATING_TICKS
 				            + " connection ticks"
-				                            : "the floating kick after " + MAXIMUM_FLOATING_TICKS
+				                            : "the floating kick after " + ServerPlayerState.MAXIMUM_FLOATING_TICKS
 				            + " connection ticks cannot be decided: the last accepted packet's"
 				            + " air query reached space the capture does not declare");
 			}

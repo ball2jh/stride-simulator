@@ -2,7 +2,6 @@ package com.nettarion.stride.simulator.world;
 
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.block.LayeredCauldronBlock;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -11,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 
 /**
  * Block records extracted from one Minecraft version independently of any
@@ -219,7 +219,7 @@ public final class BlockStateCatalog {
 
 	/**
 	 * Installs the entity-inside shapes and replaces each cauldron entry's
-	 * behavior with a {@link LayeredCauldronBlock} naming its successor's
+	 * behavior with a a layered-cauldron behavior naming its successor's
 	 * palette index, before the tables are shared.
 	 */
 	void installBehaviors(final PaletteTables tables, final WorldSnapshot snapshot) {
@@ -232,7 +232,7 @@ public final class BlockStateCatalog {
 				if (shape == null) {
 					continue;
 				}
-				tables.sourceInsideShapes[i] = LayeredCauldronBlock.compileShape(shape.boxes());
+				tables.sourceInsideShapes[i] = BlockBehavior.flattenShape(shape.boxes());
 				tables.sourceInsideFull[i] = shape.canonicalFull();
 			}
 		}
@@ -248,7 +248,7 @@ public final class BlockStateCatalog {
 					break;
 				}
 			}
-			tables.behavior[i] = new LayeredCauldronBlock(successor, cauldron.insideBoxes());
+			tables.behavior[i] = BlockBehavior.layeredCauldron(successor, cauldron.insideBoxes());
 		}
 	}
 }
