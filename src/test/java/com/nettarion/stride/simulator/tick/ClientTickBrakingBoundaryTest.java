@@ -1,15 +1,16 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.world.FlatFloorView;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.world.FlatFloorView;
+
 import org.junit.jupiter.api.Test;
 
-/** Permanent exact-kernel evidence for the two discontinuities in dry braking. */
+/** The two discontinuities in dry braking, at their exact double boundaries. */
 final class ClientTickBrakingBoundaryTest {
 	private static final double FLOOR_VELOCITY = -0.0784000015258789;
 	private static final double POSITION_COMMIT_SQUARED = 1.0E-7;
@@ -27,7 +28,7 @@ final class ClientTickBrakingBoundaryTest {
 
 		assertTrue(entries[0] * entries[0] < HORIZONTAL_DEAD_ZONE_SQUARED);
 		assertFalse(entries[1] * entries[1] < HORIZONTAL_DEAD_ZONE_SQUARED,
-		    "the source comparison is strict at the first surviving double");
+		    "vanilla's comparison is strict at the first surviving double");
 		for (int row = 0; row < entries.length; row++) {
 			PlayerState state = stableGrounded();
 			state.deltaMovementZ = entries[row];
@@ -72,9 +73,9 @@ final class ClientTickBrakingBoundaryTest {
 
 		PlayerState dropped = brakingEntry(lowerEntry);
 		PlayerState committed = brakingEntry(upperEntry);
-		ClientTick kernel = new ClientTick();
-		kernel.tick(dropped, SPRINT_FORWARD, FlatFloorView.ordinary(0, -64));
-		kernel.tick(committed, SPRINT_FORWARD, FlatFloorView.ordinary(0, -64));
+		ClientTick simulator = new ClientTick();
+		simulator.tick(dropped, SPRINT_FORWARD, FlatFloorView.ordinary(0, -64));
+		simulator.tick(committed, SPRINT_FORWARD, FlatFloorView.ordinary(0, -64));
 
 		assertEquals(0x3fe0000000000000L, Double.doubleToRawLongBits(dropped.z));
 		assertEquals(0x3fe002972d7d385cL, Double.doubleToRawLongBits(committed.z));

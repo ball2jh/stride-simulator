@@ -1,16 +1,18 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.FluidSample;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
 
 import org.junit.jupiter.api.Test;
 
-class ClientTickLavaTest {
+final class ClientTickLavaTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 	private static final PlayerInput JUMP = new PlayerInput(false, false, false, false, true, false, false, 0.0F, 0.0F);
 
@@ -103,22 +105,7 @@ class ClientTickLavaTest {
 		return state;
 	}
 
-	private static void assertRaw(final double expected, final double actual) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual));
-	}
-
-	private static void assertRaw(final double expected, final double actual, final String message) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual), message);
-	}
-
 	private static final class LavaWorld implements CompleteWorldView {
-		/** Defined, not derived: no block in this fixture suffocates. */
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
-
 		private final double height;
 		private final double flowX;
 		private final boolean bankWall;
@@ -129,10 +116,6 @@ class ClientTickLavaTest {
 			this.bankWall = bankWall;
 		}
 
-		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
 		@Override
 		public boolean hasFluids() {
 			return true;
@@ -154,27 +137,6 @@ class ClientTickLavaTest {
 			if (this.bankWall && minX < 2.0 && maxX > -1.0 && minY < 1.0 && maxY > 0.0 && minZ < 2.0 && maxZ > 1.0) {
 				target.add(-1.0, 0.0, 1.0, 2.0, 1.0, 2.0);
 			}
-		}
-
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 }

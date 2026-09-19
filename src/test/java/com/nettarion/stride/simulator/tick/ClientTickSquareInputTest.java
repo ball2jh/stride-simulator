@@ -1,15 +1,16 @@
 package com.nettarion.stride.simulator.tick;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.world.FlatFloorView;
 import com.nettarion.stride.simulator.world.WorldView;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
-/** Source- and headless-derived exact values for 26.2 square movement input. */
-class ClientTickSquareInputTest {
+/** Exact values, derived from vanilla's expressions, for 26.2 square movement input. */
+final class ClientTickSquareInputTest {
 	private static final int ORDINARY_CARDINAL = 0x3f7a_e148;
 	private static final int ORDINARY_DIAGONAL_COMPONENT = 0x3f35_04f2;
 	private static final int SLOW_COMPONENT = 0x3e96_872c;
@@ -20,13 +21,13 @@ class ClientTickSquareInputTest {
 		PlayerState diagonal = grounded();
 		PlayerState slowCardinal = groundedAfterShift();
 		PlayerState slowDiagonal = groundedAfterShift();
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 		WorldView world = FlatFloorView.ordinary(0, -64);
 
-		kernel.tick(cardinal, action(true, false, false), world);
-		kernel.tick(diagonal, action(true, true, false), world);
-		kernel.tick(slowCardinal, action(true, false, true), world);
-		kernel.tick(slowDiagonal, action(true, true, true), world);
+		simulator.tick(cardinal, action(true, false, false), world);
+		simulator.tick(diagonal, action(true, true, false), world);
+		simulator.tick(slowCardinal, action(true, false, true), world);
+		simulator.tick(slowDiagonal, action(true, true, true), world);
 
 		assertFloatBits(0, cardinal.xxa);
 		assertFloatBits(ORDINARY_CARDINAL, cardinal.zza);

@@ -1,29 +1,34 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.SupportCell;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.FluidSample;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.UnimplementedMechanicException;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.SupportCell;
+import com.nettarion.stride.simulator.world.WorldIdentity;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Consumer;
+
 import org.junit.jupiter.api.Test;
-import com.nettarion.stride.simulator.world.OutsidePolicy;
-import com.nettarion.stride.simulator.world.BlockEntry;
-import com.nettarion.stride.simulator.world.Suffocation;
 
 /** Source-derived regressions for mixed branches that isolated fixtures missed. */
-class ClientTickMixedBranchTest {
+final class ClientTickMixedBranchTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 	private static final PlayerInput FORWARD =
 	    new PlayerInput(true, false, false, false, false, false, false, 0.0F, 0.0F);
@@ -173,19 +178,18 @@ class ClientTickMixedBranchTest {
 
 	@Test
 	void statesVanillasPlayerNeverHoldsRefuseInsteadOfSimulating() {
-		java.util.List<java.util.function.Consumer<PlayerState>> corruptions = java.util.List.of(s
+		List<Consumer<PlayerState>> corruptions = List.of(s
 		    -> s.noJumpDelay = -1,
 		    s
 		    -> s.jumpTriggerTime = -1,
 		    s
 		    -> s.fallFlyTicks = -1,
 		    s -> s.ticksFrozen = 141, s -> s.foodLevel = 21, s -> s.yya = 0.5F, s -> s.inputMoveVectorY = Float.NaN);
-		for (var corruption : corruptions) {
+		for (Consumer<PlayerState> corruption : corruptions) {
 			PlayerState state = stateAt(0.5, 10.0, 0.5);
 			corruption.accept(state);
-			org.junit.jupiter.api.Assertions.assertThrows(
-			    com.nettarion.stride.simulator.UnimplementedMechanicException.class,
-			    () -> new ClientTick().tick(state, IDLE, new AirWorld()));
+			assertThrows(
+			    UnimplementedMechanicException.class, () -> new ClientTick().tick(state, IDLE, new AirWorld()));
 		}
 	}
 
@@ -287,10 +291,10 @@ class ClientTickMixedBranchTest {
 		PlayerState slow = stateAt(0.5, 0.1, 0.5);
 		PlayerState fast = slow.copy();
 		fast.fastLava = true;
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 
-		kernel.tick(slow, IDLE, new FlowingLavaWorld());
-		kernel.tick(fast, IDLE, new FlowingLavaWorld());
+		simulator.tick(slow, IDLE, new FlowingLavaWorld());
+		simulator.tick(fast, IDLE, new FlowingLavaWorld());
 
 		assertTrue(fast.deltaMovementX > slow.deltaMovementX);
 	}
@@ -299,10 +303,10 @@ class ClientTickMixedBranchTest {
 	void fallFlyingIgnoresBlockSpeedFactor() {
 		PlayerState ordinary = fallFlyingState();
 		PlayerState slowed = ordinary.copy();
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 
-		kernel.tick(ordinary, IDLE, new AirWorld());
-		kernel.tick(slowed, IDLE, new AirWorld() {
+		simulator.tick(ordinary, IDLE, new AirWorld());
+		simulator.tick(slowed, IDLE, new AirWorld() {
 			@Override
 			public boolean hasNonDefaultSpeedFactor() {
 				return true;
@@ -326,10 +330,10 @@ class ClientTickMixedBranchTest {
 	void fallFlyingContinuesThroughGlideThroughClimbable() {
 		PlayerState ordinary = fallFlyingState();
 		PlayerState throughVine = ordinary.copy();
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 
-		kernel.tick(ordinary, IDLE, new AirWorld());
-		kernel.tick(throughVine, IDLE, new AirWorld() {
+		simulator.tick(ordinary, IDLE, new AirWorld());
+		simulator.tick(throughVine, IDLE, new AirWorld() {
 			@Override
 			public boolean hasClimbables() {
 				return true;
@@ -361,8 +365,8 @@ class ClientTickMixedBranchTest {
 		Arrays.fill(cells, 0);
 		cells[index(size, 2, 1, 2)] = 1;
 		cells[index(size, 2, 2, 2)] = 2;
-		SnapshotView world = new SnapshotView(new WorldSnapshot(-2, -2, -2, size, size, size,
-		    OutsidePolicy.REFUSING, List.of(air, ladder, trapdoor), cells));
+		SnapshotView world = new SnapshotView(new WorldSnapshot(
+		    -2, -2, -2, size, size, size, OutsidePolicy.REFUSING, List.of(air, ladder, trapdoor), cells));
 		PlayerState state = stateAt(0.5, 0.0, 0.5);
 		state.deltaMovementX = 0.5;
 
@@ -428,60 +432,28 @@ class ClientTickMixedBranchTest {
 		return state;
 	}
 
-	private static void assertRaw(final double expected, final double actual) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual));
-	}
-
 	private static int index(final int size, final int x, final int y, final int z) {
 		return (y * size + z) * size + x;
 	}
 
 	private static BlockEntry block(final int id, final WorldView.Climbability climbability) {
-		return new BlockEntry(id, "test:" + id, 0.6F, 1.0F, 1.0F, false, false,
-		    WorldView.BubbleColumnMode.NONE, climbability != WorldView.Climbability.NONE,
-		    WorldView.CollisionBehavior.ORDINARY, Suffocation.NO, WorldView.InsideEffect.NONE, 0.0F,
-		    false, WorldView.StepOn.NONE, false, climbability, List.of());
+		return new BlockEntry(id, "test:" + id, 0.6F, 1.0F, 1.0F, false, false, WorldView.BubbleColumnMode.NONE,
+		    climbability != WorldView.Climbability.NONE, WorldView.CollisionBehavior.ORDINARY, Suffocation.NO,
+		    WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false, climbability, List.of());
 	}
 
 	private static class AirWorld implements CompleteWorldView {
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
-		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
-		private final long identity = com.nettarion.stride.simulator.world.WorldIdentity.next();
+		private final long identity = WorldIdentity.next();
+
 		@Override
 		public long identity() {
 			return this.identity;
 		}
+
 		@Override
 		public void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
 		    final double maxY, final double maxZ, final CollisionBuffer target) {
 			target.clear();
-		}
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 
@@ -562,7 +534,9 @@ class ClientTickMixedBranchTest {
 
 		@Override
 		public float jumpFactor(final int x, final int y, final int z) {
-			if (x == 1 && y == 0 && z == 0) return this.currentJump;
+			if (x == 1 && y == 0 && z == 0) {
+				return this.currentJump;
+			}
 			return x == 0 && y == -1 && z == 0 ? this.supportJump : 1.0F;
 		}
 	}

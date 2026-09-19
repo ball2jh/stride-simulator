@@ -1,42 +1,35 @@
 package com.nettarion.stride.simulator.geometry;
 
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
-import java.util.List;
-import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.ShapeBox;
-import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
 
 /**
- * The evidence for asking about large shapes per section instead of per world.
+ * Large shapes (fences, and anything reaching sideways out of its cell) are found per section
+ * rather than per world, so the Cursor3D ring and the span-reuse refusal can be skipped where no
+ * such shape is in reach. That is only sound if the ring truly contributes nothing when the
+ * neighborhood is clear, so this test compares the view against a reference implementation: the
+ * full Cursor3D walk with its {@code cursorType} rules, written out here over a plain model of the
+ * world the test built rather than the view under test. Reading shapes back through
+ * {@code collectCollisionBoxes} would be wrong for exactly the reason this test exists: a query
+ * inside one cell legitimately returns boxes owned by its neighbors, so the reference would count
+ * the large shape once per cell it reaches into.
  *
- * <p>validation replaced a palette-wide "does this world contain a shape that leaves its
- * own cell" with "is there one near this query", which lets the Cursor3D ring and
- * the span-reuse refusal be skipped where no such shape is in reach. That is only
- * sound if the ring truly contributes nothing when the neighborhood is clear, and
-	 * `:vanilla-oracle:fuzzCheck` cannot say so: of twenty-nine captures exactly one holds a
- * large shape at all, and a negative control claiming *no* world had one still
- * passed all 58 cases, because that capture's fence is nowhere near the route. The
- * ring path had no differential coverage in this project before this test.
- *
- * <p>The oracle is therefore a reference implementation rather than another implementation —
- * the full Cursor3D walk with its {@code cursorType} rules, written out here and
- * reading a plain model of the world the test built rather than the view under
- * test. Reading shapes back through {@code collectCollisionBoxes} was tried first
- * and is wrong for exactly the reason this test exists: a query inside one cell
- * legitimately returns boxes owned by its neighbors, so the oracle counted the
- * large shape once per cell it reaches into.
- *
- * <p>Placements are swept, not chosen. The interesting ones straddle a 16-cube
- * boundary, since a shape in the section next door is what a per-section answer can
- * get wrong and a per-world answer cannot.
+ * <p>Placements are swept, not chosen. The interesting ones straddle a 16-cube boundary, since a
+ * shape in the section next door is what a per-section answer can get wrong and a per-world answer
+ * cannot.
  */
 final class LargeShapeNeighborhoodTest {
 	private static final int SIZE = 40;
@@ -54,7 +47,7 @@ final class LargeShapeNeighborhoodTest {
 	    {-0.25, 0.0, 0.375, 0.5, 1.0, 0.625},
 	};
 
-	/** The world under test beside the plain model the oracle reads. */
+	/** The world under test beside the plain model the reference walk reads. */
 	private record Fixture(SnapshotView world, int[] cells) {
 		int at(final int x, final int y, final int z) {
 			if (x < 0 || x >= SIZE || y < 0 || y >= SIZE || z < 0 || z >= SIZE) {
@@ -267,13 +260,11 @@ final class LargeShapeNeighborhoodTest {
 			}
 		}
 		cells[(atY * SIZE + atZ) * SIZE + atX] = block;
-		SnapshotView world =
-		    new SnapshotView(new WorldSnapshot(0, 0, 0, SIZE, SIZE, SIZE, OutsidePolicy.SEALED,
-		        List.of(solid(AIR, "air", SHAPES[AIR], Suffocation.NO),
-		            solid(STONE, "stone", SHAPES[STONE], Suffocation.YES),
-		            solid(TALL, "tall", SHAPES[TALL], Suffocation.YES),
-		            solid(WIDE, "wide", SHAPES[WIDE], Suffocation.YES)),
-		        cells));
+		SnapshotView world = new SnapshotView(new WorldSnapshot(0, 0, 0, SIZE, SIZE, SIZE, OutsidePolicy.SEALED,
+		    List.of(solid(AIR, "air", SHAPES[AIR], Suffocation.NO),
+		        solid(STONE, "stone", SHAPES[STONE], Suffocation.YES),
+		        solid(TALL, "tall", SHAPES[TALL], Suffocation.YES), solid(WIDE, "wide", SHAPES[WIDE], Suffocation.YES)),
+		    cells));
 		return new Fixture(world, cells);
 	}
 
@@ -281,11 +272,11 @@ final class LargeShapeNeighborhoodTest {
 	    final int id, final String name, final double[] shape, final Suffocation suffocation) {
 		List<ShapeBox> boxes = new ArrayList<>();
 		for (int at = 0; at < shape.length; at += 6) {
-			boxes.add(new ShapeBox(
-			    shape[at], shape[at + 1], shape[at + 2], shape[at + 3], shape[at + 4], shape[at + 5]));
+			boxes.add(
+			    new ShapeBox(shape[at], shape[at + 1], shape[at + 2], shape[at + 3], shape[at + 4], shape[at + 5]));
 		}
-		return new BlockEntry(id, name, 0.6F, 1.0F, 1.0F, false, false, WorldView.BubbleColumnMode.NONE,
-		    false, WorldView.CollisionBehavior.ORDINARY, suffocation, WorldView.InsideEffect.NONE, 0.0F, false,
+		return new BlockEntry(id, name, 0.6F, 1.0F, 1.0F, false, false, WorldView.BubbleColumnMode.NONE, false,
+		    WorldView.CollisionBehavior.ORDINARY, suffocation, WorldView.InsideEffect.NONE, 0.0F, false,
 		    WorldView.StepOn.NONE, false, WorldView.Climbability.NONE, boxes);
 	}
 }

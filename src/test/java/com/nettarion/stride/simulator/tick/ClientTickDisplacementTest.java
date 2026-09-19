@@ -1,15 +1,17 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.List;
-import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.ShapeBox;
-import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
 
 final class ClientTickDisplacementTest {
 	@Test
@@ -18,7 +20,7 @@ final class ClientTickDisplacementTest {
 		state.placeAt(0.5, 0.0, 0.5);
 		state.onGround = true;
 		state.deltaMovementX = 0.7;
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 
 		Move.resolve(state, 0.1, 0.0, 0.0, false, new SnapshotView(flatWorld()), new Scratch());
 
@@ -41,9 +43,9 @@ final class ClientTickDisplacementTest {
 			}
 		}
 		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		BlockEntry stone = new BlockEntry(
-		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
-		return new WorldSnapshot(origin, originY, origin, size, size, size,
-		    OutsidePolicy.REFUSING, List.of(air, stone), cells);
+		BlockEntry stone =
+		    new BlockEntry(1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
+		return new WorldSnapshot(
+		    origin, originY, origin, size, size, size, OutsidePolicy.REFUSING, List.of(air, stone), cells);
 	}
 }

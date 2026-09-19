@@ -1,13 +1,22 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.geometry.Mth;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.geometry.Mth;
+
 import org.junit.jupiter.api.Test;
 
-/** Exhaustive source-expression evidence for finite float yaw/input support. */
+/**
+ * Characterization suite for the finite float yaw and input domain: which sine-table buckets every
+ * finite yaw can reach, and the largest movement impulse any reachable pair can produce.
+ *
+ * <p>The hex constants are recorded outputs of vanilla's own expressions ({@code Mth.sin}'s table
+ * index arithmetic, {@code Entity.moveRelative}'s rotation, the sprint-jump boost) evaluated over
+ * the whole finite float domain; they were captured once from this code and pin it rather than
+ * being derived by hand. A change here means the table or the input expressions moved.
+ */
 final class ReachableYawTableTest {
 	private static final int TABLE_SIZE = 65_536;
 	private static final int TABLE_MASK = TABLE_SIZE - 1;
@@ -134,10 +143,10 @@ final class ReachableYawTableTest {
 		assertEquals(8023, maximum.sinIndex);
 		assertEquals(24407, maximum.cosIndex);
 
-		float witnessYaw = yawPreimage(maximum.sinIndex + 0.5);
-		assertYawPair(witnessYaw, maximum.sinIndex, maximum.cosIndex);
-		assertEquals(0x1.64201cp-1F, Mth.sin(witnessYaw * DEG_TO_RAD));
-		assertEquals(0x1.6fdb5ep-1F, Mth.cos(witnessYaw * DEG_TO_RAD));
+		float maximumYaw = yawPreimage(maximum.sinIndex + 0.5);
+		assertYawPair(maximumYaw, maximum.sinIndex, maximum.cosIndex);
+		assertEquals(0x1.64201cp-1F, Mth.sin(maximumYaw * DEG_TO_RAD));
+		assertEquals(0x1.6fdb5ep-1F, Mth.cos(maximumYaw * DEG_TO_RAD));
 	}
 
 	@Test

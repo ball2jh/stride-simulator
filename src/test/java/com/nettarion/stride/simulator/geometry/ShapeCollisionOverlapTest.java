@@ -1,13 +1,14 @@
 package com.nettarion.stride.simulator.geometry;
 
-import com.nettarion.stride.simulator.tick.Scratch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.nettarion.stride.simulator.tick.Scratch;
 
 import org.junit.jupiter.api.Test;
 
-class ShapeCollisionOverlapTest {
+final class ShapeCollisionOverlapTest {
 	@Test
-	void resolvingMovementDoesNotProveTheStartingBoxWasFree() {
+	void resolvingMovementDoesNotShowTheStartingBoxWasFree() {
 		CollisionBuffer shapes = new CollisionBuffer();
 		shapes.add(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
 		Scratch scratch = new Scratch();
@@ -16,6 +17,6 @@ class ShapeCollisionOverlapTest {
 		// intersections; like vanilla, it does not repair an existing one.
 		ShapeCollision.collideWithShapes(0.25, 0.5, 0.25, 0.75, 2.3, 0.75, 0.0, -0.1, 0.0, shapes, scratch);
 
-		assertEquals(-0.1, scratch.movedY, "an unchanged request is not evidence that the destination pose fits");
+		assertEquals(-0.1, scratch.movedY, "an unchanged request does not show that the destination pose fits");
 	}
 }

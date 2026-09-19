@@ -3,57 +3,61 @@ package com.nettarion.stride.simulator.geometry;
 import com.nettarion.stride.simulator.world.WorldView;
 
 /**
- * One retained span of collision cells: the boxes a closed cell span owns,
- * unfiltered and grouped by source shape, with the world, version and
- * bounds that make them reusable.
+ * One retained span of collision cells: the boxes a closed cell span owns, unfiltered and grouped
+ * by source shape, with the world, version and bounds that make them reusable.
  *
- * <p>Optimization metadata only: every use rechecks world identity, the span's
- * collision version and its bounds, so a stale retention can only become a
- * miss. It is a property of the world neighborhood rather than of one player,
- * yet each workspace keeps its own: the client's and the server's copies are
- * one packet apart, and sharing a span between them measured a repeatable loss
- * on the captured terrain route, where the two positions straddle cell
- * boundaries and each copy evicts the other's span. A query inside the span
- * reselects the span's groups in place and reads them there; nothing is copied
+ * <p>Optimization metadata only: every use rechecks world identity, the span's collision version
+ * and its bounds, so a stale retention can only become a miss. It is a property of the world
+ * neighborhood rather than of one player, yet each scratch keeps its own: the client's and the
+ * server's copies are one packet apart, and sharing a span between them measured a repeatable loss
+ * where the two positions straddle cell boundaries and each copy evicts the other's span. A query
+ * inside the span reselects the span's groups in place and reads them there; nothing is copied
  * between the span and the resolver.
  *
- * <p>The span is keyed on the {@link WorldView#spanRevision} of its cells
- * when the world gives one: a republished corridor that kept the sections
- * the span read answers the same number, and the span survives the
- * publication. Otherwise the world is named by its
- * {@link WorldView#identity()} number and the span's collision version, and
- * not held: a workspace outlives the corridors it has stepped through, and
- * the span must not keep a superseded one alive. Zero names no world, so a
- * view without an identity is never covered.
+ * <p>The span is keyed on the {@link WorldView#spanRevision} of its cells when the world gives one:
+ * a republished view that kept the sections the span read answers the same number, and the span
+ * survives the publication. Otherwise the world is named by its {@link WorldView#identity()} number
+ * and the span's collision version, and not held: a scratch outlives the views it has stepped
+ * through, and the span must not keep a superseded one alive. Zero names no world, so a view
+ * without an identity is never covered. Not thread-safe; owned by one {@code Scratch}.
  */
 public final class RetainedSpan {
-	/** An empty span that answers nothing until {@code retain} is called. */
-	public RetainedSpan() {}
-
 	final CollisionBuffer boxes = new CollisionBuffer();
+
 	private long world;
+
 	private long version;
+
 	/**
-	 * The span revision retained under, read from the view the span was
-	 * retained in the first time another view asks, and zero until then; a
-	 * workspace steps in one view for a whole plan, and pays for the revision
-	 * only at the publication that follows.
+	 * The span revision retained under, read from the view the span was retained in the first time
+	 * another view asks, and zero until then; a scratch steps in one view for many ticks, and pays
+	 * for the revision only at the publication that follows.
 	 */
 	private long revision;
+
 	private int x0;
+
 	private int y0;
+
 	private int z0;
+
 	private int x1;
+
 	private int y1;
+
 	private int z1;
 
+	/** An empty span that answers nothing until {@link #retain} is called. */
+	public RetainedSpan() {}
+
 	/**
-	 * Whether a well-formed, epsilon-expanded query fits the span.
+	 * Whether a well-formed, epsilon-expanded query box, in blocks, fits the span and the span still
+	 * holds in {@code world}.
 	 *
-	 * <p>Faces are compared before flooring: floor(min) >= low iff min >= low,
-	 * and {@code floor(max) <= high} iff {@code max < high + 1}. The query is required to be
-	 * ordered on each axis, so a hit stands in for the admission a span-building
-	 * miss performs; an inverted or NaN face fails and takes the admitted path.
+	 * <p>Faces are compared before flooring: {@code floor(min) >= low} iff {@code min >= low}, and
+	 * {@code floor(max) <= high} iff {@code max < high + 1}. The query is required to be ordered on
+	 * each axis, so a hit stands in for the admission a span-building miss performs; an inverted or
+	 * NaN face fails and takes the admitted path. Public because world-package tests drive it.
 	 */
 	public boolean covers(final WorldView world, final double minX, final double minY, final double minZ,
 	    final double maxX, final double maxY, final double maxZ) {
@@ -69,11 +73,10 @@ public final class RetainedSpan {
 	}
 
 	/**
-	 * Carry the retention across a publication: record, from the view it was
-	 * retained in, the span revision it stands under. Nothing is read when
-	 * there is no retention, it is already carried, or it is stale in its
-	 * own view. {@link com.nettarion.stride.simulator.tick.Scratch#carry} calls this for a workspace kept across
-	 * a republication.
+	 * Carries the retention across a publication: records, from the view it was retained in, the
+	 * span revision it stands under. Nothing is read when there is no retention, it is already
+	 * carried, or it is stale in its own view. {@code Scratch.carry} calls this for a scratch kept
+	 * across a republication.
 	 */
 	public void carry(final WorldView world) {
 		if (this.revision != 0L || this.world == 0L) {
@@ -91,9 +94,9 @@ public final class RetainedSpan {
 	}
 
 	/**
-	 * Whether the retention stands in {@code world}: by span revision when
-	 * retained under one and the world answers the same over the span, else
-	 * by identity and, unless the world is immutable, its collision version.
+	 * Whether the retention stands in {@code world}: by span revision when retained under one and
+	 * the world answers the same over the span, else by identity and, unless the world is immutable,
+	 * its collision version.
 	 */
 	boolean holds(final WorldView world) {
 		long identity = world.identity();
@@ -109,9 +112,17 @@ public final class RetainedSpan {
 		    && this.revision == world.spanRevision(this.x0, this.y0, this.z0, this.x1, this.y1, this.z1);
 	}
 
+	/**
+	 * Records that {@link #boxes} now holds the closed cell span {@code [x0..x1] x [y0..y1] x [z0..z1]}
+	 * of {@code world}. Public because world-package tests drive it.
+	 */
 	public void retain(
 	    final WorldView world, final int x0, final int y0, final int z0, final int x1, final int y1, final int z1) {
 		this.world = world.identity();
+		// A view that declares movementFactsImmutable() promises its facts never
+		// change for its lifetime, so no version is stored and none is re-read.
+		// A mutable SnapshotView answers false here, and its edits are caught by
+		// collisionVersionIn in holds().
 		this.version = world.movementFactsImmutable() ? 0L : world.collisionVersionIn(x0, y0, z0, x1, y1, z1);
 		this.revision = 0L;
 		this.x0 = x0;

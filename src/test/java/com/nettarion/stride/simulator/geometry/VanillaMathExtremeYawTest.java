@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 /** Executable boundary probe for 26.2's double-scale trigonometric lookup. */
-class VanillaMathExtremeYawTest {
+final class VanillaMathExtremeYawTest {
 	private static final float DEG_TO_RAD = (float) (Math.PI / 180.0);
 	private static final double SIN_SCALE = 10430.378350470453;
 

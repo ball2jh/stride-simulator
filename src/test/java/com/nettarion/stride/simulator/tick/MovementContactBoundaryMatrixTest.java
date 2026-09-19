@@ -1,28 +1,29 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.world.FlatFloorView;
-import com.nettarion.stride.simulator.world.SupportCell;
-import com.nettarion.stride.simulator.world.WorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.FlatFloorView;
+import com.nettarion.stride.simulator.world.SupportCell;
+import com.nettarion.stride.simulator.world.WorldView;
+
 import org.junit.jupiter.api.Test;
 
 /**
- * Exact-kernel contact and control-boundary evidence for advanced movement math.
+ * Contact and control boundaries of the movement math, at their exact doubles.
  *
- * <p>The collision rows mirror the strict face tests in pinned 26.2
- * {@code VoxelShape.collideX}; the bounce rows mirror
- * {@code Entity.restituteMovementAfterCollisions}. Expected numeric results are
- * compared by raw bits. The yaw-rate row is deliberately a producer-owned test
- * constraint: {@link PlayerInput} and the movement kernel admit an arbitrary
- * finite float yaw every tick and impose no actuator slew limit.
+ * <p>The collision rows mirror the strict face tests in vanilla's {@code VoxelShape.collideX}; the
+ * bounce rows mirror {@code Entity.restituteMovementAfterCollisions}. Expected numeric results are
+ * compared by raw bits. The yaw-rate row is a constraint the caller imposes on itself:
+ * {@link PlayerInput} and the tick admit an arbitrary finite float yaw every tick and impose no
+ * slew limit.
  */
 final class MovementContactBoundaryMatrixTest {
 	private static final double COLLISION_EPSILON = 1.0E-7;
@@ -57,7 +58,7 @@ final class MovementContactBoundaryMatrixTest {
 		}
 
 		// These are the adjacent centers whose reconstructed 0.6F-wide box
-		// changes the source's strict perpendicular-overlap decision at [0,1].
+		// changes vanilla's strict perpendicular-overlap decision at [0,1].
 		double leftEdge = Double.longBitsToDouble(0xbfd33332d4a03595L);
 		double rightEdge = Double.longBitsToDouble(0x3ff4ccccb5280d66L);
 		double[][] centers = {{Math.nextDown(leftEdge), leftEdge, Math.nextUp(leftEdge)},
@@ -81,7 +82,6 @@ final class MovementContactBoundaryMatrixTest {
 			for (CeilingTopology topology : CeilingTopology.values()) {
 				PlayerState state = risingState(poses[poseRow], 0.5);
 				state.deltaMovementZ = topology.requestedZ;
-				ClientTick kernel = new ClientTick();
 				Move.resolve(state, 0.0, JUMP_VELOCITY, topology.requestedZ, false, topology.world(), new Scratch());
 
 				double clearance = topology.underside - (double) poses[poseRow].height;
@@ -97,7 +97,6 @@ final class MovementContactBoundaryMatrixTest {
 
 		PlayerState exiting = risingState(PlayerState.Pose.STANDING, 0.5);
 		CeilingWorld lateral = CeilingTopology.LATERAL_FULL.world();
-		ClientTick kernel = new ClientTick();
 		exiting.deltaMovementZ = 0.6;
 		Move.resolve(exiting, 0.0, JUMP_VELOCITY, 0.6, false, lateral, new Scratch());
 		assertRaw(2.0 - (double) PlayerState.Pose.STANDING.height, exiting.y);
@@ -154,13 +153,13 @@ final class MovementContactBoundaryMatrixTest {
 	}
 
 	@Test
-	void brakingCarriesSprintAndPreviousInputEpochsAndBoundsOnlyProducerYaw() {
+	void brakingCarriesSprintAndPreviousInputEpochsAndBoundsOnlyTheCallersYaw() {
 		PlayerInput reverseForward = forwardAt(180.0F);
 		PlayerState ordinaryEpoch = brakingState(PlayerInput.FLAG_FORWARD, 0.98F);
 		PlayerState shiftedEpoch = brakingState(PlayerInput.FLAG_SNEAK, 0.0F);
-		ClientTick kernel = new ClientTick();
-		kernel.tick(ordinaryEpoch, reverseForward, FlatFloorView.ordinary(0, -64));
-		kernel.tick(shiftedEpoch, reverseForward, FlatFloorView.ordinary(0, -64));
+		ClientTick simulator = new ClientTick();
+		simulator.tick(ordinaryEpoch, reverseForward, FlatFloorView.ordinary(0, -64));
+		simulator.tick(shiftedEpoch, reverseForward, FlatFloorView.ordinary(0, -64));
 
 		assertTrue(ordinaryEpoch.sprinting);
 		assertTrue(shiftedEpoch.sprinting, "current forward input retains sprint even during the prior-shift epoch");
@@ -202,7 +201,9 @@ final class MovementContactBoundaryMatrixTest {
 
 	private static int firstNegativeRetainedProjection(final long[][] trajectory) {
 		for (int tick = 0; tick < trajectory.length; tick++) {
-			if (Double.longBitsToDouble(trajectory[tick][1]) < 0.0) return tick;
+			if (Double.longBitsToDouble(trajectory[tick][1]) < 0.0) {
+				return tick;
+			}
 		}
 		return -1;
 	}
@@ -217,10 +218,10 @@ final class MovementContactBoundaryMatrixTest {
 
 	private static long[][] backwardTrajectory(final PlayerState state, final int ticks) {
 		long[][] bits = new long[ticks][3];
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 		PlayerInput backward = new PlayerInput(false, true, false, false, false, false, true, 0.0F, 0.0F);
 		for (int tick = 0; tick < ticks; tick++) {
-			kernel.tick(state, backward, FlatFloorView.ordinary(0, -64));
+			simulator.tick(state, backward, FlatFloorView.ordinary(0, -64));
 			bits[tick][0] = Double.doubleToRawLongBits(state.z);
 			bits[tick][1] = Double.doubleToRawLongBits(state.deltaMovementZ);
 			bits[tick][2] = state.sprinting ? 1L : 0L;
@@ -235,17 +236,17 @@ final class MovementContactBoundaryMatrixTest {
 		}
 	}
 
-	private static long[][] trajectory(final PlayerState state, final float[] yaws, final float producerMaxYawDelta) {
+	private static long[][] trajectory(final PlayerState state, final float[] yaws, final float callerMaxYawDelta) {
 		long[][] bits = new long[yaws.length][3];
 		float previousYaw = state.yRot;
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 		for (int tick = 0; tick < yaws.length; tick++) {
 			float yaw = yaws[tick];
-			if (Float.isFinite(producerMaxYawDelta)) {
-				assertTrue(Math.abs(yaw - previousYaw) <= producerMaxYawDelta,
-				    "this schedule's producer, not the kernel, owns the 45-degree slew");
+			if (Float.isFinite(callerMaxYawDelta)) {
+				assertTrue(Math.abs(yaw - previousYaw) <= callerMaxYawDelta,
+				    "the caller of this schedule, not the tick, owns the 45-degree slew");
 			}
-			kernel.tick(state, forwardAt(yaw), FlatFloorView.ordinary(0, -64));
+			simulator.tick(state, forwardAt(yaw), FlatFloorView.ordinary(0, -64));
 			bits[tick][0] = Double.doubleToRawLongBits(state.z);
 			bits[tick][1] = Double.doubleToRawLongBits(state.deltaMovementZ);
 			bits[tick][2] = state.sprinting ? 1L : 0L;
@@ -325,14 +326,6 @@ final class MovementContactBoundaryMatrixTest {
 		Move.resolve(state, 0.0, requestedY, 0.0, false, world, new Scratch());
 	}
 
-	private static void assertRaw(final double expected, final double actual) {
-		assertRaw(expected, actual, "");
-	}
-
-	private static void assertRaw(final double expected, final double actual, final String context) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual), context);
-	}
-
 	private abstract static class SingleBoxWorld implements CompleteWorldView {
 		private final double minX;
 		private final double minY;
@@ -352,11 +345,6 @@ final class MovementContactBoundaryMatrixTest {
 		}
 
 		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
-
-		@Override
 		public void collectCollisionBoxes(final double queryMinX, final double queryMinY, final double queryMinZ,
 		    final double queryMaxX, final double queryMaxY, final double queryMaxZ, final CollisionBuffer target) {
 			target.clear();
@@ -364,31 +352,6 @@ final class MovementContactBoundaryMatrixTest {
 			    && queryMaxZ > this.minZ && queryMinZ < this.maxZ) {
 				target.add(this.minX, this.minY, this.minZ, this.maxX, this.maxY, this.maxZ);
 			}
-		}
-
-		@Override
-		public boolean suffocatesAt(final int x, final int z, final double minY, final double maxY) {
-			return false;
-		}
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 

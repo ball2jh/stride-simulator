@@ -1,21 +1,22 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.UnimplementedMechanicException;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.FluidEntry;
+import com.nettarion.stride.simulator.world.FluidKind;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.ShapeBox;
-import com.nettarion.stride.simulator.world.BlockEntry;
-import com.nettarion.stride.simulator.world.FluidKind;
-import com.nettarion.stride.simulator.world.FluidEntry;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Vanilla's {@code EntityFluidInteraction.update} answers "no fluid" when any
@@ -72,18 +73,17 @@ final class ClientTickFluidRefreshLoadedChunkTest {
 		WorldSnapshot.Builder builder =
 		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -3, -8, 16, 12, 16)
 		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
-		            BlockEntry.builder(1, "minecraft:stone")
-		                .boxes(ShapeBox.FULL_CUBE)
-		                .build())
-		        .fluidPalette(FluidEntry.EMPTY,
-		            new FluidEntry(
-		                1, "minecraft:water", FluidKind.WATER, 8.0 / 9.0, 0, 0, 0, true));
+		            BlockEntry.builder(1, "minecraft:stone").boxes(ShapeBox.FULL_CUBE).build())
+		        .fluidPalette(
+		            FluidEntry.EMPTY, new FluidEntry(1, "minecraft:water", FluidKind.WATER, 8.0 / 9.0, 0, 0, 0, true));
 		for (int x = -8; x < 8; x++) {
 			for (int z = -8; z < 8; z++) {
 				builder.set(x, -1, z, 1);
-				if (water)
-					for (int y = 0; y < 4; y++)
+				if (water) {
+					for (int y = 0; y < 4; y++) {
 						builder.setFluid(x, y, z, 1);
+					}
+				}
 			}
 		}
 		return SnapshotView.compile(builder.build());
