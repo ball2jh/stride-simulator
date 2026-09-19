@@ -1,41 +1,87 @@
 package com.nettarion.stride.simulator.trace;
 
-import com.nettarion.stride.simulator.*;
 import com.nettarion.stride.simulator.world.BlockStateCatalog;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
 
-/** Portable independently extracted source records accompanying a captured world. */
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+
+/**
+ * Reads and writes the {@code .catalog} companion of a capture: the block facts of one Minecraft
+ * version that the capture's world is verified against.
+ *
+ * <p>The stream is binary ({@code DataOutput} big-endian) and specified in
+ * {@code docs/trace-formats.md}. Its palette section embeds a one-cell world in the text format
+ * of {@link WorldSnapshotCodec}, because that codec already owns the palette row encoding; the
+ * bundled captures depend on this layout.
+ */
 public final class BlockStateCatalogCodec {
+	/**
+	 * The magic string opening every catalog stream. The byte value is fixed by the bundled
+	 * captures and predates the {@code BlockStateCatalog} name.
+	 */
+	static final String MAGIC = "stride-block-source";
+
+	/** The catalog stream format this library reads and writes; no other version is read. */
+	public static final int FORMAT_VERSION = 1;
+
+	/** The most bytes the embedded palette text may occupy: 64 MiB. */
+	private static final int MAX_PALETTE_TEXT_BYTES = 64 * 1024 * 1024;
+
+	/** The most cauldrons, inside shapes, or boxes per shape a stream may declare. */
+	private static final int MAX_LIST_SIZE = 100_000;
+
 	private BlockStateCatalogCodec() {}
+
+	/** Writes {@code catalog} to {@code path}, replacing any existing file. */
 	public static void write(final BlockStateCatalog catalog, final Path path) throws IOException {
 		Files.write(path, bytes(catalog));
 	}
-	/** Canonical source bytes used both for sidecars and trace provenance fingerprints. */
-	public static byte[] bytes(final BlockStateCatalog catalog) throws IOException {
-		var buffer = new ByteArrayOutputStream();
-		var out = new DataOutputStream(buffer);
 
-		out.writeUTF("stride-block-source");
-		out.writeInt(1);
+	/**
+	 * The canonical stream bytes of {@code catalog}. The same bytes are what a
+	 * {@link ScheduledRecording} fingerprints to pin the catalog it was recorded against.
+	 */
+	public static byte[] bytes(final BlockStateCatalog catalog) throws IOException {
+		ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+		DataOutputStream out = new DataOutputStream(buffer);
+
+		out.writeUTF(MAGIC);
+		out.writeInt(FORMAT_VERSION);
 		out.writeUTF(catalog.minecraftVersion());
-		var snapshot = new WorldSnapshot(
-		    0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, catalog.entries(), new int[] {0});
-		var text = new StringWriter();
+		WorldSnapshot snapshot =
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, 0, 0, 0, 1, 1, 1).palette(catalog.entries()).build();
+		StringWriter text = new StringWriter();
 		WorldSnapshotCodec.write(snapshot, text);
-		byte[] bytes = text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-		out.writeInt(bytes.length);
-		out.write(bytes);
+		byte[] paletteText = text.toString().getBytes(StandardCharsets.UTF_8);
+		out.writeInt(paletteText.length);
+		out.write(paletteText);
 		out.writeInt(catalog.cauldrons().size());
-		for (var cauldron : catalog.cauldrons()) {
+		for (BlockStateCatalog.Cauldron cauldron : catalog.cauldrons()) {
 			out.writeInt(cauldron.blockStateId());
 			out.writeInt(cauldron.successorStateId());
 			boxes(out, cauldron.insideBoxes());
 		}
 		out.writeInt(catalog.insideShapes().size());
-		for (var entry : new TreeMap<>(catalog.insideShapes()).entrySet()) {
+		for (Map.Entry<Integer, BlockStateCatalog.InsideShape> entry :
+		    new TreeMap<>(catalog.insideShapes()).entrySet()) {
 			out.writeInt(entry.getKey());
 			out.writeBoolean(entry.getValue().canonicalFull());
 			boxes(out, entry.getValue().boxes());
@@ -43,55 +89,78 @@ public final class BlockStateCatalogCodec {
 		return buffer.toByteArray();
 	}
 
+	/** Reads the catalog at {@code path}; see {@link #read(byte[], String)}. */
 	public static BlockStateCatalog read(final Path path, final String expectedVersion) throws IOException {
 		return read(Files.readAllBytes(path), expectedVersion);
 	}
-	/** Decodes independent source records without any simulator execution. */
+
+	/**
+	 * Decodes one catalog stream. Refuses with an {@link IOException} a stream with another magic
+	 * or format version, a Minecraft version other than {@code expectedVersion}, a duplicate inside
+	 * shape, trailing bytes, or facts the catalog itself rejects.
+	 */
 	public static BlockStateCatalog read(final byte[] encoded, final String expectedVersion) throws IOException {
-		try (var in = new DataInputStream(new ByteArrayInputStream(encoded))) {
-			if (!in.readUTF().equals("stride-block-source") || in.readInt() != 1)
-				throw new IOException("unsupported block source schema");
+		try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded))) {
+			if (!in.readUTF().equals(MAGIC) || in.readInt() != FORMAT_VERSION) {
+				throw new IOException("unsupported block catalog stream");
+			}
 			String version = in.readUTF();
-			if (!version.equals(expectedVersion)) throw new IOException("block source version mismatch");
-			int size = count(in, 64 * 1024 * 1024);
-			byte[] bytes = in.readNBytes(size);
-			if (bytes.length != size) throw new EOFException();
-			var world = WorldSnapshotCodec.read(
-			    new BufferedReader(new StringReader(new String(bytes, java.nio.charset.StandardCharsets.UTF_8))));
-			var cauldrons = new ArrayList<BlockStateCatalog.Cauldron>();
-			for (int n = count(in, 100000); n > 0; n--)
+			if (!version.equals(expectedVersion)) {
+				throw new IOException("block catalog version mismatch");
+			}
+			int size = count(in, MAX_PALETTE_TEXT_BYTES);
+			byte[] paletteText = in.readNBytes(size);
+			if (paletteText.length != size) {
+				throw new EOFException();
+			}
+			WorldSnapshot world = WorldSnapshotCodec.read(
+			    new BufferedReader(new StringReader(new String(paletteText, StandardCharsets.UTF_8))));
+			List<BlockStateCatalog.Cauldron> cauldrons = new ArrayList<>();
+			for (int n = count(in, MAX_LIST_SIZE); n > 0; n--) {
 				cauldrons.add(new BlockStateCatalog.Cauldron(in.readInt(), in.readInt(), boxes(in)));
-			var inside = new HashMap<Integer, BlockStateCatalog.InsideShape>();
-			for (int n = count(in, 100000); n > 0; n--) {
+			}
+			Map<Integer, BlockStateCatalog.InsideShape> inside = new HashMap<>();
+			for (int n = count(in, MAX_LIST_SIZE); n > 0; n--) {
 				int id = in.readInt();
 				boolean full = in.readBoolean();
-				var shape = new BlockStateCatalog.InsideShape(boxes(in), full);
-				if (inside.put(id, shape) != null) throw new IOException("duplicate source shape");
+				BlockStateCatalog.InsideShape shape = new BlockStateCatalog.InsideShape(boxes(in), full);
+				if (inside.put(id, shape) != null) {
+					throw new IOException("duplicate inside shape");
+				}
 			}
-			if (in.read() != -1) throw new IOException("trailing block source data");
+			if (in.read() != -1) {
+				throw new IOException("trailing block catalog data");
+			}
 			return new BlockStateCatalog(version, world.palette(), cauldrons, inside);
 		} catch (IllegalArgumentException invalid) {
-			throw new IOException("invalid source records", invalid);
+			throw new IOException("invalid block catalog", invalid);
 		}
 	}
-	private static List<WorldSnapshot.ShapeBox> boxes(final DataInputStream in) throws IOException {
-		var result = new ArrayList<WorldSnapshot.ShapeBox>();
-		for (int n = count(in, 100000); n > 0; n--)
-			result.add(new WorldSnapshot.ShapeBox(Double.longBitsToDouble(in.readLong()),
+
+	private static List<ShapeBox> boxes(final DataInputStream in) throws IOException {
+		List<ShapeBox> result = new ArrayList<>();
+		for (int n = count(in, MAX_LIST_SIZE); n > 0; n--) {
+			result.add(new ShapeBox(Double.longBitsToDouble(in.readLong()), Double.longBitsToDouble(in.readLong()),
 			    Double.longBitsToDouble(in.readLong()), Double.longBitsToDouble(in.readLong()),
-			    Double.longBitsToDouble(in.readLong()), Double.longBitsToDouble(in.readLong()),
-			    Double.longBitsToDouble(in.readLong())));
+			    Double.longBitsToDouble(in.readLong()), Double.longBitsToDouble(in.readLong())));
+		}
 		return List.copyOf(result);
 	}
-	private static void boxes(final DataOutputStream out, final List<WorldSnapshot.ShapeBox> boxes) throws IOException {
+
+	private static void boxes(final DataOutputStream out, final List<ShapeBox> boxes) throws IOException {
 		out.writeInt(boxes.size());
-		for (var b : boxes)
-			for (double v : new double[] {b.minX(), b.minY(), b.minZ(), b.maxX(), b.maxY(), b.maxZ()})
-				out.writeLong(Double.doubleToRawLongBits(v));
+		for (ShapeBox box : boxes) {
+			for (double value : new double[] {box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ()}) {
+				out.writeLong(Double.doubleToRawLongBits(value));
+			}
+		}
 	}
+
 	private static int count(final DataInputStream in, final int max) throws IOException {
 		int value = in.readInt();
-		if (value < 0 || value > max) throw new IOException("source count out of range");
+		if (value < 0 || value > max) {
+			throw new IOException("block catalog count out of range");
+		}
 		return value;
 	}
 }

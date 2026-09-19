@@ -1,22 +1,26 @@
 package com.nettarion.stride.simulator.server;
 
-import com.nettarion.stride.simulator.HurtMotion;
-import com.nettarion.stride.simulator.HurtMotionWrite;
-import com.nettarion.stride.simulator.ServerWriteTimeline;
-import com.nettarion.stride.simulator.HurtCause;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.HurtCause;
+import com.nettarion.stride.simulator.HurtMotion;
+import com.nettarion.stride.simulator.HurtMotionWrite;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.ServerWriteTimeline;
+
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
+/** A root-package type tested here because its writes come from this package's server tick. */
 final class ServerWriteTimelineTest {
 	@Test
-	void appliesAWriteOnlyAtItsCausalBoundary() {
+	void appliesAWriteOnlyAtItsActionIndex() {
 		PlayerState start = state();
 		HurtMotionWrite write = write(2, start, -0.5);
 		ServerWriteTimeline timeline = ServerWriteTimeline.of(List.of(write));
@@ -38,23 +42,27 @@ final class ServerWriteTimelineTest {
 
 		ServerWriteTimeline rebased = timeline.afterConsuming(2);
 
-		assertEquals(1, rebased.events().size());
-		assertEquals(2, rebased.events().getFirst().actionIndex());
+		assertEquals(1, rebased.writes().size());
+		assertEquals(2, rebased.writes().getFirst().actionIndex());
+		assertSame(timeline, timeline.afterConsuming(0));
+		assertSame(ServerWriteTimeline.EMPTY, timeline.afterConsuming(5));
 	}
 
 	@Test
-	void composesLooseEventsIntoDeliveryBoundaryOrder() {
+	void composesLooseWritesIntoActionOrder() {
 		PlayerState start = state();
 		HurtMotionWrite later = write(4, start, -0.6);
 		HurtMotionWrite earlier = write(1, start, -0.4);
 
 		ServerWriteTimeline timeline = ServerWriteTimeline.of(List.of(later, earlier));
 
-		assertEquals(List.of(earlier, later), timeline.events());
+		assertEquals(List.of(earlier, later), timeline.writes());
+		assertEquals(List.of(earlier, later), timeline.hurtMotion());
+		assertTrue(timeline.damage().isEmpty());
 	}
 
 	@Test
-	void refusesTwoMovementWritesAtOneBoundary() {
+	void refusesTwoVelocityWritesAtOneActionIndex() {
 		PlayerState start = state();
 
 		assertThrows(IllegalArgumentException.class,
@@ -62,7 +70,8 @@ final class ServerWriteTimelineTest {
 	}
 
 	private static HurtMotionWrite write(final int actionIndex, final PlayerState state, final double velocityY) {
-		return new HurtMotionWrite(actionIndex, HurtMotion.decoded(HurtCause.FALL, 0, state, 0.0, velocityY, 0.0));
+		return new HurtMotionWrite(
+		    actionIndex, HurtMotion.decoded(HurtCause.FALL, 0, actionIndex, state, 0.0, velocityY, 0.0));
 	}
 
 	private static PlayerState state() {

@@ -1,47 +1,31 @@
 package com.nettarion.stride.simulator;
 
-import com.nettarion.stride.simulator.server.ServerTick;
-import java.util.Optional;
+import java.util.Objects;
 
 /**
- * Refusal thrown when another server decision precedes the write this step can
- * prove, so the successor is not determined.
+ * Refusal thrown when the server would correct the client's reported movement instead of
+ * accepting it, so the successor is not the one the client computed.
  *
- * <p>The observed decision is an external authority boundary, not movement
- * physics and not a prediction default. When the decision is the listener
- * correcting a movement packet, {@link #correction()} carries the decoded
- * transaction: the packet form, the cause, the target the client reported,
- * the position the server's collision resolved to, the residual it measured,
- * and where it sent the client back to. The {@link #cause()} is always
- * {@link Refusal#CORRECTED_MOVEMENT}.
+ * <p>The correction is a server authority decision, not movement physics, and the simulator does
+ * not predict where a corrected client ends up. {@link #correction()} carries the decoded
+ * transaction: the packet kind, the reason, the target the client reported, the position the
+ * server's collision resolved to, the residual it measured, and where it sent the client back
+ * to. The {@link #cause()} is always {@link RefusalCause#CORRECTED_MOVEMENT}.
  */
-public final class UnpredictedServerWriteException extends IllegalStateException implements Refuses {
+public final class UnpredictedServerWriteException extends RefusalException {
 	private static final long serialVersionUID = 1L;
-	private final transient ServerTick.Corrected correction;
 
-	public UnpredictedServerWriteException(final int tick, final double positionDrift) {
-		super("server movement diverges before fall-damage prediction at tick " + tick + " by " + positionDrift
-		    + " blocks");
-		this.correction = null;
+	private final MovementCorrection correction;
+
+	/** A refusal of the step after action {@code action}, because the server issued {@code correction}. */
+	public UnpredictedServerWriteException(final int action, final MovementCorrection correction) {
+		super(RefusalCause.CORRECTED_MOVEMENT,
+		    "the server corrects the movement packet after input " + action + ": " + correction);
+		this.correction = Objects.requireNonNull(correction, "correction");
 	}
 
-	public UnpredictedServerWriteException(final int tick, final ServerTick.Corrected correction) {
-		super("the server corrects the movement packet after input " + tick + ": " + correction);
-		this.correction = correction;
-	}
-
-	/** The decoded correction that refused this step, when that was the cause. */
-	public Optional<ServerTick.Corrected> correction() {
-		return Optional.ofNullable(this.correction);
-	}
-
-	@Override
-	public Refusal cause() {
-		return Refusal.CORRECTED_MOVEMENT;
-	}
-
-	@Override
-	public synchronized Throwable fillInStackTrace() {
-		return TRACE ? super.fillInStackTrace() : this;
+	/** The decoded correction that refused this step. */
+	public MovementCorrection correction() {
+		return this.correction;
 	}
 }

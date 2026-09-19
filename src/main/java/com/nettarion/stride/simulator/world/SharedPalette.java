@@ -9,40 +9,45 @@ import java.util.Objects;
 
 /**
  * One growing palette that every section a producer captures indexes into,
- * so composing those sections into a corridor copies rows whole instead of
+ * so composing those sections into a snapshot copies rows whole instead of
  * remapping every cell.
  *
  * <p>{@link WorldSnapshot#compose} unions its parts' palettes and remaps each
- * part's cells into the union. That is the whole cost of publishing a corridor
- * when the parts are the pilot's retained sections, most of which it held at
- * the previous publication: millions of cells re-indexed to say what they
- * already said. A producer that interns its entries here instead gives every
- * section the same index for the same state, and the union of parts that
- * share a palette is that palette, so their rows copy with one array copy
- * each and no cell is touched.
+ * part's cells into the union. For parts a producer captured through their
+ * own palettes, most of which it already held at the previous composition,
+ * that is millions of cells re-indexed to say what they already said. A
+ * producer that interns its entries here instead gives every section the same
+ * index for the same state, and the union of parts that share a palette is
+ * that palette, so their rows copy with one array copy each and no cell is
+ * touched.
  *
  * <p>Append-only and never shrinks, so an index handed out stays valid for
- * every section that holds it; the parts a corridor composes therefore never
+ * every section that holds it; the parts a snapshot composes therefore never
  * disagree about what an index means. Indexing more distinct states than a
  * session ever meets is a few thousand entries. Not thread-safe; the producer
  * that captures sections owns it.
  */
 public final class SharedPalette {
-	private final List<WorldSnapshot.BlockEntry> blocks = new ArrayList<>();
-	private final Map<WorldSnapshot.BlockEntry, Integer> blockIndices = new HashMap<>();
-	private final List<WorldSnapshot.FluidEntry> fluids = new ArrayList<>();
-	private final Map<WorldSnapshot.FluidEntry, Integer> fluidIndices = new HashMap<>();
-	private List<WorldSnapshot.BlockEntry> blockView = List.of();
-	private List<WorldSnapshot.FluidEntry> fluidView = List.of();
+	private final List<BlockEntry> blocks = new ArrayList<>();
 
-	/** Creates an empty palette interner for sharing consistent block and fluid identities across snapshots. */
+	private final Map<BlockEntry, Integer> blockIndices = new HashMap<>();
+
+	private final List<FluidEntry> fluids = new ArrayList<>();
+
+	private final Map<FluidEntry, Integer> fluidIndices = new HashMap<>();
+
+	private List<BlockEntry> blockView = List.of();
+
+	private List<FluidEntry> fluidView = List.of();
+
+	/** An empty palette whose fluid palette holds {@link FluidEntry#EMPTY} at index 0. */
 	public SharedPalette() {
-		this.fluidIndices.put(WorldSnapshot.FluidEntry.EMPTY, 0);
-		this.fluids.add(WorldSnapshot.FluidEntry.EMPTY);
+		this.fluidIndices.put(FluidEntry.EMPTY, 0);
+		this.fluids.add(FluidEntry.EMPTY);
 	}
 
 	/** The index of {@code entry}, interned on first sight. */
-	public int index(final WorldSnapshot.BlockEntry entry) {
+	public int index(final BlockEntry entry) {
 		Integer index = this.blockIndices.get(Objects.requireNonNull(entry, "entry"));
 		if (index == null) {
 			index = this.blocks.size();
@@ -54,7 +59,7 @@ public final class SharedPalette {
 	}
 
 	/** The index of {@code entry}, interned on first sight; the empty entry is always zero. */
-	public int fluidIndex(final WorldSnapshot.FluidEntry entry) {
+	public int fluidIndex(final FluidEntry entry) {
 		Integer index = this.fluidIndices.get(Objects.requireNonNull(entry, "entry"));
 		if (index == null) {
 			index = this.fluids.size();
@@ -69,10 +74,12 @@ public final class SharedPalette {
 	 * The palette as it stands, an immutable list every section captured so
 	 * far indexes into. A later intern does not change the entries already
 	 * listed, so a section holding an earlier list still reads its own cells
-	 * correctly from a later one.
+	 * correctly from a later one. The list is copied once after each intern
+	 * and cached until the next, so a producer that interns a section's entries
+	 * and then asks for the list pays one copy per section, not per cell.
 	 */
-	public List<WorldSnapshot.BlockEntry> blocks() {
-		List<WorldSnapshot.BlockEntry> view = this.blockView;
+	public List<BlockEntry> blocks() {
+		List<BlockEntry> view = this.blockView;
 		if (view == null) {
 			view = Collections.unmodifiableList(new ArrayList<>(this.blocks));
 			this.blockView = view;
@@ -81,8 +88,8 @@ public final class SharedPalette {
 	}
 
 	/** The fluid palette as it stands; see {@link #blocks()}. */
-	public List<WorldSnapshot.FluidEntry> fluids() {
-		List<WorldSnapshot.FluidEntry> view = this.fluidView;
+	public List<FluidEntry> fluids() {
+		List<FluidEntry> view = this.fluidView;
 		if (view == null) {
 			view = Collections.unmodifiableList(new ArrayList<>(this.fluids));
 			this.fluidView = view;

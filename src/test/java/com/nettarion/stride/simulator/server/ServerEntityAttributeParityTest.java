@@ -1,35 +1,23 @@
 package com.nettarion.stride.simulator.server;
 
-import com.nettarion.stride.simulator.EntityDataWrite;
-import com.nettarion.stride.simulator.PendingServerWriteException;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.ServerPlayerState;
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.nettarion.stride.simulator.EntityDataWrite;
+import com.nettarion.stride.simulator.PendingServerWriteException;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.RefusalCause;
+import com.nettarion.stride.simulator.ServerPlayerState;
+
+import org.junit.jupiter.api.Test;
 
 /**
- * {@code ServerEntity.sendChanges} sends attributes only inside the block
- * guarded by the tracker's update interval or dirty entity data, and a
- * player's interval is two ticks: a movement-speed attribute that changed
- * with nothing else dirty is sent on the tracker's even ticks only, a parity
- * the state does not carry.
+ * {@code ServerEntity.sendChanges} sends attributes only inside the block guarded by the tracker's update interval
+ * or dirty entity data, and a player's interval is two ticks: a movement-speed attribute that changed with nothing
+ * else dirty is sent on the tracker's even ticks only, a parity the state does not carry.
  */
-class ServerEntityAttributeParityTest {
-	private static ServerPlayerState sampled() {
-		PlayerState client = new PlayerState();
-		client.placeAt(0.5, 0.0, 0.5);
-		client.onGround = true;
-		client.ticksFrozen = 140;
-		client.frostSpeedTicks = 140;
-		ServerPlayerState server = ServerPlayerState.atBoundary(client);
-		server.entityDataDirty = 0;
-		return server;
-	}
-
+final class ServerEntityAttributeParityTest {
 	@Test
 	void anAttributeChangeWithNoDirtyEntityDataRefusesOnTheTrackersParity() {
 		ServerPlayerState server = sampled();
@@ -40,7 +28,7 @@ class ServerEntityAttributeParityTest {
 
 		PendingServerWriteException refusal =
 		    assertThrows(PendingServerWriteException.class, () -> new ServerTick().collectPublications(server));
-		assertTrue(refusal.getMessage().contains("even ticks"), refusal.getMessage());
+		assertEquals(RefusalCause.PENDING_SERVER_RANDOM, refusal.cause());
 	}
 
 	@Test
@@ -68,5 +56,16 @@ class ServerEntityAttributeParityTest {
 		assertNotNull(write);
 		assertEquals(EntityDataWrite.FROZEN | EntityDataWrite.MOVEMENT_SPEED, write.dirty());
 		assertEquals(138, write.frostSpeedTicks());
+	}
+
+	private static ServerPlayerState sampled() {
+		PlayerState client = new PlayerState();
+		client.placeAt(0.5, 0.0, 0.5);
+		client.onGround = true;
+		client.ticksFrozen = 140;
+		client.frostSpeedTicks = 140;
+		ServerPlayerState server = ServerPlayerState.atBoundary(client);
+		server.entityDataDirty = 0;
+		return server;
 	}
 }

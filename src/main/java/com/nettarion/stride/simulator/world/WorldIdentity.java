@@ -5,11 +5,13 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * The process-wide source of {@link WorldView#identity()} numbers.
  *
- * <p>Every view that wants retained proofs keyed to it takes one number here at
- * construction and returns it for its lifetime. Numbers start above zero, since
- * zero is the identity of a view that declines to be proven against, and never
- * repeat within a process, so a proof keyed to a view that no longer exists is a
- * miss rather than a hit against whichever view took its place.
+ * <p>Its one purpose: a {@link WorldView} implementation that wants the
+ * pose-fit cache and retained spans keyed to it calls {@link #next()} once in
+ * its constructor and returns that number from {@code identity()} for its
+ * lifetime. Numbers start above zero, since zero is the identity of a view
+ * that declines to be cached against, and never repeat within a process, so a
+ * cache entry keyed to a view that no longer exists is a miss rather than a
+ * hit against whichever view took its place. Thread-safe.
  */
 public final class WorldIdentity {
 	private static final AtomicLong NEXT = new AtomicLong(1L);

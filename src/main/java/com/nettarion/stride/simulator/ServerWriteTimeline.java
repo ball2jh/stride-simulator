@@ -7,132 +7,146 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * The ordered server writes one plan will cause, each at the input that causes
- * it.
+ * The server writes one action list causes, ordered by the completed action each is applied after.
  *
- * <p>Damage, sampled metadata and attributes, and motion publications share this
- * stream. Equal-boundary events retain insertion order. One boundary can deliver
- * at most one velocity operation; metadata does not consume that slot.
+ * <p>Damage, entity-data, health, position, block and velocity writes share the one stream. Writes at the same action
+ * index keep their insertion order. One action index carries at most one velocity write ({@link HurtMotionWrite} or
+ * {@link ImpulseWrite}); the other kinds do not take that slot. Immutable.
  */
 public final class ServerWriteTimeline {
-	/** The empty timeline of a plan with no predicted authority writes. */
+	/** The timeline of an action list that causes no server write. */
 	public static final ServerWriteTimeline EMPTY = new ServerWriteTimeline(List.of());
 
 	private static final Comparator<ServerWrite> DELIVERY_ORDER = Comparator.comparingInt(ServerWrite::actionIndex);
 
-	private final List<ServerWrite> events;
+	private final List<ServerWrite> writes;
 
-	private ServerWriteTimeline(final List<ServerWrite> events) {
-		this.events = List.copyOf(events);
-		validate(this.events);
+	/** Wraps an already ordered list; {@link #of} is the sorting entry point. */
+	private ServerWriteTimeline(final List<ServerWrite> writes) {
+		this.writes = List.copyOf(writes);
+		validate(this.writes);
 	}
 
-	/** Compose loose events into one timeline ordered by delivery boundary. */
-	public static ServerWriteTimeline of(final List<? extends ServerWrite> events) {
-		Objects.requireNonNull(events, "events");
-		if (events.isEmpty()) return EMPTY;
-		List<ServerWrite> ordered = new ArrayList<>(events);
+	/**
+	 * Order loose writes by action index into one timeline.
+	 *
+	 * @throws IllegalArgumentException when a write is null, has a negative action index, or two velocity writes
+	 *     share an action index
+	 */
+	public static ServerWriteTimeline of(final List<? extends ServerWrite> writes) {
+		Objects.requireNonNull(writes, "writes");
+		if (writes.isEmpty()) {
+			return EMPTY;
+		}
+		List<ServerWrite> ordered = new ArrayList<>(writes);
 		ordered.sort(DELIVERY_ORDER);
 		return new ServerWriteTimeline(ordered);
 	}
 
-	/** Every event in delivery order. */
-	public List<ServerWrite> events() {
-		return this.events;
+	/** Every write in delivery order. */
+	public List<ServerWrite> writes() {
+		return this.writes;
 	}
 
-	/** The hurt-marked velocity publications, in delivery order. */
+	/** The hurt-marked velocity writes, in delivery order. */
 	public List<HurtMotionWrite> hurtMotion() {
-		return this.events.stream()
-		    .filter(HurtMotionWrite.class ::isInstance)
-		    .map(HurtMotionWrite.class ::cast)
-		    .toList();
+		List<HurtMotionWrite> found = new ArrayList<>();
+		for (ServerWrite write : this.writes) {
+			if (write instanceof HurtMotionWrite motion) {
+				found.add(motion);
+			}
+		}
+		return List.copyOf(found);
 	}
 
 	/** The hits the server deals, in delivery order. */
 	public List<DamageWrite> damage() {
-		return this.events.stream().filter(DamageWrite.class ::isInstance).map(DamageWrite.class ::cast).toList();
+		List<DamageWrite> found = new ArrayList<>();
+		for (ServerWrite write : this.writes) {
+			if (write instanceof DamageWrite hit) {
+				found.add(hit);
+			}
+		}
+		return List.copyOf(found);
 	}
 
-	/** Returns whether this timeline contains no server writes. */
+	/** Whether this timeline contains no write. */
 	public boolean isEmpty() {
-		return this.events.isEmpty();
+		return this.writes.isEmpty();
 	}
 
-	/** The hurt-marked publication delivered after this completed action, if any. */
-	public Optional<HurtMotionWrite> hurtMotionAfterAction(final int actionIndex) {
-		for (ServerWrite event : this.events) {
-			if (event.actionIndex() == actionIndex && event instanceof HurtMotionWrite hurt) {
-				return Optional.of(hurt);
-			}
-		}
-		return Optional.empty();
-	}
-
-	/** Whether a velocity write is delivered after this completed action. */
+	/** Whether a velocity write is applied after this completed action. */
 	public boolean velocityWriteAfterAction(final int actionIndex) {
-		return this.events.stream().anyMatch(event -> event.actionIndex() == actionIndex && movesVelocity(event));
+		for (ServerWrite write : this.writes) {
+			if (write.actionIndex() == actionIndex && movesVelocity(write)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
-	private static boolean movesVelocity(final ServerWrite event) {
-		return event instanceof HurtMotionWrite || event instanceof ImpulseWrite;
-	}
-
-	/** Apply every write delivered at this boundary in delivery order. */
+	/** Apply every write whose action index is {@code completedAction}, in delivery order. */
 	public void applyAfterAction(final int completedAction, final PlayerState state) {
-		for (ServerWrite event : this.events) {
-			event.applyAfterAction(completedAction, state);
+		for (ServerWrite write : this.writes) {
+			write.applyAfterAction(completedAction, state);
 		}
 	}
 
-	/** Return this timeline relative to a suffix, dropping delivered events. */
+	/**
+	 * This timeline relative to the actions remaining after the first {@code actions} completed, without the writes
+	 * delivered inside them. Shifting every index by the same amount keeps the order, so nothing is re-sorted.
+	 */
 	public ServerWriteTimeline afterConsuming(final int actions) {
-		if (actions == 0) return this;
-		return of(this.events.stream()
-		        .map(event -> event.afterConsuming(actions))
-		        .flatMap(Optional::stream)
-		        .map(ServerWrite.class ::cast)
-		        .toList());
+		if (actions == 0) {
+			return this;
+		}
+		List<ServerWrite> remaining = new ArrayList<>(this.writes.size());
+		for (ServerWrite write : this.writes) {
+			Optional<ServerWrite> shifted = write.afterConsuming(actions);
+			if (shifted.isPresent()) {
+				remaining.add(shifted.get());
+			}
+		}
+		return remaining.isEmpty() ? EMPTY : new ServerWriteTimeline(remaining);
 	}
 
-	/** Retain only events delivered strictly inside the first {@code ticks}. */
-	public ServerWriteTimeline before(final int ticks) {
-		return of(this.events.stream().filter(event -> event.actionIndex() < ticks).toList());
+	private static boolean movesVelocity(final ServerWrite write) {
+		return write instanceof HurtMotionWrite || write instanceof ImpulseWrite;
 	}
 
-	private static void validate(final List<ServerWrite> events) {
+	private static void validate(final List<ServerWrite> writes) {
 		ServerWrite previous = null;
-		int velocityBoundary = -1;
-		for (ServerWrite event : events) {
-			Objects.requireNonNull(event, "timeline contains null event");
-			if (event.actionIndex() < 0) {
-				throw new IllegalArgumentException("timeline event delivery is out of range");
+		int velocityAction = -1;
+		for (ServerWrite write : writes) {
+			Objects.requireNonNull(write, "timeline contains null write");
+			if (write.actionIndex() < 0) {
+				throw new IllegalArgumentException("timeline write delivery is out of range");
 			}
-			if (previous != null && previous.actionIndex() > event.actionIndex()) {
-				throw new IllegalArgumentException("timeline events are outside delivery order");
+			if (previous != null && previous.actionIndex() > write.actionIndex()) {
+				throw new IllegalArgumentException("timeline writes are outside delivery order");
 			}
-			if (movesVelocity(event)) {
-				if (velocityBoundary == event.actionIndex()) {
-					throw new IllegalArgumentException("one boundary cannot deliver two velocity writes");
+			if (movesVelocity(write)) {
+				if (velocityAction == write.actionIndex()) {
+					throw new IllegalArgumentException("one action index cannot deliver two velocity writes");
 				}
-				velocityBoundary = event.actionIndex();
+				velocityAction = write.actionIndex();
 			}
-			previous = event;
+			previous = write;
 		}
 	}
 
 	@Override
 	public boolean equals(final Object other) {
-		return other instanceof ServerWriteTimeline timeline && this.events.equals(timeline.events);
+		return other instanceof ServerWriteTimeline timeline && this.writes.equals(timeline.writes);
 	}
 
 	@Override
 	public int hashCode() {
-		return this.events.hashCode();
+		return this.writes.hashCode();
 	}
 
 	@Override
 	public String toString() {
-		return "ServerWriteTimeline" + this.events;
+		return "ServerWriteTimeline" + this.writes;
 	}
 }

@@ -2,24 +2,28 @@ package com.nettarion.stride.simulator.tick;
 
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.Set;
 
 /**
- * The pose the tick ends in and the box it resizes to:
- * {@code Player.updatePlayerPose}, the last phase of {@link ClientTick}.
+ * The pose the tick ends in and the box it resizes to: {@code Player.updatePlayerPose}, the last
+ * phase {@link PlayerTick} runs.
  *
- * <p>Vanilla asks for swimming, gliding, crouching, or standing in that
- * order of precedence, probes whether the desired box and its shorter
- * fallbacks fit at the current position, keeps the pose when even the
- * smallest box is blocked, and resizes the box in place when the pose
- * changes. The shift state is the current input on the client, since
- * {@code KeyboardInput.tick} has run, and the synced flag on the server's copy.
+ * <p>Vanilla asks for swimming, gliding, crouching, or standing in that order of precedence,
+ * probes whether the desired box and its shorter fallbacks fit at the current position, keeps the
+ * pose when even the smallest box is blocked, and resizes the box in place when the pose changes.
+ * The shift state is the current input on the client, since {@code KeyboardInput.tick} has run,
+ * and the synced flag on the server's copy.
  *
- * <p>Reads the flags, the current input, position, and the pose-fit
- * certificate. Writes the fields in {@link #WRITES}.
+ * <p>Reads the flags, the current input, position, and the pose-fit cache. Writes the fields in
+ * {@link #WRITES}. Refuses only through the collision query, when the probe reaches an
+ * unclassified block or leaves the admitted coordinate domain.
  */
 public final class PlayerPose {
-	/** Every {@link PlayerState} field this phase may write. */
+	/**
+	 * Every {@link PlayerState} field this phase may write. Public because the root-package
+	 * {@code PhaseWriteSetTest} reads it directly.
+	 */
 	public static final Set<String> WRITES = Set.of("entityDataDirty", "pose", "boundingBoxMinX", "boundingBoxMinY",
 	    "boundingBoxMinZ", "boundingBoxMaxX", "boundingBoxMaxY", "boundingBoxMaxZ");
 
@@ -56,21 +60,23 @@ public final class PlayerPose {
 			actual = (fits & Clearance.FIT_CROUCHING) != 0 ? PlayerState.Pose.CROUCHING : PlayerState.Pose.SWIMMING;
 		} else {
 			// FALL_FLYING and SWIMMING share width and height, so the swimming bit
-			// proves either one.
+			// answers for either one.
 			actual = desired;
 		}
 
 		if (actual != state.pose) {
-			boolean hadActualPoseFit = state.hasPoseFitCertificate(world, actual);
+			// setPose/placeAt clear the pose-fit cache; a fit this probe established
+			// for the new pose is re-recorded after the resize (see Clearance).
+			boolean hadActualPoseFit = state.hasCachedPoseFit(world, actual);
 			state.setPose(actual);
 			state.placeAt(state.x, state.y, state.z);
 			if (hadActualPoseFit) {
-				state.certifyPoseFit(world, actual);
+				state.cachePoseFit(world, actual);
 			}
 		}
 	}
 
-	/** Player.getDesiredPose for the admitted, awake, non-spinning player. */
+	/** {@code Player.getDesiredPose} for the admitted, awake, non-spinning player. */
 	private static PlayerState.Pose getDesiredPose(final PlayerState state, final Scratch scratch) {
 		return state.swimming                                            ? PlayerState.Pose.SWIMMING
 		    : state.fallFlying                                           ? PlayerState.Pose.FALL_FLYING

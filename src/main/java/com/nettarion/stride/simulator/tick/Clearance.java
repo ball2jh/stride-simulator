@@ -1,61 +1,68 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.geometry.CollisionCollector;
 import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.world.WorldView;
 
 /**
- * Whether the player's box, or a pose's box, fits at a position: the
- * collision-free queries the tick asks the world about itself.
+ * Whether the player's box, or a pose's box, fits at a position: the collision-free queries the
+ * tick asks the world about itself.
  *
- * <p>Vanilla's {@code Entity.isFree}, {@code Entity.isAboveGround} with its
- * {@code canFallAtLeast} probe, and {@code Player.updatePlayerPose}'s
- * {@code canPlayerFitWithinBlocksAndEntitiesWhen}, each transcribed. These are
- * queries, not phases: {@link AiStep} asks about the crouch, {@link Travel}
- * about the fluid ledge climb, {@link Move} about the sneaking edge, and
- * {@link PlayerPose} about the pose, and none of them changes movement state
- * beyond the pose-fit certificate {@link PlayerState} retains.
+ * <p>Vanilla's {@code Entity.isFree}, {@code Entity.isAboveGround} with its {@code canFallAtLeast}
+ * probe, and {@code Player.updatePlayerPose}'s {@code canPlayerFitWithinBlocksAndEntitiesWhen},
+ * each transcribed. These are queries, not phases: {@link AiStep} asks about the crouch,
+ * {@link Travel} about the fluid ledge climb, {@link Move} about the sneaking edge, and
+ * {@link PlayerPose} about the pose, and none of them changes movement state beyond the pose-fit
+ * cache {@link PlayerState} retains.
  *
- * <p>Reads position, box, pose, fall distance, and the powder-snow boots
- * flag; writes only the pose-fit certificate.
+ * <p>Reads position, box, pose, fall distance, and the powder-snow boots flag; writes only the
+ * pose-fit cache. Refuses through the collision and fluid queries when they reach an unclassified
+ * block or an unmodeled fluid.
  */
 final class Clearance {
-	private Clearance() {}
-
 	/*
-	 * Pose fit. Every supported player pose is 0.6 wide and differs only in
+	 * Pose fit. Every admitted player pose is 0.6 wide and differs only in
 	 * height -- SWIMMING and FALL_FLYING 0.6, CROUCHING 1.5, STANDING 1.8 -- so
 	 * one query over the tallest box a caller needs gathers every box relevant to
 	 * the shorter ones too, and the per-pose answer is one more comparison
 	 * against each gathered box rather than another walk of the world.
 	 *
-	 * Both callers previously asked twice: the crouch decision probed CROUCHING
-	 * and then the band above it, and updatePlayerPose probed SWIMMING and then
-	 * STANDING. Each is now a single probe, sized to the tallest pose that caller
-	 * can actually consult.
+	 * Pose-fit cache invariant (PlayerState.hasCachedPoseFit): a recorded fit
+	 * names the exact position bits, the pose width, the tallest height shown to
+	 * fit, and the world identity plus collision version (or span revision) it
+	 * was shown in. A fit at one height covers every shorter same-width pose.
+	 * PlayerState clears it on any position, box or pose write, and only this
+	 * class, Move (after a collision that kept the box clear) and PlayerPose
+	 * (after a resize it just checked) record one. Worlds with context-sensitive
+	 * collision are never cached: their answer depends on the player, not just
+	 * the position.
 	 */
 
 	static final int FIT_SWIMMING = 1;
+
 	static final int FIT_CROUCHING = 2;
+
 	static final int FIT_STANDING = 4;
 
+	private Clearance() {}
+
 	/**
-	 * Which same-width poses fit at the player's current position.
+	 * Which same-width poses fit at the player's current position, as a mask of the {@code FIT_*}
+	 * bits.
 	 *
-	 * <p>Returned bits are meaningful only for poses no taller than
-	 * {@code tallest}: a shorter probe cannot say anything about a taller pose,
-	 * and callers ask for exactly the height they will consult.
+	 * <p>Returned bits are meaningful only for poses no taller than {@code tallest}: a shorter probe
+	 * cannot say anything about a taller pose, and callers ask for exactly the height they will
+	 * consult.
 	 */
 	static int fitPoses(
 	    final PlayerState state, final WorldView world, final PlayerState.Pose tallest, final Scratch scratch) {
 		int all = FIT_SWIMMING | FIT_CROUCHING | FIT_STANDING;
-		// A proof at this height is a proof for every shorter same-width pose,
-		// which is exactly what the certificate's height comparison already means.
-		if (!world.hasContextSensitiveCollision() && state.hasPoseFitCertificate(world, tallest)) {
+		// A cached fit at this height covers every shorter same-width pose, which
+		// is exactly what the cache's height comparison already means.
+		if (!world.hasContextSensitiveCollision() && state.hasCachedPoseFit(world, tallest)) {
 			return all;
 		}
 		double halfWidth = tallest.width / 2.0F;
@@ -94,27 +101,29 @@ final class Clearance {
 			}
 		}
 		if (!world.hasContextSensitiveCollision()) {
-			// Certify the tallest pose actually proven, since the certificate
+			// Record the tallest pose actually shown to fit, since the cache
 			// covers every shorter one for free.
 			if (tallest == PlayerState.Pose.STANDING && (fits & FIT_STANDING) != 0) {
-				state.certifyPoseFit(world, PlayerState.Pose.STANDING);
+				state.cachePoseFit(world, PlayerState.Pose.STANDING);
 			} else if (tallest.height >= PlayerState.Pose.CROUCHING.height && (fits & FIT_CROUCHING) != 0) {
-				state.certifyPoseFit(world, PlayerState.Pose.CROUCHING);
+				state.cachePoseFit(world, PlayerState.Pose.CROUCHING);
 			} else if ((fits & FIT_SWIMMING) != 0) {
-				state.certifyPoseFit(world, PlayerState.Pose.SWIMMING);
+				state.cachePoseFit(world, PlayerState.Pose.SWIMMING);
 			}
 		}
 		return fits;
 	}
 
+	/** {@code Entity.isAboveGround}: on the ground, or less than a step above something. */
 	static boolean isAboveGround(
 	    final PlayerState state, final WorldView world, final boolean descending, final Scratch scratch) {
 		return state.onGround
-		    || state.fallDistance < PlayerTick.MAX_UP_STEP
+		    || state.fallDistance < PlayerAttributes.MAX_UP_STEP
 		    && !canFallAtLeast(
-		        state, world, 0.0, 0.0, PlayerTick.MAX_UP_STEP - state.fallDistance, descending, scratch);
+		        state, world, 0.0, 0.0, PlayerAttributes.MAX_UP_STEP - state.fallDistance, descending, scratch);
 	}
 
+	/** {@code Entity.canFallAtLeast}: nothing collides in the slab {@code minHeight} under the moved box. */
 	static boolean canFallAtLeast(final PlayerState state, final WorldView world, final double dx, final double dz,
 	    final double minHeight, final boolean descending, final Scratch scratch) {
 		return CollisionCollector
@@ -124,6 +133,7 @@ final class Clearance {
 		    .isEmpty();
 	}
 
+	/** {@code Entity.isFree}: the moved box meets no collision shape and no fluid cell. */
 	static boolean isFree(final PlayerState state, final double dx, final double dy, final double dz,
 	    final boolean descending, final WorldView world, final Scratch scratch) {
 		double minX = state.boundingBoxMinX + dx;

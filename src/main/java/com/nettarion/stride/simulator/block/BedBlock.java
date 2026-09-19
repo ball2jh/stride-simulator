@@ -1,10 +1,10 @@
 package com.nettarion.stride.simulator.block;
 
 import com.nettarion.stride.simulator.HurtCause;
-import com.nettarion.stride.simulator.server.Survival;
+import com.nettarion.stride.simulator.server.ServerDamage;
 
 /** A bed: {@code BedBlock.fallOn}, half the fall distance at multiplier one. */
-final class BedBlock extends BlockBehaviour {
+final class BedBlock extends BlockBehavior {
 	static final BedBlock INSTANCE = new BedBlock();
 
 	private BedBlock() {}
@@ -15,8 +15,8 @@ final class BedBlock extends BlockBehaviour {
 	}
 
 	@Override
-	public void fallOn(final double fallDistance, final int x, final int y, final int z, final Survival survival) {
-		survival.causeFallDamage(fallDistance * 0.5, 1.0F, HurtCause.FALL);
+	public void fallOn(final double fallDistance, final int x, final int y, final int z, final ServerDamage damage) {
+		damage.causeFallDamage(fallDistance * 0.5, 1.0F, HurtCause.FALL);
 	}
 
 	@Override

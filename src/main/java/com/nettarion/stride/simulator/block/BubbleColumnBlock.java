@@ -1,28 +1,29 @@
 package com.nettarion.stride.simulator.block;
 
+import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.tick.EntityFluidInteraction;
 import com.nettarion.stride.simulator.tick.Scratch;
-import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.world.WorldView;
 
 /**
- * A bubble column: {@code BubbleColumnBlock.entityInside} through
- * {@code Entity.onAboveBubbleColumn} and {@code onInsideBubbleColumn},
- * dragging the player down or pushing it up, harder when nothing sits above
- * the cell.
+ * A bubble column: {@code BubbleColumnBlock.entityInside}, dragging the player down or pushing it up.
  *
- * <p>The body applies immediately at the visit and only when the
- * destination box overlaps the cell ({@code isPrecise}); it is the one body
- * {@code Player.aiStep} skips for a flying player, so that gate is here. The
- * cell above is asked for a collision shape and a fluid, as vanilla asks for
- * the above state's context-free collision shape and fluid state.
+ * <p>Runs {@code Entity.onAboveBubbleColumn} or {@code onInsideBubbleColumn} depending on whether anything sits
+ * above the cell. The hook applies immediately at the visit and only when the destination box overlaps the cell
+ * ({@code isPrecise}); it is the one hook {@code Player.aiStep} skips for a flying player, so that gate is here.
+ * The cell above is asked for a collision shape and a fluid, as vanilla asks for the above state's context-free
+ * collision shape and fluid state.
+ *
+ * <p>Public only because two tick tests hand these constants to a hand-written {@code WorldView}; consumers
+ * obtain them through {@link BlockBehavior#of}.
  */
-public final class BubbleColumnBlock extends BlockBehaviour {
+final class BubbleColumnBlock extends BlockBehavior {
 	/** {@code drag = true}: the column pulls the player down. */
-	public static final BubbleColumnBlock DRAG_DOWN = new BubbleColumnBlock(true);
+	static final BubbleColumnBlock DRAG_DOWN = new BubbleColumnBlock(true);
+
 	/** {@code drag = false}: the column pushes the player up. */
-	public static final BubbleColumnBlock PUSH_UP = new BubbleColumnBlock(false);
+	static final BubbleColumnBlock PUSH_UP = new BubbleColumnBlock(false);
 
 	private final boolean drag;
 
@@ -65,15 +66,13 @@ public final class BubbleColumnBlock extends BlockBehaviour {
 	}
 
 	/**
-	 * {@code stateAbove.getCollisionShape(level, pos).isEmpty()}, negated: the
-	 * context-free overload, {@code CollisionContext.empty()}, whose answer
-	 * for a context-sensitive block is a function of the state alone and not
-	 * of the player the capture recorded the cell's boxes against.
-	 * Scaffolding's {@code isAbove} takes the empty context's default of true
-	 * and the empty context never descends, so it is the stable shape and a
-	 * collision; powder snow's entity branch needs an entity the empty
-	 * context lacks, so it is empty. Every other cell's captured shape is its
-	 * context-free shape.
+	 * {@code stateAbove.getCollisionShape(level, pos).isEmpty()}, negated: the context-free overload.
+	 *
+	 * <p>{@code CollisionContext.empty()}'s answer for a context-sensitive block is a function of the state alone
+	 * and not of the player the capture recorded the cell's boxes against. Scaffolding's {@code isAbove} takes the
+	 * empty context's default of true and the empty context never descends, so it is the stable shape and a
+	 * collision; powder snow's entity branch needs an entity the empty context lacks, so it is empty. Every other
+	 * cell's captured shape is its context-free shape.
 	 */
 	private static boolean collisionShapeAbove(final WorldView world, final int x, final int y, final int z) {
 		return switch (world.collisionBehaviorAt(x, y, z)) {

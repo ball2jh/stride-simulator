@@ -8,19 +8,16 @@ import java.util.Objects;
  * {@code yRotLast}, {@code xRotLast}, {@code lastOnGround},
  * {@code lastHorizontalCollision}, and {@code positionReminder}.
  *
- * <p>{@code sendPosition} runs at the end of every client tick and compares
- * the tick's result against the last <em>published</em> position, rotation,
- * and contacts, not against the previous tick, so two moves that each fall
- * under the threshold still publish their sum. The baselines are therefore
- * part of the composed step, but they are not movement: a standing player's
- * reminder advances every tick while its {@link PlayerState} stays the same.
- * {@link SimulationState} carries a publisher beside the client's copy; a
- * plain {@code PlayerState} has none.
- *
- * <p>Mutable and copyable like {@code PlayerState}, so a search arena can
- * hold one per slot without allocating.
+ * <p>{@code sendPosition} compares each tick's result against the last published position, rotation
+ * and contacts, not the previous tick, so two moves under the threshold still publish their sum. The
+ * baselines are part of the composed step but not movement: a standing player's reminder advances
+ * every tick while its {@link PlayerState} stays the same. Mutable and copyable like
+ * {@code PlayerState}; one thread owns an instance.
  */
 public final class Publisher {
+	/** A publisher with no packet history; prefer {@link #atBoundary}. */
+	public Publisher() {}
+
 	/**
 	 * {@code Mth.square(2.0E-4)}: the strict squared-distance threshold above
 	 * which the publisher sends a position, computed as vanilla computes it.
@@ -31,25 +28,38 @@ public final class Publisher {
 
 	/** X position most recently sent in a position-bearing movement packet. */
 	public double xLast;
+
 	/** Feet height most recently sent in a position-bearing movement packet. */
 	public double yLast;
+
 	/** Z position most recently sent in a position-bearing movement packet. */
 	public double zLast;
+
 	/** Yaw most recently sent in a rotation-bearing movement packet, in degrees. */
 	public float yRotLast;
+
 	/** Pitch most recently sent in a rotation-bearing movement packet, in degrees. */
 	public float xRotLast;
+
 	/** Ground-contact flag in the most recent movement publication. */
 	public boolean lastOnGround;
+
 	/** Horizontal-collision flag in the most recent movement publication. */
 	public boolean lastHorizontalCollision;
+
 	/** Ticks since the last published position; the twentieth forces one. */
 	public int positionReminder;
-	/** LocalPlayer.lastSentInput, flattened to Input's seven bits. */
+
+	/** {@code LocalPlayer.lastSentInput}, flattened to the input packet's seven key bits. */
 	public int lastSentInput;
-	/** LocalPlayer.wasSprinting, independent of the latest metadata from the server. */
+
+	/** {@code LocalPlayer.wasSprinting}, independent of the latest entity data from the server. */
 	public boolean wasSprinting;
+
+	/** Whether the last {@link #publish} found the input keys changed, so an input packet is sent. */
 	boolean inputChanged;
+
+	/** Whether the last {@link #publish} found the sprint flag changed, so a sprint command is sent. */
 	boolean sprintingChanged;
 
 	/**
@@ -154,7 +164,11 @@ public final class Publisher {
 		return MovementPacket.NONE;
 	}
 
-	/** Refuses non-finite baselines or a negative reminder. */
+	/**
+	 * Rejects non-finite baselines or a negative reminder.
+	 *
+	 * @throws IllegalStateException when a baseline is not finite or the reminder is negative
+	 */
 	public void requireValid() {
 		if (!Double.isFinite(this.xLast) || !Double.isFinite(this.yLast) || !Double.isFinite(this.zLast)) {
 			throw new IllegalStateException("published position must be finite");

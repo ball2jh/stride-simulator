@@ -6,7 +6,7 @@ import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.WorldView;
 
 /** A cactus: {@code CactusBlock.entityInside}, one point on every visit of the server's copy. */
-final class CactusBlock extends BlockBehaviour {
+final class CactusBlock extends BlockBehavior {
 	static final CactusBlock INSTANCE = new CactusBlock();
 
 	private CactusBlock() {}
@@ -24,8 +24,10 @@ final class CactusBlock extends BlockBehaviour {
 	@Override
 	void entityInside(final PlayerState state, final int x, final int y, final int z, final boolean isPrecise,
 	    final WorldView world, final Scratch scratch) {
-		if (!scratch.authority.isServer()) return;
-		scratch.authority.survival().hurtServer(HurtCause.CACTUS, 1.0F);
+		if (!scratch.authority.isServer()) {
+			return;
+		}
+		scratch.authority.damage().hurtServer(HurtCause.CACTUS, 1.0F);
 	}
 
 	@Override

@@ -1,19 +1,24 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
+
 import org.junit.jupiter.api.Test;
 
-class ClientTickPowderSnowTest {
+final class ClientTickPowderSnowTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 	private static final PlayerInput FORWARD =
 	    new PlayerInput(true, false, false, false, false, false, false, 0.0F, 0.0F);
@@ -165,22 +170,17 @@ class ClientTickPowderSnowTest {
 	}
 
 	/**
-	 * The pair validation could not settle: identical geometry, identical movement, and
-	 * a tenth of a block of {@code fallDistance} between opposite outcomes.
+	 * Identical geometry, identical movement, and a tenth of a block of {@code fallDistance} between
+	 * opposite outcomes. At or below 2.5 the collision shape is empty, so
+	 * {@code getEntityInsideCollisionShape} substitutes the full cube and the identity
+	 * short-circuit makes the visit unconditional. Above it the shape is the 0.9-high falling box,
+	 * the short-circuit fails, and {@code collidedWithShapeMovingFrom} finds that a box which ended at
+	 * 0.95 never reached it, so nothing applies and the cell is not marked visited.
 	 *
-	 * <p>At or below 2.5 the collision shape is empty, so
-	 * {@code getEntityInsideCollisionShape} substitutes the full cube and the
-	 * identity short-circuit makes the visit unconditional. Above it the shape is
-	 * the 0.9-high falling box, the short-circuit fails, and
-	 * {@code collidedWithShapeMovingFrom} finds that a box which ended at 0.95
-	 * never reached it — so nothing applies and the cell is not marked visited.
-	 * The live client's powder-snow-landing capture lands in exactly this state at tick 29 .
-	 *
-	 * <p>The two runs are the same movement: both resolve collision against an
-	 * empty shape, because {@code move} reads {@code fallDistance} before its own
-	 * {@code checkFallDamage} adds this tick's descent and the traversal reads it
-	 * after. Only the traversal's read crosses the threshold, which is why the
-	 * positions are bit-identical and the effects are not.
+	 * <p>The two runs are the same movement: both resolve collision against an empty shape, because
+	 * {@code move} reads {@code fallDistance} before its own {@code checkFallDamage} adds this tick's
+	 * descent and the traversal reads it after. Only the traversal's read crosses the threshold,
+	 * which is why the positions are bit-identical and the effects are not.
 	 */
 	@Test
 	void fallingShapeLeavesTheTopOfTheCellUntouchedWhereTheCubeWouldNot() {
@@ -227,33 +227,28 @@ class ClientTickPowderSnowTest {
 	}
 
 	private static SnapshotView powderWorld() {
-		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -2, -2, -2, 5, 8, 5)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build(),
-		            WorldSnapshot.BlockEntry.builder(2, "minecraft:powder_snow")
-		                .collisionBehavior(WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS)
-		                .build());
-		for (int z = -2; z <= 2; z++)
+		WorldSnapshot.Builder grid = WorldSnapshot.builder(OutsidePolicy.REFUSING, -2, -2, -2, 5, 8, 5)
+		                                 .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		                                     BlockEntry.builder(1, "minecraft:stone").fullCube().build(),
+		                                     BlockEntry.builder(2, "minecraft:powder_snow")
+		                                         .collisionBehavior(WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS)
+		                                         .build());
+		for (int z = -2; z <= 2; z++) {
 			for (int x = -2; x <= 2; x++) {
 				grid.set(x, -1, z, 1);
 			}
+		}
 		grid.set(0, 0, 0, 2);
-		return new SnapshotView(grid.build());
+		return SnapshotView.compile(grid.build());
 	}
 
 	private static SnapshotView powderWallWorld() {
-		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -2, -2, -2, 5, 8, 5)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build());
+		WorldSnapshot.Builder grid = WorldSnapshot.builder(OutsidePolicy.REFUSING, -2, -2, -2, 5, 8, 5)
+		                                 .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		                                     BlockEntry.builder(1, "minecraft:stone").fullCube().build());
 		for (int y = 1; y <= 3; y++) {
 			grid.set(0, y, 1, 1);
 		}
-		return new SnapshotView(grid.build());
-	}
-
-	private static void assertRaw(final double expected, final double actual) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual));
+		return SnapshotView.compile(grid.build());
 	}
 }

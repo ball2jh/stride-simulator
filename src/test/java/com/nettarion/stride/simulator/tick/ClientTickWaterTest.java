@@ -1,21 +1,24 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.world.FlatFloorView;
-import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.world.SupportCell;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.FluidSample;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.geometry.Mth;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.FlatFloorView;
+import com.nettarion.stride.simulator.world.SupportCell;
+
 import org.junit.jupiter.api.Test;
 
-class ClientTickWaterTest {
+final class ClientTickWaterTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 	private static final PlayerInput SPRINT_FORWARD =
 	    new PlayerInput(true, false, false, false, false, false, true, 0.0F, 0.0F);
@@ -44,22 +47,22 @@ class ClientTickWaterTest {
 		PlayerState state = stateAt(0.5, 0.0, 0.5);
 		state.onGround = false;
 		state.eyeInWater = false;
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 		FluidWorld deepWater = new FluidWorld(FluidSample.Kind.WATER, true, 0.0, Integer.MIN_VALUE);
 
-		kernel.tick(state, SPRINT_FORWARD, deepWater);
+		simulator.tick(state, SPRINT_FORWARD, deepWater);
 
 		assertTrue(state.eyeInWater, "baseTick's fresh scan sees the submerged eye");
 		assertFalse(
 		    state.sprinting, "the same tick still uses the previous dry-eye latch and treats this as shallow water");
 
-		kernel.tick(state, SPRINT_FORWARD, deepWater);
+		simulator.tick(state, SPRINT_FORWARD, deepWater);
 		assertTrue(state.sprinting, "the fresh eye result becomes the previous-eye latch on the following tick");
 	}
 
 	@Test
 	void submergedSourceWaterUsesWaterJumpAndShiftAcceleration() {
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 		FluidWorld deepWater = new FluidWorld(FluidSample.Kind.WATER, true, 0.0, Integer.MIN_VALUE);
 		// Leave space below the box so the shift impulse is not clipped by the
 		// stone floor and replaced by collision restitution before water drag.
@@ -67,8 +70,8 @@ class ClientTickWaterTest {
 		jumping.onGround = false;
 		PlayerState sinking = jumping.copy();
 
-		kernel.tick(jumping, JUMP, deepWater);
-		kernel.tick(sinking, SHIFT, deepWater);
+		simulator.tick(jumping, JUMP, deepWater);
+		simulator.tick(sinking, SHIFT, deepWater);
 
 		assertRaw((double) 0.04F * (double) 0.8F - 0.08 / 16.0, jumping.deltaMovementY);
 		assertRaw((double) -0.04F * (double) 0.8F - 0.08 / 16.0, sinking.deltaMovementY);
@@ -85,14 +88,16 @@ class ClientTickWaterTest {
 		new ClientTick().tick(shallowFirst, IDLE, new FlowWorld((x, y, z, target) -> {
 			if (x == 0 && y == 0 && (z == 0 || z == 1)) {
 				target.set(FluidSample.Kind.WATER, z == 0 ? 0.3 : 1.0, 1.0, 0.0, 0.0, false);
-			} else
+			} else {
 				target.clear();
+			}
 		}));
 		new ClientTick().tick(deepFirst, IDLE, new FlowWorld((x, y, z, target) -> {
 			if (x == 0 && y == 0 && (z == 0 || z == 1)) {
 				target.set(FluidSample.Kind.WATER, z == 0 ? 1.0 : 0.3, 1.0, 0.0, 0.0, false);
-			} else
+			} else {
 				target.clear();
+			}
 		}));
 
 		double shallowHeight = 0.3 - shallowFirst.y;
@@ -142,14 +147,16 @@ class ClientTickWaterTest {
 		new ClientTick().tick(cancelled, IDLE, new FlowWorld((x, y, z, target) -> {
 			if (x == 0 && y == 0 && (z == 0 || z == 1)) {
 				target.set(FluidSample.Kind.WATER, 1.0, z == 0 ? 1.0 : -1.0, 0.0, 0.0, false);
-			} else
+			} else {
 				target.clear();
+			}
 		}));
 		new ClientTick().tick(tinyAverage, IDLE, new FlowWorld((x, y, z, target) -> {
 			if ((x == 0 || x == 1) && (y == 0 || y == 1) && (z == 0 || z == 1)) {
 				target.set(FluidSample.Kind.WATER, 1.0, x == 0 && y == 0 && z == 0 ? 0.004 : 0.0, 0.0, 0.0, false);
-			} else
+			} else {
 				target.clear();
+			}
 		}));
 
 		assertRaw(0.5, cancelled.x);
@@ -220,20 +227,13 @@ class ClientTickWaterTest {
 		return state;
 	}
 
-	private static void assertRaw(final double expected, final double actual) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual));
-	}
-
-	private static void assertRaw(final double expected, final double actual, final String message) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual), message);
-	}
-
 	private static FluidPattern singleCell(final double height, final double flowX) {
 		return (x, y, z, target) -> {
 			if (x == 0 && y == 0 && z == 0) {
 				target.set(FluidSample.Kind.WATER, height, flowX, 0.0, 0.0, false);
-			} else
+			} else {
 				target.clear();
+			}
 		};
 	}
 
@@ -243,23 +243,12 @@ class ClientTickWaterTest {
 	}
 
 	private static final class FlowWorld implements CompleteWorldView {
-		/** Defined, not derived: no block in this fixture suffocates. */
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
-
 		private final FluidPattern fluids;
 
 		private FlowWorld(final FluidPattern fluids) {
 			this.fluids = fluids;
 		}
 
-		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
 		@Override
 		public boolean hasFluids() {
 			return true;
@@ -275,38 +264,10 @@ class ClientTickWaterTest {
 		    final double maxY, final double maxZ, final CollisionBuffer target) {
 			target.clear();
 		}
-
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
-		}
 	}
 
 	/** Full source-water columns from y=0..1, optionally beginning at a Z boundary. */
 	private static class FluidWorld implements CompleteWorldView {
-		/** Defined, not derived: no block in this fixture suffocates. */
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
-
 		private final FluidSample.Kind kind;
 		private final boolean source;
 		private final double flowX;
@@ -320,10 +281,6 @@ class ClientTickWaterTest {
 			this.waterFromZ = waterFromZ;
 		}
 
-		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
 		@Override
 		public boolean hasFluids() {
 			return true;
@@ -355,27 +312,6 @@ class ClientTickWaterTest {
 			if (minY < 0.0 && maxY > -1.0) {
 				target.add(Math.floor(minX), -1.0, Math.floor(minZ), Math.ceil(maxX), 0.0, Math.ceil(maxZ));
 			}
-		}
-
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 

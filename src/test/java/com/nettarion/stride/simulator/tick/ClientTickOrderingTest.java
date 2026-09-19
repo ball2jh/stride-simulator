@@ -1,24 +1,27 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.geometry.Mth;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
+
 import org.junit.jupiter.api.Test;
 
 /**
- * Tick-ordering witnesses: three places where vanilla reads a latch from the
- * start of the tick even though the same tick rewrites it.
+ * Tick ordering: three places where vanilla reads a latch from the start of the tick even though
+ * the same tick rewrites it.
  *
- * <p>Each expectation is derived from the pinned source rather than from the
- * kernel, and the headless twin {@code TickOrderingVanillaTest} in the
- * vanilla-oracle module runs the same fixtures through a real client.
+ * <p>Each expectation is derived from vanilla's source rather than from the simulator.
  *
  * <ul>
  * <li>{@code LivingEntity.aiStep} jumps before {@code travel}; travel then reads
@@ -35,7 +38,7 @@ import org.junit.jupiter.api.Test;
  * latch was false.</li>
  * </ul>
  */
-class ClientTickOrderingTest {
+final class ClientTickOrderingTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 	private static final PlayerInput SPRINT_JUMP =
 	    new PlayerInput(true, false, false, false, true, false, true, 0.0F, 0.0F);
@@ -45,7 +48,7 @@ class ClientTickOrderingTest {
 	void sprintJumpTakeoffUsesTickStartGroundForAccelerationAndDrag() {
 		PlayerState state = grounded(0.5, 0.5);
 
-		new ClientTick().tick(state, SPRINT_JUMP, new SnapshotView(iceFloor()));
+		new ClientTick().tick(state, SPRINT_JUMP, SnapshotView.compile(iceFloor()));
 
 		assertTrue(state.sprinting, "the sprint key starts sprinting before the jump");
 		assertFalse(state.onGround, "the jump left the ground during this tick");
@@ -70,7 +73,7 @@ class ClientTickOrderingTest {
 
 	@Test
 	void glancingCollisionKeepsSprintingWhileHeadOnStopsItOneTickLater() {
-		SnapshotView wall = new SnapshotView(eastWall());
+		SnapshotView wall = SnapshotView.compile(eastWall());
 		PlayerInput glancing = sprintForward(-5.0F);
 		PlayerState alongWall = grounded(0.7, 0.5);
 		PlayerState firstTick = tick(alongWall, glancing, wall);
@@ -93,7 +96,7 @@ class ClientTickOrderingTest {
 
 	@Test
 	void supportSearchRetriesBehindTheMoveOnlyWhenTheNoBlocksLatchWasClear() {
-		SnapshotView ledge = new SnapshotView(ledgeEndingAtZOne());
+		SnapshotView ledge = SnapshotView.compile(ledgeEndingAtZOne());
 		PlayerState retried = grounded(0.5, 1.1);
 		retried.deltaMovementY = GROUNDED_DELTA_Y;
 		retried.deltaMovementZ = 0.4;
@@ -151,24 +154,14 @@ class ClientTickOrderingTest {
 		return state;
 	}
 
-	private static void assertRaw(final double expected, final double actual) {
-		assertRaw(expected, actual, "");
-	}
-
-	private static void assertRaw(final double expected, final double actual, final String message) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual),
-		    () -> message + ": expected " + expected + " but was " + actual);
-	}
-
 	private static WorldSnapshot.Builder region() {
-		return WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -4, -4, 9, 10, 12);
+		return WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -4, -4, 9, 10, 12);
 	}
 
 	/** Ice with its top at y=0 everywhere in the region. */
 	static WorldSnapshot iceFloor() {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "test:air").build();
-		WorldSnapshot.BlockEntry ice =
-		    WorldSnapshot.BlockEntry.builder(1, "test:ice").friction(0.98F).fullCube().build();
+		BlockEntry air = BlockEntry.builder(0, "test:air").build();
+		BlockEntry ice = BlockEntry.builder(1, "test:ice").friction(0.98F).fullCube().build();
 		WorldSnapshot.Builder world = region().palette(air, ice);
 		for (int z = -4; z <= 7; z++) {
 			for (int x = -4; x <= 4; x++) {
@@ -180,8 +173,8 @@ class ClientTickOrderingTest {
 
 	/** Stone floor at y=-1 and a two-high stone wall filling x=1. */
 	static WorldSnapshot eastWall() {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "test:air").build();
-		WorldSnapshot.BlockEntry stone = WorldSnapshot.BlockEntry.builder(1, "test:stone").fullCube().build();
+		BlockEntry air = BlockEntry.builder(0, "test:air").build();
+		BlockEntry stone = BlockEntry.builder(1, "test:stone").fullCube().build();
 		WorldSnapshot.Builder world = region().palette(air, stone);
 		for (int z = -4; z <= 7; z++) {
 			for (int x = -4; x <= 4; x++) {
@@ -195,8 +188,8 @@ class ClientTickOrderingTest {
 
 	/** Stone floor at y=-1 for z at or below 0, so the ledge edge is at z=1.0. */
 	static WorldSnapshot ledgeEndingAtZOne() {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "test:air").build();
-		WorldSnapshot.BlockEntry stone = WorldSnapshot.BlockEntry.builder(1, "test:stone").fullCube().build();
+		BlockEntry air = BlockEntry.builder(0, "test:air").build();
+		BlockEntry stone = BlockEntry.builder(1, "test:stone").fullCube().build();
 		WorldSnapshot.Builder world = region().palette(air, stone);
 		for (int z = -4; z <= 0; z++) {
 			for (int x = -4; x <= 4; x++) {

@@ -14,31 +14,26 @@ import java.util.List;
 /**
  * Reads and writes traces as tab-separated text with raw-bit fields.
  *
- * <p>Text rather than a packed binary format, on purpose. The differential
- * gate's job is not only to answer "do these agree" but to say which tick and
- * which field first disagreed, and a format that {@code diff} and {@code grep}
- * can read makes a failing gate diagnosable without writing a tool first.
- * Floating-point fields are written as raw bits, so exactness is not traded
- * away for that legibility.
+ * <p>Text rather than a packed binary format, on purpose: a consumer comparing two traces wants
+ * to know which tick and which field first disagreed, and a format that {@code diff} and
+ * {@code grep} can read makes that diagnosable without writing a tool first. Floating-point
+ * fields are written as raw hexadecimal bits, so exactness is not traded away for legibility.
+ * The layout is specified in {@code docs/trace-formats.md}.
+ *
+ * <p>Only {@link Trace#FORMAT_VERSION} is read; an older trace is refused with an
+ * {@link IOException} naming its version.
  */
 public final class TraceCodec {
 	private static final String MAGIC = "#stride-trace";
 	private static final String INITIAL_TICK = "init";
 	private static final String NO_ACTION = "-";
-	private static final int ACTION_COLUMNS = 3;
-	/**
-	 * The oldest format still read. Formats 11 and 12 lack the movement
-	 * attribute and the food and sprint attribute fields, which take the
-	 * values every capture of theirs had; anything older is a recapture.
-	 */
-	static final int OLDEST_VERSION = 11;
-	private static final int MOVEMENT_ATTRIBUTE_STATE_VERSION = 12;
-	private static final int FOOD_AND_SPRINT_ATTRIBUTE_VERSION = 13;
-	private static final int MOVEMENT_ATTRIBUTE_STATE_FIELDS = 2;
-	private static final int FOOD_AND_SPRINT_ATTRIBUTE_FIELDS = 2;
+	private static final String[] ACTION_COLUMNS = {"tick", "input", "yRot", "xRot"};
+	/** The bits a packed input may carry: seven keys, {@link PlayerInput#ofPacked}. */
+	private static final int PACKED_INPUT_MASK = 0x7f;
 
 	private TraceCodec() {}
 
+	/** Writes {@code trace} to {@code path} as UTF-8, replacing any existing file. */
 	public static void write(final Trace trace, final Path path) throws IOException {
 		try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
 			write(trace, writer);
@@ -52,14 +47,14 @@ public final class TraceCodec {
 		writer.write("#producer\t" + header.producer().name() + "\n");
 		writer.write("#scenario\t" + header.scenario() + "\n");
 
-		StringBuilder columns = new StringBuilder("tick\tinput\tyRot\txRot");
+		StringBuilder columns = new StringBuilder(String.join("\t", ACTION_COLUMNS));
 		for (StateField field : StateField.ALL) {
 			columns.append('\t').append(field.name());
 		}
 		writer.write(columns.append('\n').toString());
 
 		writer.write(INITIAL_TICK);
-		for (int i = 0; i < ACTION_COLUMNS; i++) {
+		for (int i = 1; i < ACTION_COLUMNS.length; i++) {
 			writer.write('\t');
 			writer.write(NO_ACTION);
 		}
@@ -86,33 +81,6 @@ public final class TraceCodec {
 		writer.write('\n');
 	}
 
-	/**
-	 * One current-format state row: every {@link StateField#ALL} cell, tab
-	 * separated, in the same encoding trace rows use. Other fixture kinds
-	 * embed a state this way so one codec owns the raw-bit text form.
-	 */
-	public static String encodeState(final StateVector state) {
-		StringBuilder row = new StringBuilder();
-		for (StateField field : StateField.ALL) {
-			if (!row.isEmpty()) {
-				row.append('\t');
-			}
-			row.append(encode(field, state));
-		}
-		return row.toString();
-	}
-
-	/** Reads a row written by {@link #encodeState}; {@code cells[offset]} is the first field. */
-	public static StateVector decodeState(final String[] cells, final int offset) throws IOException {
-		if (cells.length - offset != StateField.ALL.length) {
-			throw new IOException(
-			    "state row has " + (cells.length - offset) + " cells, expected " + StateField.ALL.length);
-		}
-		String[] shifted = new String[ACTION_COLUMNS + 1 + StateField.ALL.length];
-		System.arraycopy(cells, offset, shifted, ACTION_COLUMNS + 1, StateField.ALL.length);
-		return decodeState(shifted, StateField.ALL.length, Trace.FORMAT_VERSION);
-	}
-
 	private static String encode(final StateField field, final StateVector state) {
 		long bits = state.rawBits(field);
 		return switch (field.kind()) {
@@ -125,34 +93,37 @@ public final class TraceCodec {
 		};
 	}
 
+	/**
+	 * Reads the trace at {@code path}. Refuses with an {@link IOException} a file that is not a
+	 * trace, carries another format version, names unknown columns, or has a malformed row.
+	 */
 	public static Trace read(final Path path) throws IOException {
 		try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
 			return read(reader);
 		}
 	}
 
-	/** The format version a written trace carries, without decoding it. */
+	/** The format version the trace at {@code path} carries, read from its first line only. */
 	public static int formatVersion(final Path path) throws IOException {
 		try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-			String magicLine = requireLine(reader, "magic");
-			String[] magic = magicLine.split("\t", -1);
-			if (magic.length != 2 || !MAGIC.equals(magic[0])) {
-				throw new IOException("not a stride trace: " + magicLine);
-			}
-			return Integer.parseInt(magic[1]);
+			return formatVersion(reader);
 		}
 	}
 
-	static Trace read(final BufferedReader reader) throws IOException {
+	private static int formatVersion(final BufferedReader reader) throws IOException {
 		String magicLine = requireLine(reader, "magic");
 		String[] magic = magicLine.split("\t", -1);
 		if (magic.length != 2 || !MAGIC.equals(magic[0])) {
 			throw new IOException("not a stride trace: " + magicLine);
 		}
-		int version = Integer.parseInt(magic[1]);
-		if (version < OLDEST_VERSION || version > Trace.FORMAT_VERSION) {
-			throw new IOException("trace format version " + version + ", expected " + OLDEST_VERSION + " through "
-			    + Trace.FORMAT_VERSION + "; older traces must be recaptured");
+		return parseInt(magic[1], "format version");
+	}
+
+	static Trace read(final BufferedReader reader) throws IOException {
+		int version = formatVersion(reader);
+		if (version != Trace.FORMAT_VERSION) {
+			throw new IOException("trace format version is " + version + "; this library reads version "
+			    + Trace.FORMAT_VERSION + " only");
 		}
 
 		String minecraftVersion = headerValue(reader, "#minecraft");
@@ -165,21 +136,23 @@ public final class TraceCodec {
 		String scenario = headerValue(reader, "#scenario");
 
 		String[] columns = requireLine(reader, "column header").split("\t", -1);
-		int stateFieldCount = StateField.ALL.length
-		    - (version < FOOD_AND_SPRINT_ATTRIBUTE_VERSION ? FOOD_AND_SPRINT_ATTRIBUTE_FIELDS : 0)
-		    - (version < MOVEMENT_ATTRIBUTE_STATE_VERSION ? MOVEMENT_ATTRIBUTE_STATE_FIELDS : 0);
-		if (columns.length != ACTION_COLUMNS + 1 + stateFieldCount) {
-			throw new IOException(
-			    "trace has " + columns.length + " columns, expected " + (ACTION_COLUMNS + 1 + stateFieldCount));
+		int expectedColumns = ACTION_COLUMNS.length + StateField.ALL.size();
+		if (columns.length != expectedColumns) {
+			throw new IOException("trace has " + columns.length + " columns, expected " + expectedColumns);
 		}
-		for (int i = 0; i < stateFieldCount; i++) {
-			String expected = StateField.ALL[i].name();
-			String actual = columns[ACTION_COLUMNS + 1 + i];
+		for (int i = 0; i < ACTION_COLUMNS.length; i++) {
+			if (!ACTION_COLUMNS[i].equals(columns[i])) {
+				throw new IOException("column " + i + " is " + columns[i] + ", expected " + ACTION_COLUMNS[i]);
+			}
+		}
+		for (int i = 0; i < StateField.ALL.size(); i++) {
+			String expected = StateField.ALL.get(i).name();
+			String actual = columns[ACTION_COLUMNS.length + i];
 			if (!expected.equals(actual)) {
-				// A same-version trace whose vector differs means one producer
-				// was built against a different audited field set. Silently
-				// tolerating it would compare misaligned columns.
-				throw new IOException("column " + i + " is " + actual + ", expected " + expected);
+				// A same-version trace whose vector differs means one producer was built against
+				// a different field set. Silently tolerating it would compare misaligned columns.
+				throw new IOException(
+				    "column " + (ACTION_COLUMNS.length + i) + " is " + actual + ", expected " + expected);
 			}
 		}
 
@@ -198,26 +171,28 @@ public final class TraceCodec {
 				if (initialState != null) {
 					throw new IOException("trace has more than one initial state row");
 				}
-				initialState = decodeState(cells, stateFieldCount, version);
+				initialState = decodeState(cells);
 			} else {
-				int tick = Integer.parseInt(cells[0]);
+				int tick = parseInt(cells[0], "tick");
 				PlayerInput action = decodeAction(cells[1], cells[2], cells[3]);
-				StateVector state = decodeState(cells, stateFieldCount, version);
-				entries.add(new Trace.TraceEntry(tick, action, state));
+				entries.add(new Trace.TraceEntry(tick, action, decodeState(cells)));
 			}
 		}
 		if (initialState == null) {
 			throw new IOException("trace has no initial state row");
 		}
-		return new Trace(new Trace.TraceHeader(producer, minecraftVersion, scenario, version), initialState, entries);
+		return new Trace(new Trace.TraceHeader(producer, minecraftVersion, scenario), initialState, entries);
 	}
 
-	/** Decodes the three packed-action cells used by trace-derived TSV formats. */
+	/**
+	 * Decodes the three action cells of a trace row: the packed input as two hex digits and the
+	 * yaw and pitch as eight hex digits of raw float bits each. Refuses unknown input bits.
+	 */
 	public static PlayerInput decodeAction(final String input, final String yRot, final String xRot)
 	    throws IOException {
 		try {
 			int flags = Integer.parseUnsignedInt(input, 16);
-			if ((flags & ~0x7f) != 0) {
+			if ((flags & ~PACKED_INPUT_MASK) != 0) {
 				throw new IOException("packed action contains unknown input bits: " + input);
 			}
 			return PlayerInput.ofPacked((byte) flags, Float.intBitsToFloat(Integer.parseUnsignedInt(yRot, 16)),
@@ -227,16 +202,15 @@ public final class TraceCodec {
 		}
 	}
 
-	private static StateVector decodeState(final String[] cells, final int stateFieldCount, final int version)
-	    throws IOException {
+	private static StateVector decodeState(final String[] cells) throws IOException {
 		StateVector.Builder builder = StateVector.builder();
-		for (int i = 0; i < stateFieldCount; i++) {
-			StateField field = StateField.ALL[i];
-			String cell = cells[ACTION_COLUMNS + 1 + i];
+		for (int i = 0; i < StateField.ALL.size(); i++) {
+			StateField field = StateField.ALL.get(i);
+			String cell = cells[ACTION_COLUMNS.length + i];
 			try {
 				switch (field.kind()) {
 					case DOUBLE, FLOAT, BYTE_FLAGS -> builder.setRawBits(field, Long.parseUnsignedLong(cell, 16), null);
-					case BOOLEAN -> builder.setRawBits(field, "1".equals(cell) ? 1L : 0L, null);
+					case BOOLEAN -> builder.setRawBits(field, parseBoolean(cell, field), null);
 					case INT -> builder.setRawBits(field, Integer.parseInt(cell), null);
 					case ENUM -> {
 						int separator = cell.indexOf(':');
@@ -251,17 +225,23 @@ public final class TraceCodec {
 				throw new IOException("cannot parse " + field + " cell " + cell, malformed);
 			}
 		}
-		if (version < MOVEMENT_ATTRIBUTE_STATE_VERSION) {
-			builder.set(StateField.MOVEMENT_SPEED_MULTIPLIER, 1.0).set(StateField.JUMP_BOOST_POWER, 0.0F);
-		}
-		if (version < FOOD_AND_SPRINT_ATTRIBUTE_VERSION) {
-			// Earlier admission required enough food and coupled the sprint attribute to bit 3.
-			builder
-			    .set(StateField.SPRINTING_ATTRIBUTE,
-			        "1".equals(cells[ACTION_COLUMNS + 1 + StateField.SPRINTING.ordinal()]))
-			    .set(StateField.FOOD_LEVEL, 20);
-		}
 		return builder.build();
+	}
+
+	private static long parseBoolean(final String cell, final StateField field) throws IOException {
+		return switch (cell) {
+			case "0" -> 0L;
+			case "1" -> 1L;
+			default -> throw new IOException(field + " cell must be 0 or 1: " + cell);
+		};
+	}
+
+	private static int parseInt(final String value, final String what) throws IOException {
+		try {
+			return Integer.parseInt(value);
+		} catch (NumberFormatException malformed) {
+			throw new IOException("invalid trace " + what + ": " + value, malformed);
+		}
 	}
 
 	private static String headerValue(final BufferedReader reader, final String key) throws IOException {

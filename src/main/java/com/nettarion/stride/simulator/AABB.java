@@ -1,11 +1,18 @@
 package com.nettarion.stride.simulator;
 
-import com.nettarion.stride.simulator.tick.Scratch;
-
-/** An axis-aligned box, matching vanilla's {@code AABB} semantics. */
+/**
+ * An axis-aligned box in blocks, matching vanilla's {@code AABB} semantics.
+ *
+ * @param minX the minimum X face
+ * @param minY the minimum Y face
+ * @param minZ the minimum Z face
+ * @param maxX the maximum X face
+ * @param maxY the maximum Y face
+ * @param maxZ the maximum Z face
+ */
 public record AABB(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
 	/**
-	 * Player boxes are built from a width and height centred on x/z and resting
+	 * Player boxes are built from a width and height centered on x/z and resting
 	 * on y, exactly as {@code EntityDimensions.makeBoundingBox} does.
 	 */
 	public static AABB around(final double x, final double y, final double z, final float width, final float height) {
@@ -73,60 +80,60 @@ public record AABB(double minX, double minY, double minZ, double maxX, double ma
 		return dz < -1.0E-7 && clipPoint(1.0, dz, dx, dy, maxZ, minX, maxX, minY, maxY, fromZ, fromX, fromY) >= 0.0;
 	}
 
-	/** {@code AABB.clip} against one unit cell, writing the hit point to scratch. */
+	/** {@code AABB.clip} against one unit cell, writing the hit point to {@code hit[0..2]}. */
 	public static boolean clipCell(final int cellX, final int cellY, final int cellZ, final double fromX,
 	    final double fromY, final double fromZ, final double toX, final double toY, final double toZ,
-	    final Scratch scratch) {
+	    final double[] hit) {
 		double dx = toX - fromX;
 		double dy = toY - fromY;
 		double dz = toZ - fromZ;
 		double scale = 1.0;
-		boolean hit = false;
+		boolean clipped = false;
 		if (dx > 1.0E-7) {
 			double s = clipPoint(scale, dx, dy, dz, cellX, cellY, cellY + 1, cellZ, cellZ + 1, fromX, fromY, fromZ);
 			if (s >= 0.0) {
 				scale = s;
-				hit = true;
+				clipped = true;
 			}
 		} else if (dx < -1.0E-7) {
 			double s = clipPoint(scale, dx, dy, dz, cellX + 1, cellY, cellY + 1, cellZ, cellZ + 1, fromX, fromY, fromZ);
 			if (s >= 0.0) {
 				scale = s;
-				hit = true;
+				clipped = true;
 			}
 		}
 		if (dy > 1.0E-7) {
 			double s = clipPoint(scale, dy, dz, dx, cellY, cellZ, cellZ + 1, cellX, cellX + 1, fromY, fromZ, fromX);
 			if (s >= 0.0) {
 				scale = s;
-				hit = true;
+				clipped = true;
 			}
 		} else if (dy < -1.0E-7) {
 			double s = clipPoint(scale, dy, dz, dx, cellY + 1, cellZ, cellZ + 1, cellX, cellX + 1, fromY, fromZ, fromX);
 			if (s >= 0.0) {
 				scale = s;
-				hit = true;
+				clipped = true;
 			}
 		}
 		if (dz > 1.0E-7) {
 			double s = clipPoint(scale, dz, dx, dy, cellZ, cellX, cellX + 1, cellY, cellY + 1, fromZ, fromX, fromY);
 			if (s >= 0.0) {
 				scale = s;
-				hit = true;
+				clipped = true;
 			}
 		} else if (dz < -1.0E-7) {
 			double s = clipPoint(scale, dz, dx, dy, cellZ + 1, cellX, cellX + 1, cellY, cellY + 1, fromZ, fromX, fromY);
 			if (s >= 0.0) {
 				scale = s;
-				hit = true;
+				clipped = true;
 			}
 		}
-		if (!hit) {
+		if (!clipped) {
 			return false;
 		}
-		scratch.clipHitX = fromX + scale * dx;
-		scratch.clipHitY = fromY + scale * dy;
-		scratch.clipHitZ = fromZ + scale * dz;
+		hit[0] = fromX + scale * dx;
+		hit[1] = fromY + scale * dy;
+		hit[2] = fromZ + scale * dz;
 		return true;
 	}
 

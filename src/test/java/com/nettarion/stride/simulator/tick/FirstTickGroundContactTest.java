@@ -1,13 +1,18 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.geometry.Mth;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.ShapeProvenance;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
 
 import org.junit.jupiter.api.Test;
 
@@ -22,14 +27,14 @@ import org.junit.jupiter.api.Test;
  * false for it: the ground and the supporting block are lost for one tick and
  * regained on the next, in vanilla as here.
  */
-class FirstTickGroundContactTest {
+final class FirstTickGroundContactTest {
 	/** {@code (0.0 - 0.08) * 0.98F}: the vertical velocity a standing player retains. */
 	private static final double STANDING_VELOCITY = (0.0 - 0.08) * 0.98F;
 
 	@Test
 	void theRetainedStandingVelocityHoldsGroundOnTheFirstTick() {
-		for (WorldSnapshot.CollisionShapeIdentity identity : WorldSnapshot.CollisionShapeIdentity.values()) {
-			if (identity == WorldSnapshot.CollisionShapeIdentity.LEGACY_GEOMETRY) {
+		for (ShapeProvenance identity : ShapeProvenance.values()) {
+			if (identity == ShapeProvenance.LEGACY_GEOMETRY) {
 				continue;
 			}
 			SnapshotView world = floor(identity);
@@ -47,19 +52,19 @@ class FirstTickGroundContactTest {
 
 	@Test
 	void zeroRetainedVelocityRequestsNoMoveAndLosesGroundForOneTick() {
-		SnapshotView world = floor(WorldSnapshot.CollisionShapeIdentity.GENERAL);
+		SnapshotView world = floor(ShapeProvenance.GENERAL);
 		PlayerState state = standing(0.5, 0.0, 0.5);
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 		Scratch scratch = new Scratch();
 
-		kernel.tick(state, PlayerInput.idle(0.0F, 0.0F), world, scratch);
+		simulator.tick(state, PlayerInput.idle(0.0F, 0.0F), world, scratch);
 		assertEquals(0.0, state.y, "a zero request moves nothing");
 		assertFalse(state.verticalCollision, "0.0 != 0.0 is false in Entity.move");
 		assertFalse(state.onGround, "setOnGroundWithMovement(verticalCollisionBelow) clears it");
 		assertFalse(state.mainSupportingBlockPosPresent);
 		assertEquals(STANDING_VELOCITY, state.deltaMovementY, "gravity is added after the move");
 
-		kernel.tick(state, PlayerInput.idle(0.0F, 0.0F), world, scratch);
+		simulator.tick(state, PlayerInput.idle(0.0F, 0.0F), world, scratch);
 		assertEquals(0.0, state.y);
 		assertTrue(state.verticalCollision, "the retained descent now collides");
 		assertTrue(state.onGround);
@@ -77,16 +82,14 @@ class FirstTickGroundContactTest {
 		return state;
 	}
 
-	private static SnapshotView floor(final WorldSnapshot.CollisionShapeIdentity identity) {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build();
-		WorldSnapshot.BlockEntry.Builder stone =
-		    WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").boxes(WorldSnapshot.ShapeBox.FULL_CUBE);
-		if (identity == WorldSnapshot.CollisionShapeIdentity.CANONICAL_FULL) {
+	private static SnapshotView floor(final ShapeProvenance identity) {
+		BlockEntry air = BlockEntry.builder(0, "minecraft:air").build();
+		BlockEntry.Builder stone = BlockEntry.builder(1, "minecraft:stone").boxes(ShapeBox.FULL_CUBE);
+		if (identity == ShapeProvenance.CANONICAL_FULL) {
 			stone.fullCube();
 		}
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -8, -3, -8, 16, 12, 16)
-		        .palette(air, stone.build());
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -3, -8, 16, 12, 16).palette(air, stone.build());
 		for (int x = -8; x < 8; x++) {
 			for (int z = -8; z < 8; z++) {
 				builder.set(x, -1, z, 1);

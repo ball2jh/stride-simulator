@@ -2,92 +2,84 @@ package com.nettarion.stride.simulator;
 
 import com.nettarion.stride.simulator.server.ServerTick;
 import com.nettarion.stride.simulator.world.SnapshotView;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
- * One deterministic client-and-server transition under the constructed publication schedule.
+ * Advances a client-and-server {@link SimulationState} by one action under the composed schedule.
  *
- * <p>One {@code MinecraftServer} tick runs, in the pinned source's order, its packet drain, its
- * entity tracker sample, its level tick and its connection tick. The composed step cuts that
- * cycle after the drain: it finishes the server tick that drained the previous action's packets
- * (sample, level tick, doTick), runs the client tick and drains its packets, and delivers the
- * sample and the doTick's health packet before the next client tick. Where the client applies a
- * server write is a measured transport fact, not a source one: the live captures
- * (live-pose-echo-boundary, live-elytra-glide, live-powder-snow-crossing) show a write the
- * packet drain caused applied before client tick N + 2 and one the doTick caused before N + 3,
- * which is exactly this cut. Delivery can change the client trajectory. Unknown timing refuses
- * rather than assuming identity writes. An instance retains scratch and is not thread-safe. See
- * the package's admission contract.
+ * <p>Vanilla's server tick runs, in order, its packet drain, its entity tracker sample, its level tick
+ * and its connection tick. One step here cuts that cycle after the drain: it finishes the server tick
+ * that drained the previous action's packets (tracker sample, level tick, connection tick), runs the
+ * client tick and drains the packets it publishes, and delivers the sample's entity data, any pending
+ * hurt velocity and the connection tick's health packet to the client before its next tick. The
+ * bundled captures record writes arriving at exactly that phase; a delivery can change the client's
+ * trajectory. When the timing of a write is unknown the step refuses rather than assuming.
+ *
+ * <p>An instance retains scratch and is not thread-safe; use one per stepping thread. A refusal
+ * produces no successor and leaves the input boundary untouched.
  */
 public final class Simulator {
-	private final Transition transition = new Transition();
-	private final ServerTick serverTick = this.transition.serverTick();
-	/** The packet form the last {@link #step} published. */
-	private MovementPacket published = MovementPacket.NONE;
+	private final Transition transition;
 
-	/**
-	 * A simulator for a consumer on a free-running connection, which observes
-	 * the server's publications rather than taking the constructed schedule's
-	 * word for them: the composed step records the entity-data echo but does
-	 * not apply it to the client copy, since the echo's arrival tick is not the
-	 * schedule's there, and the hurt-marked velocity write carries the server's
-	 * velocity as of its delivery, after the client's next movement packet was
-	 * drained, which is what a free-running server was observed to send. Health
-	 * publications are delivered as scheduled.
-	 */
-	public static Simulator observed() {
-		Simulator simulator = new Simulator();
-		simulator.serverTick.deliverEchoes(false);
-		simulator.serverTick.hurtMotionAfterNextPacket(true);
-		return simulator;
+	private final ServerTick serverTick;
+
+	/** A simulator under the composed schedule; see {@link #forObservedConnection()} for the alternative. */
+	public Simulator() {
+		this(new Transition());
+	}
+
+	private Simulator(final Transition transition) {
+		this.transition = transition;
+		this.serverTick = transition.serverTick();
 	}
 
 	/**
-	 * Carry this simulator's retained proofs across a publication: its
-	 * workspaces' collision spans, and the pose-fit certificate of each state
-	 * in {@code kept}, are keyed on the revisions of the sections they read in
-	 * {@code leaving}, so a view that kept those sections honours them. A
-	 * pilot calls this with the view it is leaving and the boundaries it
-	 * keeps; nothing is read for a proof that is absent, already carried, or
-	 * stale in its own view. A proof never carried is a miss elsewhere.
+	 * A simulator for a consumer on a live connection that observes the server's writes itself. The
+	 * composed step records the entity-data echo but does not apply it to the client copy, since the
+	 * echo's real arrival tick is not the composed schedule's, and the hurt velocity write carries the
+	 * server's velocity as of its delivery, after the client's next movement packet was drained, which
+	 * is what a live server was observed to send. Health writes are delivered as scheduled.
+	 */
+	public static Simulator forObservedConnection() {
+		return new Simulator(new Transition(ServerTick.observed()));
+	}
+
+	/**
+	 * Carries this simulator's collision caches across a world republication.
+	 *
+	 * <p>The workspaces' retained collision spans and the pose-fit cache of each state in {@code kept}
+	 * are keyed on the revisions of the sections they read in {@code leaving}; after this call a view
+	 * that kept those sections honors them. Nothing is read for a cache entry that is absent, already
+	 * carried, or stale in its own view. Call this with the view being left and the boundaries that
+	 * will be stepped in its successor; an entry never carried is simply a cache miss there.
 	 */
 	public void carry(final SnapshotView leaving, final Iterable<SimulationState> kept) {
 		Objects.requireNonNull(leaving, "leaving");
 		this.transition.carry(leaving);
 		for (SimulationState state : kept) {
-			state.client.carryPoseFitCertificate(leaving);
-			state.server.carryPoseFitCertificate(leaving);
+			state.client.carryPoseFitCache(leaving);
+			state.server.carryPoseFitCache(leaving);
 		}
 	}
 
-	/** The composed state at a packet boundary whose server copy is constructed from {@code server}. */
-	public SimulationState start(final PlayerState client, final PlayerState server) {
-		return new SimulationState(client, ServerPlayerState.atBoundary(server), 0);
-	}
-
-	/** The composed state at a packet boundary whose server facts were observed. */
-	public SimulationState start(final PlayerState client, final ServerPlayerState server) {
-		return new SimulationState(client, server, 0);
-	}
-
 	/**
-     * Advances one action under the fixed publication schedule without mutating the input boundary.
-     *
-     * <p>The returned writes and confirmations describe this transition's publications. A refusal
-     * produces no successor. Use a separate simulator instance on each stepping thread.
-     *
-     * @param before complete causal boundary, including the publisher and pending server effect
-     * @param action input buttons and view rotation for this action
-     * @param world compiled world facts for every query the transition can reach
-     * @return successor boundary and the writes/confirmations observed during its transition
-     * @throws UnimplementedMechanicException if required mechanics or world facts are unsupported
-     * @throws PendingServerWriteException if supplied state cannot determine a server outcome
-     * @throws UnpredictedServerWriteException if the server would correct the reported movement
-     */
+	 * Advances one action under the composed schedule without mutating the input boundary.
+	 *
+	 * <p>The returned writes and confirmations describe this step's deliveries. A refusal produces no
+	 * successor.
+	 *
+	 * @param before the boundary to step, including its publisher and any pending hurt
+	 * @param action the keys held and the view rotation for this tick
+	 * @param world compiled world facts for every query the step can reach
+	 * @return the successor boundary with the writes and confirmations of its transition
+	 * @throws UnimplementedMechanicException when the step leaves the admitted domain
+	 * @throws PendingServerWriteException when the supplied state does not determine a server outcome
+	 * @throws UnpredictedServerWriteException when the server would correct the reported movement
+	 */
 	public Step advance(final SimulationState before, final PlayerInput action, final SnapshotView world) {
 		Objects.requireNonNull(before, "before");
 		Objects.requireNonNull(action, "action");
@@ -96,25 +88,24 @@ public final class Simulator {
 		PlayerState client = before.clientState();
 		Publisher publisher = before.publisher();
 		ServerPlayerState server = before.serverState();
-		FreezeWrite freezeBeforeAction = new FreezeWrite(client.ticksFrozen, client.frostSpeedTicks);
+		FreezeSnapshot freezeBeforeAction = new FreezeSnapshot(client.ticksFrozen, client.frostSpeedTicks);
 		List<ServerWrite> writes = new ArrayList<>(1);
 		List<Confirmation> confirmations = new ArrayList<>(4);
 		HurtCause pendingAfter = recordStep(client, publisher, server, action, world, before.pendingHurt,
-		    before.completedActions, writes, writes::add, confirmations);
+		    before.completedActions, writes, confirmations);
 		SimulationState after =
 		    SimulationState.takeOwnership(client, publisher, server, before.completedActions + 1, pendingAfter);
 		return new Step(after, confirmations, writes, freezeBeforeAction);
 	}
 
-	/** Records one transition into the caller's accumulated evidence, on owned states. */
+	/** Runs one transition on owned states and appends its writes and confirmations to the caller's lists. */
 	private HurtCause recordStep(final PlayerState client, final Publisher publisher, final ServerPlayerState server,
 	    final PlayerInput action, final SnapshotView world, final HurtCause pendingHurt, final int completedActions,
-	    final List<ServerWrite> writes, final Consumer<ServerWrite> appendWrite,
-	    final List<Confirmation> confirmations) {
-		FreezeWrite.requireValid(server.ticksFrozen, server.frostSpeedTicks);
+	    final List<ServerWrite> writes, final List<Confirmation> confirmations) {
+		FreezeSnapshot.requireValid(server.ticksFrozen, server.frostSpeedTicks);
 		int firstWrite = writes.size();
 		HurtCause pendingAfter =
-		    step(client, publisher, server, action, world, pendingHurt, completedActions, appendWrite);
+		    step(client, publisher, server, action, world, pendingHurt, completedActions, writes::add);
 
 		for (int index = firstWrite; index < writes.size(); index++) {
 			if (writes.get(index) instanceof HurtMotionWrite motion) {
@@ -136,48 +127,20 @@ public final class Simulator {
 	}
 
 	/**
-	 * The composed step on caller-owned states, advanced in place. The server
-	 * tick that drained the previous action's packets continues: its entity
-	 * tracker samples the copy (nothing touched it since the drain, so the
-	 * sample taken here is {@code ChunkMap.tick}'s), its level tick counts the
-	 * hit cooldown down, its connection tick runs {@code doTick}. Then the
-	 * client ticks and its publisher selects the movement packet, and the next
-	 * server tick's packet processor drains the input, sprint, glide and
-	 * movement packets. Finally the sample's entity data, the hurt-marked
-	 * velocity of a hit the sample saw, and the doTick's health packet are
-	 * delivered to the client, before its next tick: the transport phase the
-	 * live captures measure. Every hit the server dealt is emitted at this
-	 * input. This is the one transition; {@link #advance} records it and the
-	 * planner's search expands it, and neither has a rule of its own.
+	 * The composed transition on caller-owned states, advanced in place; see the class description for
+	 * the phase order. A hit marks the server copy once and the next tracker sample publishes its
+	 * velocity, so a hit dealt during this step is returned as the hurt the next step delivers.
 	 *
-	 * <p>A hit marks the copy once; the next sample sees the mark and
-	 * publishes the velocity. A hit the previous action's packet drain or the
-	 * server tick after it dealt is therefore the pending hit this step
-	 * publishes.
-	 *
-	 * @param pendingHurt the hit the previous action caused, in its packet
-	 *     drain or the server tick that followed, whose write this step
-	 *     publishes, or {@code null}
-	 * @param server the server's copy, admitted through
-	 *     {@link ServerPlayerState#requireValid()} at its boundary; the step
-	 *     trusts what it produced itself and does not re-derive that admission
-	 * @param completedActions inputs applied before this one; names the write
-	 *     and the cause in refusals
-	 * @param writes receives the server writes delivered during this step:
-	 *     each hit as a {@link DamageWrite}, the sampled metadata, the
-	 *     published {@link HurtMotionWrite}, and the health packet
-	 * @return the hit this action caused that marked, in the server tick
-	 *     finished here or in its own packet drain, whose write the next step
-	 *     publishes, or {@code null}. While a write pends the server is inside
-	 *     the hit cooldown, and a second hit there does not mark again.
-	 * @throws UnimplementedMechanicException when the client tick leaves the
-	 *     modelled slice or the server reaches a body it does not model
-	 * @throws UnpredictedServerWriteException when the server would correct
-	 *     the client instead of accepting the reported movement
-	 * @throws PendingServerWriteException when the server's outcome is not
-	 *     determined by the composed state
+	 * @param pendingHurt the hit the previous action caused, whose velocity write this step delivers,
+	 *     or {@code null}
+	 * @param completedActions actions applied before this one; names writes and causes
+	 * @param writes receives every server write delivered during this step
+	 * @return the hit this action caused whose write the next step delivers, or {@code null}
+	 * @throws UnimplementedMechanicException when the step leaves the admitted domain
+	 * @throws UnpredictedServerWriteException when the server would correct the reported movement
+	 * @throws PendingServerWriteException when the composed state does not determine a server outcome
 	 */
-	public HurtCause step(final PlayerState client, final Publisher publisher, final ServerPlayerState server,
+	HurtCause step(final PlayerState client, final Publisher publisher, final ServerPlayerState server,
 	    final PlayerInput input, final SnapshotView world, final HurtCause pendingHurt, final int completedActions,
 	    final Consumer<? super ServerWrite> writes) {
 		// The server tick that drained the previous action's packets continues:
@@ -186,12 +149,12 @@ public final class Simulator {
 		this.transition.publishServerEntity(server);
 		HurtCause tickHurt = this.serverTick.advanceTicks(server, world, completedActions, writes);
 		// The client tick, its packets, and the next server tick's packet drain.
-		this.published = this.transition.tickClient(client, publisher, input, world);
+		MovementPacket published = this.transition.tickClient(client, publisher, input, world);
 		HurtCause packetHurt =
-		    this.serverTick.handlePackets(client, this.published, server, input, world, publisher.inputChanged,
+		    this.serverTick.handlePackets(client, published, server, input, world, publisher.inputChanged,
 		        publisher.sprintingChanged, this.transition.startedFallFlying(), completedActions, writes);
 		// Transport: the sample and the health packet reach the client before its
-		// next tick, the phase the live captures measure.
+		// next tick, the phase the bundled captures record.
 		this.serverTick.deliverPublications(
 		    completedActions, client, server, pendingHurt, completedActions - 1, writes);
 		// hurtMarked is one flag the next sample clears; a hit inside the
@@ -199,59 +162,31 @@ public final class Simulator {
 		return tickHurt != null ? tickHurt : packetHurt;
 	}
 
-	/** Run one fixed action sequence from a constructed boundary. */
-	public Run run(final PlayerState clientStart, final PlayerState serverStart, final List<PlayerInput> actions,
-	    final SnapshotView world) {
-		return run(clientStart, ServerPlayerState.atBoundary(serverStart), Optional.empty(), actions, world);
-	}
-
-	/** Run one fixed action sequence from observed server facts. */
-	public Run run(final PlayerState clientStart, final ServerPlayerState serverStart, final List<PlayerInput> actions,
-	    final SnapshotView world) {
-		return run(clientStart, serverStart, Optional.empty(), actions, world);
-	}
-
-	/** {@link #run(PlayerState, ServerPlayerState, Optional, List, SnapshotView)} from a constructed boundary. */
-	public Run run(final PlayerState clientStart, final PlayerState serverStart, final Optional<HurtCause> pendingHurt,
-	    final List<PlayerInput> actions, final SnapshotView world) {
-		return run(clientStart, ServerPlayerState.atBoundary(serverStart), pendingHurt, actions, world);
-	}
-
 	/**
-	 * Run from an explicit composed boundary.
+	 * Runs a fixed action sequence from {@code start}, which carries any pending hurt.
 	 *
-	 * <p>A present {@code pendingHurt} means the preceding action already
-	 * caused that hit, whose velocity publication belongs after the first
-	 * action in {@code actions}. This fact is part of the causal boundary;
-	 * reconstructing from the two movement states alone would erase it.
+	 * <p>The run owns one working client, publisher and server for the whole sequence and records the
+	 * same writes and confirmations {@link #advance} would, without building intermediate boundaries.
 	 *
-	 * <p>The run owns one working client, publisher, and server for the sequence.
-	 * It records the same transition and evidence as {@link #advance} without
-	 * constructing immutable intermediate states.
+	 * @throws PendingServerWriteException when the sequence ends while a hurt write is still pending
 	 */
-	public Run run(final PlayerState clientStart, final ServerPlayerState serverStart,
-	    final Optional<HurtCause> pendingHurt, final List<PlayerInput> actions, final SnapshotView world) {
-		Objects.requireNonNull(clientStart, "clientStart");
-		Objects.requireNonNull(serverStart, "serverStart");
+	public Run run(final SimulationState start, final List<PlayerInput> actions, final SnapshotView world) {
+		Objects.requireNonNull(start, "start");
 		Objects.requireNonNull(actions, "actions");
 		Objects.requireNonNull(world, "world");
 		if (actions.stream().anyMatch(Objects::isNull)) {
 			throw new NullPointerException("actions contains null");
 		}
-		Objects.requireNonNull(pendingHurt, "pendingHurt");
-		PlayerState client = clientStart.copy();
-		Publisher publisher = Publisher.atBoundary(clientStart);
-		ServerPlayerState server = serverStart.copy();
-		// Admission once at the boundary; every later value is this run's own.
-		server.requireValid();
-		HurtCause pending = pendingHurt.orElse(null);
+		PlayerState client = start.clientState();
+		Publisher publisher = start.publisher();
+		ServerPlayerState server = start.serverState();
+		HurtCause pending = start.pendingHurt;
 		List<Confirmation> confirmations = new ArrayList<>();
 		List<ServerWrite> events = new ArrayList<>();
-		Consumer<ServerWrite> appendWrite = events::add;
-		int completedActions = 0;
+		int completedActions = start.completedActions;
 		for (PlayerInput action : actions) {
-			pending = recordStep(client, publisher, server, action, world, pending, completedActions++, events,
-			    appendWrite, confirmations);
+			pending = recordStep(
+			    client, publisher, server, action, world, pending, completedActions++, events, confirmations);
 		}
 		if (pending != null) {
 			throw new PendingServerWriteException();
@@ -260,12 +195,26 @@ public final class Simulator {
 	}
 
 	/**
-	 * One scheduled composite successor, the publication evidence caused by
-	 * its action, and the server writes it delivered. All lists are immutable
-	 * copies.
+	 * {@link #run(SimulationState, List, SnapshotView)} from a boundary with nothing pending, built as
+	 * {@code new SimulationState(client, server, 0)}.
+	 */
+	public Run run(final PlayerState client, final ServerPlayerState server, final List<PlayerInput> actions,
+	    final SnapshotView world) {
+		return run(new SimulationState(client, server, 0), actions, world);
+	}
+
+	/**
+	 * One successor boundary with the confirmations its action caused and the server writes delivered
+	 * during its transition. Both lists are immutable copies.
+	 *
+	 * @param state the successor boundary
+	 * @param confirmations values the server published during this step, for matching observed packets
+	 * @param writes every server write delivered during this step, in delivery order
+	 * @param freezeBeforeAction the client's freeze values before the client tick
 	 */
 	public record Step(SimulationState state, List<Confirmation> confirmations, List<ServerWrite> writes,
-	    FreezeWrite freezeBeforeAction) {
+	    FreezeSnapshot freezeBeforeAction) {
+		/** Copies both lists and rejects null components. */
 		public Step {
 			Objects.requireNonNull(state, "state");
 			confirmations = List.copyOf(confirmations);
@@ -273,44 +222,71 @@ public final class Simulator {
 			Objects.requireNonNull(freezeBeforeAction, "freezeBeforeAction");
 		}
 
-		/** The hurt-marked velocity writes among {@link #writes()}. */
+		/** The hurt velocity writes among {@link #writes()}. */
 		public List<HurtMotionWrite> hurtMotion() {
-			return this.writes.stream()
-			    .filter(HurtMotionWrite.class ::isInstance)
-			    .map(HurtMotionWrite.class ::cast)
-			    .toList();
+			List<HurtMotionWrite> result = new ArrayList<>();
+			for (ServerWrite write : this.writes) {
+				if (write instanceof HurtMotionWrite motion) {
+					result.add(motion);
+				}
+			}
+			return List.copyOf(result);
 		}
 
 		/** The hits among {@link #writes()}, in the order the server dealt them. */
 		public List<DamageWrite> damage() {
-			return this.writes.stream().filter(DamageWrite.class ::isInstance).map(DamageWrite.class ::cast).toList();
+			List<DamageWrite> result = new ArrayList<>();
+			for (ServerWrite write : this.writes) {
+				if (write instanceof DamageWrite hit) {
+					result.add(hit);
+				}
+			}
+			return List.copyOf(result);
 		}
 
-		/** Whether the server dealt a hit, without allocating a filtered event list. */
+		/** Whether the server dealt a hit, without allocating a filtered list. */
 		public boolean hasDamage() {
 			for (int index = 0; index < this.writes.size(); index++) {
-				if (this.writes.get(index) instanceof DamageWrite) return true;
+				if (this.writes.get(index) instanceof DamageWrite) {
+					return true;
+				}
 			}
 			return false;
 		}
 	}
 
-	/** Server-owned freeze values projected before one client movement tick. */
-	public record FreezeWrite(int ticksFrozen, int frostSpeedTicks) {
-		public FreezeWrite {
+	/**
+	 * The client's freeze values before one client tick, in ticks.
+	 *
+	 * @param ticksFrozen the client's {@code Entity.ticksFrozen}
+	 * @param frostSpeedTicks the client's frost speed modifier, also in ticks
+	 */
+	public record FreezeSnapshot(int ticksFrozen, int frostSpeedTicks) {
+		/** Rejects values outside {@code [0, DEFAULT_TICKS_REQUIRED_TO_FREEZE]}. */
+		public FreezeSnapshot {
 			requireValid(ticksFrozen, frostSpeedTicks);
 		}
 
 		private static void requireValid(final int ticksFrozen, final int frostSpeedTicks) {
-			if (ticksFrozen < 0 || ticksFrozen > 140 || frostSpeedTicks < 0 || frostSpeedTicks > 140) {
+			if (ticksFrozen < 0 || ticksFrozen > ServerPlayerState.DEFAULT_TICKS_REQUIRED_TO_FREEZE
+			    || frostSpeedTicks < 0 || frostSpeedTicks > ServerPlayerState.DEFAULT_TICKS_REQUIRED_TO_FREEZE) {
 				throw new IllegalArgumentException("freeze projection is out of range");
 			}
 		}
 	}
 
-	/** Complete fixed-plan result. Entity-data confirmations are not writes. */
+	/**
+	 * The result of {@link Simulator#run}: the ordered writes, the confirmations and the final states.
+	 * Entity-data confirmations are not writes. The state accessors return copies.
+	 *
+	 * @param timeline every server write of the run, in delivery order
+	 * @param confirmations every confirmation of the run, in action order
+	 * @param clientState the client's copy after the last action
+	 * @param serverState the server's copy after the last action
+	 */
 	public record Run(ServerWriteTimeline timeline, List<Confirmation> confirmations, PlayerState clientState,
 	    ServerPlayerState serverState) {
+		/** Copies the confirmations and both states. */
 		public Run {
 			Objects.requireNonNull(timeline, "timeline");
 			confirmations = List.copyOf(confirmations);
@@ -318,11 +294,13 @@ public final class Simulator {
 			serverState = Objects.requireNonNull(serverState, "serverState").copy();
 		}
 
+		/** A copy of the client's final state. */
 		@Override
 		public PlayerState clientState() {
 			return this.clientState.copy();
 		}
 
+		/** A copy of the server's final state. */
 		@Override
 		public ServerPlayerState serverState() {
 			return this.serverState.copy();
@@ -330,60 +308,100 @@ public final class Simulator {
 	}
 
 	/**
-	 * A value published at the declared boundary, retained as reconciliation evidence.
-	 * The index names its scheduled action. Matching a later observation does not
-	 * prove that applying it at a different time would preserve the trajectory.
+	 * A value the server published during a step, recorded so a consumer can match it against the
+	 * packets it later observes. {@link #causeAction()} names the action that caused it. Matching a
+	 * later observation does not show that applying it at a different time would preserve the trajectory.
 	 */
 	public sealed interface Confirmation permits SprintConfirmation, SwimmingConfirmation, PoseConfirmation,
 	    VelocityConfirmation, FreezeConfirmation, ImpulseConfirmation, DamageConfirmation {
+		/** The index of the action that caused this publication. */
 		int causeAction();
 	}
 
 	/**
-	 * A full hit the server dealt at the causing action, whose damage-event
-	 * packet names the cause. A partial hit sends no damage event and only
-	 * a health packet, so it is not confirmed here.
+	 * A full hit the server dealt at the causing action, whose damage-event packet names the cause. A
+	 * partial hit sends only a health packet and is not confirmed here.
+	 *
+	 * @param causeAction the action whose transition dealt the hit
+	 * @param cause what dealt it
 	 */
 	public record DamageConfirmation(int causeAction, HurtCause cause) implements Confirmation {
+		/** Rejects a null cause. */
 		public DamageConfirmation {
 			Objects.requireNonNull(cause, "cause");
 		}
 	}
 
-	/** Owner-local sprint value after the causing action. */
+	/**
+	 * The server's sprint flag as its tracker published it after the causing action.
+	 *
+	 * @param causeAction the action after which the tracker sampled the flag
+	 * @param sprinting the published flag
+	 */
 	public record SprintConfirmation(int causeAction, boolean sprinting) implements Confirmation {}
 
-	/** Owner-local swimming value after the causing action. */
+	/**
+	 * The server's swimming flag as its tracker published it after the causing action.
+	 *
+	 * @param causeAction the action after which the tracker sampled the flag
+	 * @param swimming the published flag
+	 */
 	public record SwimmingConfirmation(int causeAction, boolean swimming) implements Confirmation {}
 
-	/** Owner-local pose value after the causing action. */
+	/**
+	 * The server's pose as its tracker published it after the causing action.
+	 *
+	 * @param causeAction the action after which the tracker sampled the pose
+	 * @param pose the published pose
+	 */
 	public record PoseConfirmation(int causeAction, PlayerState.Pose pose) implements Confirmation {
+		/** Rejects a null pose. */
 		public PoseConfirmation {
 			Objects.requireNonNull(pose, "pose");
 		}
 	}
 
-	/** Decoded server velocity that may publish one caused hit. */
+	/**
+	 * The decoded velocity of a hurt velocity packet, in blocks per tick.
+	 *
+	 * @param causeAction the action whose hit the packet publishes
+	 * @param x the decoded X component
+	 * @param y the decoded Y component
+	 * @param z the decoded Z component
+	 */
 	public record VelocityConfirmation(int causeAction, double x, double y, double z) implements Confirmation {}
 
-	/** Server-owned frozen-tick value projected into later client movement. */
+	/**
+	 * The server's frozen tick count as its tracker published it after the causing action.
+	 *
+	 * @param causeAction the action after which the tracker sampled the count
+	 * @param ticksFrozen the published count, in ticks
+	 */
 	public record FreezeConfirmation(int causeAction, int ticksFrozen) implements Confirmation {
+		/** Rejects a count outside {@code [0, DEFAULT_TICKS_REQUIRED_TO_FREEZE]}. */
 		public FreezeConfirmation {
-			if (ticksFrozen < 0 || ticksFrozen > 140) {
+			if (ticksFrozen < 0 || ticksFrozen > ServerPlayerState.DEFAULT_TICKS_REQUIRED_TO_FREEZE) {
 				throw new IllegalArgumentException("frozen ticks are out of range");
 			}
 		}
 	}
 
 	/**
-	 * An external actor's velocity operation predicted at its causal action,
-	 * which its later packet or actor tick confirms rather than applies again.
-	 * An add carries the packet's full doubles; a replacement is a decoded
-	 * motion packet. Nothing predicts one yet; the ledger names the shape so an
-	 * observed impulse with no prediction is unattributed rather than unknown.
+	 * An external actor's velocity operation predicted at its causal action, which its later packet or
+	 * actor tick confirms rather than applies again. An add carries the packet's full doubles; a
+	 * replacement is a decoded motion packet. Nothing predicts one yet; the shape exists so an observed
+	 * impulse with no prediction is unattributed rather than unknown.
+	 *
+	 * @param causeAction the action at which the operation was predicted
+	 * @param actor the actor that applies it
+	 * @param operation the operation, never {@code MOVE}
+	 * @param x the X component, in blocks per tick
+	 * @param y the Y component, in blocks per tick
+	 * @param z the Z component, in blocks per tick
 	 */
 	public record ImpulseConfirmation(int causeAction, ExternalActor actor, ImpulseWrite.Operation operation, double x,
 	    double y, double z) implements Confirmation {
+		/** Rejects a displacement operation or a non-finite component. */
 		public ImpulseConfirmation {
 			Objects.requireNonNull(actor, "actor");
 			Objects.requireNonNull(operation, "operation");

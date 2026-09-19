@@ -1,22 +1,25 @@
 package com.nettarion.stride.simulator.block;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.tick.Scratch;
-import com.nettarion.stride.simulator.world.WorldView;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.RefusalCause;
+import com.nettarion.stride.simulator.UnimplementedMechanicException;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.tick.Scratch;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.ArrayList;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /** Contact acceptance, traversal limits, and reuse across complete block-effect phases. */
-class InsideBlockTraversalLifecycleTest {
+final class InsideBlockTraversalLifecycleTest {
 	@Test
 	void aShapeMissOnTheXArmCanContactOnTheZArmAndAppliesOnlyOnce() {
 		ProbeBlock block = new ProbeBlock(new double[] {0, 0, 0.85, 1, 1, 1});
@@ -80,11 +83,14 @@ class InsideBlockTraversalLifecycleTest {
 		return state;
 	}
 
-	/** An observable contact body with optional partial geometry and a one-shot refusal. */
-	private static final class ProbeBlock extends BlockBehaviour {
+	/** An observable contact hook with optional partial geometry and a one-shot refusal. */
+	private static final class ProbeBlock extends BlockBehavior {
 		private final double[] shape;
+
 		private final List<Boolean> shapeHits = new ArrayList<>();
+
 		private int applications;
+
 		private boolean refuseOnce;
 
 		private ProbeBlock(final double[] shape) {
@@ -106,21 +112,24 @@ class InsideBlockTraversalLifecycleTest {
 		}
 
 		@Override
-		void entityInside(final PlayerState state, final int x, final int y, final int z, final boolean precise,
+		void entityInside(final PlayerState state, final int x, final int y, final int z, final boolean isPrecise,
 		    final WorldView world, final Scratch scratch) {
 			this.applications++;
 			scratch.insideEffects.collectFreeze();
 			if (this.refuseOnce) {
 				this.refuseOnce = false;
-				throw new UnimplementedMechanicException("test contact refuses after collection");
+				throw new UnimplementedMechanicException(
+				    RefusalCause.UNMODELED_BLOCK, "test contact refuses after collection");
 			}
 		}
 	}
 
-	/** Empty geometry with one instrumented inside-effect body at (cellX, 0, 0). */
+	/** Empty geometry with one instrumented inside-effect hook at (cellX, 0, 0). */
 	private static final class ProbeWorld implements CompleteWorldView {
 		private final int cellX;
+
 		private final ProbeBlock block;
+
 		private final List<Integer> queriedX = new ArrayList<>();
 
 		private ProbeWorld(final int cellX, final ProbeBlock block) {
@@ -134,9 +143,9 @@ class InsideBlockTraversalLifecycleTest {
 		}
 
 		@Override
-		public BlockBehaviour behaviourAt(final int x, final int y, final int z) {
+		public BlockBehavior behaviorAt(final int x, final int y, final int z) {
 			this.queriedX.add(x);
-			return x == this.cellX && y == 0 && z == 0 ? this.block : BlockBehaviour.INERT;
+			return x == this.cellX && y == 0 && z == 0 ? this.block : BlockBehavior.INERT;
 		}
 
 		@Override
@@ -155,18 +164,22 @@ class InsideBlockTraversalLifecycleTest {
 		public float friction(final int x, final int y, final int z) {
 			return 0.6F;
 		}
+
 		@Override
 		public float speedFactor(final int x, final int y, final int z) {
 			return 1.0F;
 		}
+
 		@Override
 		public float jumpFactor(final int x, final int y, final int z) {
 			return 1.0F;
 		}
+
 		@Override
 		public boolean hasChunkAt(final int x, final int z) {
 			return true;
 		}
+
 		@Override
 		public int minY() {
 			return -64;

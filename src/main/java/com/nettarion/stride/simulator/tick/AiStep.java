@@ -1,61 +1,77 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.Refusal;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.Mth;
 import com.nettarion.stride.simulator.server.ServerPlayerTick;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.Set;
 
 /**
- * The control decisions of the tick: {@code LocalPlayer.aiStep} and the head
- * of {@code LivingEntity.aiStep} through the jump, the second phase of
- * {@link ClientTick}.
+ * The control decisions of the tick: {@code LocalPlayer.aiStep} and the head of
+ * {@code LivingEntity.aiStep} through the jump, the second phase {@link PlayerTick} runs.
  *
- * <p>In vanilla's order: the sprint trigger countdown; the previous input's
- * shift, jump, and forward impulse sampled before {@code KeyboardInput.tick}
- * installs the current one; the private crouch decision from the pose fit;
- * {@code KeyboardInput.tick} itself, which is where the retained input
- * facts become the current action, so every {@code isShiftKeyDown()} from
- * here to the end of the tick reads the current input, including the block
- * bodies two phases on; the four-corner suffocation escape; the sprint
- * start and stop rules; the creative double-tap flight toggle; the local
- * glide start; the water shift sink and creative vertical input;
- * {@code Player.aiStep}'s jump trigger countdown and flying fall reset; then
- * {@code LivingEntity.aiStep}'s jump delay, velocity dead zone,
- * {@code applyInput}, and the jump itself. What follows in vanilla,
- * {@code travel} and the block effects, is the next two
- * phases; {@code LocalPlayer.aiStep}'s tail after them is written in
- * {@link ClientTick}.
+ * <p>In vanilla's order: the sprint trigger countdown; the previous input's shift, jump, and
+ * forward impulse sampled before {@code KeyboardInput.tick} installs the current one; the private
+ * crouch decision from the pose fit; {@code KeyboardInput.tick} itself, after which every
+ * {@code isShiftKeyDown()} to the end of the tick reads the current input; the four-corner
+ * suffocation escape; the sprint start and stop rules; the creative double-tap flight toggle; the
+ * local glide start; the water shift sink and creative vertical input; {@code Player.aiStep}'s
+ * jump trigger countdown and flying fall reset; then {@code LivingEntity.aiStep}'s jump delay,
+ * velocity dead zone, {@code applyInput}, and the jump itself. {@code travel} and the block effects
+ * are the next two phases; {@code LocalPlayer.aiStep}'s tail after them is in {@link PlayerTick}.
  *
- * <p>Reads the previous input, the timers, the collision latches, the fluid
- * heights, and the flags. Writes the fields in {@link #WRITES}; the pose fit
- * probe also refreshes the private certificate on {@link PlayerState}. On the
- * server's copy the crouch field stays absent and {@code isShiftKeyDown()}
- * reads the synced flag.
+ * <p>Reads the previous input, the timers, the collision latches, the fluid heights, and the
+ * flags. Writes the fields in {@link #WRITES}; the pose fit probe also refreshes the pose-fit cache
+ * on {@link PlayerState}. On the server's copy the crouch field stays absent and
+ * {@code isShiftKeyDown()} reads the synced flag.
+ *
+ * <p>Refuses when the Jump Boost power is not a finite non-negative float
+ * ({@code INADMISSIBLE_ATTRIBUTE}), and through the suffocation and pose-fit queries when they
+ * reach an unclassified block.
  */
 public final class AiStep {
-	/** Every movement or server food field this phase may write. */
+	/**
+	 * Every movement or server food field this phase may write. Public because the root-package
+	 * {@code PhaseWriteSetTest} reads it directly.
+	 */
 	public static final Set<String> WRITES = Set.of("entityDataDirty", "sprintingAttribute",
 	    "movementSpeedAttributeDirty", "sprintTriggerTime", "crouching", "inputKeyPresses", "inputMoveVectorX",
 	    "inputMoveVectorY", "deltaMovementX", "deltaMovementY", "deltaMovementZ", "sprinting", "flying",
 	    "jumpTriggerTime", "fallFlying", "fallDistance", "noJumpDelay", "xxa", "zza", "jumping", "exhaustionLevel");
 
-	/** {@code Attributes.JUMP_STRENGTH} default. */
-	static final float JUMP_STRENGTH = 0.42F;
-	/** {@code Attributes.SNEAKING_SPEED} default. */
-	private static final float SNEAKING_SPEED = 0.3F;
+	/** {@code LocalPlayer.modifyInput} and {@code LivingEntity.aiStep}: the movement input is scaled by this. */
+	private static final float INPUT_SCALE = 0.98F;
+
+	/** {@code LocalPlayer.aiStep}: the creative double-tap window opened by a first jump press, in ticks. */
+	private static final int CREATIVE_FLIGHT_DOUBLE_TAP_TICKS = 7;
+
+	/** {@code LivingEntity.aiStep}: the delay before the next ground jump, in ticks. */
+	private static final int JUMP_DELAY_TICKS = 10;
+
 	private static final float[] MOVE_VECTOR_X = new float[9];
+
 	private static final float[] MOVE_VECTOR_Y = new float[9];
+
 	private static final float[] INPUT_XXA = new float[18];
+
 	private static final float[] INPUT_ZZA = new float[18];
 
 	static {
-		// There are only nine net direction pairs and two slow-movement states.
-		// Build the table by executing the canonical float expressions once;
-		// lookup therefore memoizes exact results instead of approximating them.
+		buildInputTables();
+	}
+
+	private AiStep() {}
+
+	/**
+	 * Fills the four input tables. There are only nine net direction pairs and two slow-movement
+	 * states, so the canonical float expressions run once here and lookup memoizes exact results
+	 * instead of approximating them.
+	 */
+	private static void buildInputTables() {
 		for (int forward = -1; forward <= 1; forward++) {
 			for (int left = -1; left <= 1; left++) {
 				int direction = directionIndex(forward, left);
@@ -78,11 +94,11 @@ public final class AiStep {
 					float inputX = moveX;
 					float inputY = moveY;
 					if (inputX * inputX + inputY * inputY != 0.0F) {
-						inputX *= 0.98F;
-						inputY *= 0.98F;
+						inputX *= INPUT_SCALE;
+						inputY *= INPUT_SCALE;
 						if (slow != 0) {
-							inputX *= SNEAKING_SPEED;
-							inputY *= SNEAKING_SPEED;
+							inputX *= PlayerAttributes.SNEAKING_SPEED;
+							inputY *= PlayerAttributes.SNEAKING_SPEED;
 						}
 						float inputLength = Mth.sqrt(inputX * inputX + inputY * inputY);
 						if (inputLength > 0.0F) {
@@ -112,8 +128,7 @@ public final class AiStep {
 		}
 	}
 
-	private AiStep() {}
-
+	/** The phase body: the {@code LocalPlayer} prefix on the client, then the shared control tail. */
 	public static void run(
 	    final PlayerState state, final PlayerInput action, final WorldView world, final Scratch scratch) {
 		if (!scratch.authority.isServer()) {
@@ -123,7 +138,7 @@ public final class AiStep {
 		livingEntityAiStepThroughJump(state, action, world, scratch);
 	}
 
-	/** Player.aiStep's prefix before LivingEntity.aiStep. */
+	/** {@code Player.aiStep}'s prefix before {@code LivingEntity.aiStep}. */
 	private static void playerAiStep(final PlayerState state) {
 		// Player.aiStep runs after LocalPlayer has handled the flight toggle and
 		// vertical input, but before LivingEntity travel.
@@ -135,7 +150,7 @@ public final class AiStep {
 		}
 	}
 
-	/** LocalPlayer's control prefix, which ServerPlayer never executes. */
+	/** {@code LocalPlayer}'s control prefix, which {@code ServerPlayer} never executes. */
 	private static void localPlayerAiStep(
 	    final PlayerState state, final PlayerInput action, final WorldView world, final Scratch scratch) {
 		if (state.sprintTriggerTime > 0) {
@@ -145,7 +160,7 @@ public final class AiStep {
 		// Sampled before input.tick() overwrites them. hasForwardImpulse reads
 		// the *previous* move vector, which is what makes the sprint double-tap
 		// window work at all.
-		boolean wasShiftKeyDown = PlayerTick.hasInput(state, PlayerInput.FLAG_SHIFT);
+		boolean wasShiftKeyDown = PlayerTick.hasInput(state, PlayerInput.FLAG_SNEAK);
 		boolean wasJumping = PlayerTick.hasInput(state, PlayerInput.FLAG_JUMP);
 		boolean hadForwardImpulse = state.inputMoveVectorY > 1.0E-5F;
 
@@ -181,10 +196,10 @@ public final class AiStep {
 		state.inputMoveVectorX = moveVectorX;
 		state.inputMoveVectorY = moveVectorY;
 
-		// LocalPlayer.aiStep, gated only on noPhysics, which no audited state can
+		// LocalPlayer.aiStep, gated only on noPhysics, which no admitted state can
 		// set. Four corners of the player's own footprint, in this order, each
 		// writing deltaMovement directly — so the order is observable whenever two
-		// corners choose different axes .
+		// corners choose different axes.
 		double corner = state.pose.width * 0.35;
 		double westX = state.x - corner;
 		double eastX = state.x + corner;
@@ -199,7 +214,6 @@ public final class AiStep {
 		// Asked in the corner order below, and short-circuited, so the first query
 		// that can fail closed is the same one vanilla would reach first. A player
 		// in motion often straddles an axis, so the distinct-column cases matter.
-		// Query counting and the p3 workload own the cost of this grouping.
 		int westCell = Mth.floor(westX);
 		int eastCell = Mth.floor(eastX);
 		int northCell = Mth.floor(northZ);
@@ -220,7 +234,7 @@ public final class AiStep {
 			state.sprintTriggerTime = 0;
 		}
 
-		if (canStartSprinting(state, action, scratch, moveVectorY)) {
+		if (canStartSprinting(state, scratch, moveVectorY)) {
 			if (!hadForwardImpulse) {
 				if (state.sprintTriggerTime > 0) {
 					state.setSprinting(true);
@@ -250,7 +264,7 @@ public final class AiStep {
 		boolean justToggledCreativeFlight = false;
 		if (state.mayfly && !wasJumping && action.jump()) {
 			if (state.jumpTriggerTime == 0) {
-				state.jumpTriggerTime = 7;
+				state.jumpTriggerTime = CREATIVE_FLIGHT_DOUBLE_TAP_TICKS;
 			} else if (!state.swimming) {
 				state.flying = !state.flying;
 				if (state.flying && state.onGround) {
@@ -262,7 +276,7 @@ public final class AiStep {
 		}
 
 		// LocalPlayer locally starts gliding on a rising jump edge. Levitation is
-		// outside the current audited state, while climbable contact is a captured
+		// outside the admitted domain, while climbable contact is a captured
 		// world capability and is therefore checked exactly.
 		if (action.jump() && !justToggledCreativeFlight && !wasJumping && !state.flying && !state.fallFlying
 		    && state.gliderUsable && !state.onGround && !(state.waterHeight > 0.0)
@@ -271,11 +285,11 @@ public final class AiStep {
 			scratch.startFallFlying = true;
 		}
 
-		if (state.waterHeight > 0.0 && action.shift() && !state.flying) {
+		if (state.waterHeight > 0.0 && action.sneak() && !state.flying) {
 			state.deltaMovementY += -0.04F;
 		}
 		if (state.flying) {
-			int verticalInput = (action.jump() ? 1 : 0) - (action.shift() ? 1 : 0);
+			int verticalInput = (action.jump() ? 1 : 0) - (action.sneak() ? 1 : 0);
 			if (verticalInput != 0) {
 				state.deltaMovementY += verticalInput * state.flyingSpeed * 3.0F;
 			}
@@ -283,17 +297,16 @@ public final class AiStep {
 	}
 
 	/**
-	 * {@code LocalPlayer.moveTowardsClosestSpace}: if this corner's column
-	 * suffocates, pick the nearest column side that does not and set the velocity
-	 * on that axis to 0.1 towards it.
+	 * {@code LocalPlayer.moveTowardsClosestSpace}: if this corner's column suffocates, pick the
+	 * nearest column side that does not and set the velocity on that axis to 0.1 towards it.
 	 *
-	 * <p>The distance compared is to the column's own edge, not to the player, and
-	 * the neighbour test is only made when the distance improves — vanilla's
-	 * {@code &&} short-circuit, kept because each test can throw on unclassified
-	 * space and refusing a query vanilla never makes would be a different engine.
+	 * <p>The distance compared is to the column's own edge, not to the player, and the neighbor test
+	 * is only made when the distance improves — vanilla's {@code &&} short-circuit, kept because each
+	 * test can throw on unclassified space and refusing a query vanilla never makes would be a
+	 * different answer.
 	 *
-	 * <p>The Y span is the live bounding box's, which at this point in the tick is
-	 * still the previous tick's box.
+	 * <p>The Y span is the live bounding box's, which at this point in the tick is still the
+	 * previous tick's box.
 	 */
 	private static void moveTowardsClosestSpace(
 	    final PlayerState state, final double x, final double z, final WorldView world) {
@@ -336,9 +349,9 @@ public final class AiStep {
 	}
 
 	/**
-	 * {@code LivingEntity.aiStep} through the jump: the jump delay, the velocity
-	 * dead zone, the current input, and the jump. {@code travel} and the block
-	 * effects that follow it in vanilla are the next two phases.
+	 * {@code LivingEntity.aiStep} through the jump: the jump delay, the velocity dead zone, the
+	 * current input, and the jump. {@code travel} and the block effects that follow it in vanilla
+	 * are the next two phases.
 	 */
 	private static void livingEntityAiStepThroughJump(
 	    final PlayerState state, final PlayerInput action, final WorldView world, final Scratch scratch) {
@@ -364,8 +377,8 @@ public final class AiStep {
 
 		if (scratch.authority.isServer()) {
 			// LivingEntity.applyInput: no keyboard, sprint decision, or jump edge.
-			state.xxa *= 0.98F;
-			state.zza *= 0.98F;
+			state.xxa *= INPUT_SCALE;
+			state.zza *= INPUT_SCALE;
 		} else {
 			applyInput(state, action, scratch);
 		}
@@ -374,8 +387,7 @@ public final class AiStep {
 		// to `!abilities.flying`. So enabling flight suppresses the whole jump
 		// block, not just the fluid branches — including the ground jump and its
 		// noJumpDelay. Reachable on the exact tick the creative double-tap
-		// toggles flight while still on the ground, which validation's schedule never
-		// produced.
+		// toggles flight while still on the ground.
 		if (state.jumping && !state.flying) {
 			boolean inLava = state.lavaHeight > 0.0;
 			double selectedFluidHeight = inLava ? state.lavaHeight : state.waterHeight;
@@ -390,7 +402,7 @@ public final class AiStep {
 				} else {
 					jumpFromGround(state, world);
 				}
-				state.noJumpDelay = 10;
+				state.noJumpDelay = JUMP_DELAY_TICKS;
 			}
 		} else {
 			state.noJumpDelay = 0;
@@ -407,12 +419,20 @@ public final class AiStep {
 		state.jumping = action.jump();
 	}
 
+	/**
+	 * {@code LivingEntity.jumpFromGround}: the vertical impulse from the jump strength and block
+	 * factor, and the sprint boost along yaw.
+	 *
+	 * @throws UnimplementedMechanicException when the Jump Boost power is not a finite non-negative
+	 *         float
+	 */
 	public static void jumpFromGround(final PlayerState state, final WorldView world) {
 		if (!Float.isFinite(state.jumpBoostPower) || state.jumpBoostPower < 0.0F) {
 			throw UnimplementedMechanicException.deferred(
-			    Refusal.INADMISSIBLE_ATTRIBUTE, () -> "invalid Jump Boost power: " + state.jumpBoostPower);
+			    RefusalCause.INADMISSIBLE_ATTRIBUTE, () -> "invalid Jump Boost power: " + state.jumpBoostPower);
 		}
-		float jumpPower = JUMP_STRENGTH * SupportingBlock.getBlockJumpFactor(state, world) + state.jumpBoostPower;
+		float jumpPower =
+		    PlayerAttributes.JUMP_STRENGTH * SupportingBlock.getBlockJumpFactor(state, world) + state.jumpBoostPower;
 		if (jumpPower <= 1.0E-5F) {
 			return;
 		}
@@ -425,16 +445,12 @@ public final class AiStep {
 		}
 	}
 
-	private static boolean canStartSprinting(
-	    final PlayerState state, final PlayerInput action, final Scratch scratch, final float moveVectorY) {
+	private static boolean canStartSprinting(final PlayerState state, final Scratch scratch, final float moveVectorY) {
 		return !state.sprinting && moveVectorY > 1.0E-5F && (state.foodLevel > 6 || state.mayfly)
 		    && (state.flying || !isInShallowWater(state, scratch))
-		    // A gliding player cannot start sprinting unless underwater. Omitted
-		    // until the action fuzz reached it: validation gated Elytra with a schedule
-		    // that never pressed sprint mid-glide, so the missing term could not
-		    // change any recorded transition.
-		    && (!state.fallFlying || isUnderWater(state, scratch))
-		    && (!isMovingSlowly(state, scratch) || isUnderWater(state, scratch));
+		    // A gliding player cannot start sprinting unless underwater.
+		    && (!state.fallFlying || isUnderWater(scratch))
+		    && (!isMovingSlowly(state, scratch) || isUnderWater(scratch));
 	}
 
 	private static boolean shouldStopRunSprinting(
@@ -446,24 +462,23 @@ public final class AiStep {
 	private static boolean shouldStopSwimSprinting(
 	    final PlayerState state, final PlayerInput action, final float moveVectorY) {
 		return !(state.foodLevel > 6 || state.mayfly) || !(state.waterHeight > 0.0)
-		    || !(moveVectorY > 1.0E-5F) && !state.onGround && !action.shift();
+		    || !(moveVectorY > 1.0E-5F) && !state.onGround && !action.sneak();
 	}
 
 	/**
-	 * {@code LocalPlayer.isUnderWater}, which overrides {@code Entity}'s and
-	 * returns {@code wasUnderwater} alone: the tracker's eye flag as
-	 * {@code Player.tick} samples it before {@code baseTick} refreshes the
-	 * tracker, with no in-water conjunct. Only the server's copy asks
-	 * {@code Entity.isUnderWater}, and this prefix never runs there. A player
-	 * whose eyes were under at the previous refresh but whose box now holds
-	 * no water is still under water to this tick's sprint rules.
+	 * {@code LocalPlayer.isUnderWater}, which overrides {@code Entity}'s and returns
+	 * {@code wasUnderwater} alone: the tracker's eye flag as {@code Player.tick} samples it before
+	 * {@code baseTick} refreshes the tracker, with no in-water conjunct. Only the server's copy asks
+	 * {@code Entity.isUnderWater}, and this prefix never runs there. A player whose eyes were under
+	 * at the previous refresh but whose box now holds no water is still under water to this tick's
+	 * sprint rules.
 	 */
-	private static boolean isUnderWater(final PlayerState state, final Scratch scratch) {
+	private static boolean isUnderWater(final Scratch scratch) {
 		return scratch.wasUnderWaterAtTickStart;
 	}
 
 	private static boolean isInShallowWater(final PlayerState state, final Scratch scratch) {
-		return state.waterHeight > 0.0 && !isUnderWater(state, scratch);
+		return state.waterHeight > 0.0 && !isUnderWater(scratch);
 	}
 
 	private static boolean isMovingSlowly(final PlayerState state, final Scratch scratch) {

@@ -1,28 +1,27 @@
 package com.nettarion.stride.simulator.trace;
 
-import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.PlayerState;
 
 import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * The audited player state vector at one instant, as raw bits per
- * {@link StateField}: what a live capture, a headless replay, and the
- * simulator each write into a trace so they can be held to each other.
+ * The recorded player state at one instant, as raw bits per {@link StateField}.
  *
- * <p>Values are stored as raw bits so that equality is exact by construction
- * rather than by the care of whoever writes the comparison. A producer hands
- * over a {@code double} and this class keeps its bit pattern; nothing widens,
- * narrows, rounds or normalizes on the way in or out.
+ * <p>Every producer that writes a trace, a live game client or this simulator, fills one of
+ * these per tick, so two producers can be compared field for field. Values are stored as raw
+ * bits so that equality is exact by construction: a producer hands over a {@code double} and this
+ * class keeps its bit pattern; nothing widens, narrows, rounds or normalizes on the way in or out.
+ * Instances are immutable.
  */
 public final class StateVector {
 	private final long[] raw;
 
 	/**
-	 * Human-readable labels for {@link StateField.Kind#ENUM} fields, parallel
-	 * to {@link StateField#ALL}. Deliberately outside the equality relation:
-	 * a label is a diagnostic aid, and the ordinal in {@link #raw} is the fact.
+	 * Human-readable labels for {@link StateField.Kind#ENUM} fields, parallel to
+	 * {@link StateField#ALL}. Deliberately outside the equality relation: a label is a diagnostic
+	 * aid, and the numeric id in {@link #raw} is the fact.
 	 */
 	private final String[] labels;
 
@@ -71,13 +70,13 @@ public final class StateVector {
 		return (byte) this.raw[field.ordinal()];
 	}
 
-	/** Returns the ordinal of an enum field, refusing a field of another kind. */
-	public int getEnumOrdinal(final StateField field) {
+	/** The vanilla numeric id of an enum field, refusing a field of another kind. */
+	public int getEnumId(final StateField field) {
 		require(field, StateField.Kind.ENUM);
 		return (int) this.raw[field.ordinal()];
 	}
 
-	/** The label recorded for an enum field, or its ordinal if none was given. */
+	/** The label recorded for an enum field, or its numeric id if none was given. */
 	public String label(final StateField field) {
 		String label = this.labels[field.ordinal()];
 		return label != null ? label : Long.toString(this.raw[field.ordinal()]);
@@ -99,85 +98,91 @@ public final class StateVector {
 		return Arrays.hashCode(this.raw);
 	}
 
-	/** The simulator's player state carrying exactly these values. */
+	/**
+	 * A new player state carrying exactly these values, without validating them.
+	 *
+	 * <p>The pose is restored from its vanilla numeric id, never from the diagnostic label. Refuses
+	 * with {@link IllegalArgumentException} when the id names no admitted pose.
+	 */
 	public PlayerState toPlayerState() {
 		PlayerState state = new PlayerState();
-		StateVector from = this;
-		state.x = from.getDouble(StateField.POS_X);
-		state.y = from.getDouble(StateField.POS_Y);
-		state.z = from.getDouble(StateField.POS_Z);
-		state.deltaMovementX = from.getDouble(StateField.DELTA_X);
-		state.deltaMovementY = from.getDouble(StateField.DELTA_Y);
-		state.deltaMovementZ = from.getDouble(StateField.DELTA_Z);
-		state.yRot = from.getFloat(StateField.Y_ROT);
-		state.xRot = from.getFloat(StateField.X_ROT);
-		state.setBox(new com.nettarion.stride.simulator.AABB(from.getDouble(StateField.BB_MIN_X),
-		    from.getDouble(StateField.BB_MIN_Y), from.getDouble(StateField.BB_MIN_Z),
-		    from.getDouble(StateField.BB_MAX_X), from.getDouble(StateField.BB_MAX_Y),
-		    from.getDouble(StateField.BB_MAX_Z)));
-		state.onGround = from.getBoolean(StateField.ON_GROUND);
-		state.horizontalCollision = from.getBoolean(StateField.HORIZONTAL_COLLISION);
-		state.verticalCollision = from.getBoolean(StateField.VERTICAL_COLLISION);
-		state.verticalCollisionBelow = from.getBoolean(StateField.VERTICAL_COLLISION_BELOW);
-		state.minorHorizontalCollision = from.getBoolean(StateField.MINOR_HORIZONTAL_COLLISION);
-		state.mainSupportingBlockPosPresent = from.getBoolean(StateField.SUPPORTING_BLOCK_PRESENT);
-		state.mainSupportingBlockPosX = from.getInt(StateField.SUPPORTING_BLOCK_X);
-		state.mainSupportingBlockPosY = from.getInt(StateField.SUPPORTING_BLOCK_Y);
-		state.mainSupportingBlockPosZ = from.getInt(StateField.SUPPORTING_BLOCK_Z);
-		state.onGroundNoBlocks = from.getBoolean(StateField.ON_GROUND_NO_BLOCKS);
-		state.fallDistance = from.getDouble(StateField.FALL_DISTANCE);
-		state.sprinting = from.getBoolean(StateField.SPRINTING);
-		state.sprintingAttribute = from.getBoolean(StateField.SPRINTING_ATTRIBUTE);
-		state.foodLevel = from.getInt(StateField.FOOD_LEVEL);
-		state.swimming = from.getBoolean(StateField.SWIMMING);
-		state.fallFlying = from.getBoolean(StateField.FALL_FLYING);
-		state.sharedFlagsResidual = from.getFlags(StateField.SHARED_FLAGS_RESIDUAL);
-		state.pose = PlayerState.Pose.valueOf(from.label(StateField.POSE));
-		state.xxa = from.getFloat(StateField.XXA);
-		state.yya = from.getFloat(StateField.YYA);
-		state.zza = from.getFloat(StateField.ZZA);
-		state.jumping = from.getBoolean(StateField.JUMPING);
-		state.sprintTriggerTime = from.getInt(StateField.SPRINT_TRIGGER_TIME);
-		state.jumpTriggerTime = from.getInt(StateField.JUMP_TRIGGER_TIME);
-		state.autoJumpTime = from.getInt(StateField.AUTO_JUMP_TIME);
-		state.noJumpDelay = from.getInt(StateField.NO_JUMP_DELAY);
-		state.crouching = from.getBoolean(StateField.CROUCHING);
-		state.inputKeyPresses = from.getFlags(StateField.INPUT_KEY_PRESSES);
-		state.inputMoveVectorX = from.getFloat(StateField.INPUT_MOVE_VECTOR_X);
-		state.inputMoveVectorY = from.getFloat(StateField.INPUT_MOVE_VECTOR_Y);
-		state.waterHeight = from.getDouble(StateField.WATER_HEIGHT);
-		state.lavaHeight = from.getDouble(StateField.LAVA_HEIGHT);
-		state.eyeInWater = from.getBoolean(StateField.EYE_IN_WATER);
-		state.mayfly = from.getBoolean(StateField.MAY_FLY);
-		state.flying = from.getBoolean(StateField.FLYING);
-		state.flyingSpeed = from.getFloat(StateField.FLYING_SPEED);
-		state.fallFlyTicks = from.getInt(StateField.FALL_FLY_TICKS);
-		state.gliderUsable = from.getBoolean(StateField.GLIDER_USABLE);
-		state.stuckSpeedMultiplierX = from.getDouble(StateField.STUCK_SPEED_X);
-		state.stuckSpeedMultiplierY = from.getDouble(StateField.STUCK_SPEED_Y);
-		state.stuckSpeedMultiplierZ = from.getDouble(StateField.STUCK_SPEED_Z);
-		state.isInPowderSnow = from.getBoolean(StateField.IN_POWDER_SNOW);
-		state.wasInPowderSnow = from.getBoolean(StateField.WAS_IN_POWDER_SNOW);
-		state.ticksFrozen = from.getInt(StateField.TICKS_FROZEN);
-		state.canFreeze = from.getBoolean(StateField.CAN_FREEZE);
-		state.frostSpeedTicks = from.getInt(StateField.FROST_SPEED_TICKS);
-		state.canWalkOnPowderSnow = from.getBoolean(StateField.CAN_WALK_ON_POWDER_SNOW);
-		state.sprintWindowTicks = from.getInt(StateField.SPRINT_WINDOW_TICKS);
-		state.autoJumpEnabled = from.getBoolean(StateField.AUTO_JUMP_ENABLED);
-		state.fastLava = from.getBoolean(StateField.FAST_LAVA);
-		state.movementSpeedMultiplier = from.getDouble(StateField.MOVEMENT_SPEED_MULTIPLIER);
-		state.jumpBoostPower = from.getFloat(StateField.JUMP_BOOST_POWER);
+		state.x = getDouble(StateField.POS_X);
+		state.y = getDouble(StateField.POS_Y);
+		state.z = getDouble(StateField.POS_Z);
+		state.deltaMovementX = getDouble(StateField.DELTA_X);
+		state.deltaMovementY = getDouble(StateField.DELTA_Y);
+		state.deltaMovementZ = getDouble(StateField.DELTA_Z);
+		state.yRot = getFloat(StateField.Y_ROT);
+		state.xRot = getFloat(StateField.X_ROT);
+		state.setBox(
+		    new AABB(getDouble(StateField.BB_MIN_X), getDouble(StateField.BB_MIN_Y), getDouble(StateField.BB_MIN_Z),
+		        getDouble(StateField.BB_MAX_X), getDouble(StateField.BB_MAX_Y), getDouble(StateField.BB_MAX_Z)));
+		state.onGround = getBoolean(StateField.ON_GROUND);
+		state.horizontalCollision = getBoolean(StateField.HORIZONTAL_COLLISION);
+		state.verticalCollision = getBoolean(StateField.VERTICAL_COLLISION);
+		state.verticalCollisionBelow = getBoolean(StateField.VERTICAL_COLLISION_BELOW);
+		state.minorHorizontalCollision = getBoolean(StateField.MINOR_HORIZONTAL_COLLISION);
+		state.mainSupportingBlockPosPresent = getBoolean(StateField.SUPPORTING_BLOCK_PRESENT);
+		state.mainSupportingBlockPosX = getInt(StateField.SUPPORTING_BLOCK_X);
+		state.mainSupportingBlockPosY = getInt(StateField.SUPPORTING_BLOCK_Y);
+		state.mainSupportingBlockPosZ = getInt(StateField.SUPPORTING_BLOCK_Z);
+		state.onGroundNoBlocks = getBoolean(StateField.ON_GROUND_NO_BLOCKS);
+		state.fallDistance = getDouble(StateField.FALL_DISTANCE);
+		state.sprinting = getBoolean(StateField.SPRINTING);
+		state.sprintingAttribute = getBoolean(StateField.SPRINTING_ATTRIBUTE);
+		state.foodLevel = getInt(StateField.FOOD_LEVEL);
+		state.swimming = getBoolean(StateField.SWIMMING);
+		state.fallFlying = getBoolean(StateField.FALL_FLYING);
+		state.sharedFlagsResidual = getFlags(StateField.SHARED_FLAGS_RESIDUAL);
+		state.pose = PlayerState.Pose.fromVanillaId(getEnumId(StateField.POSE));
+		state.xxa = getFloat(StateField.XXA);
+		state.yya = getFloat(StateField.YYA);
+		state.zza = getFloat(StateField.ZZA);
+		state.jumping = getBoolean(StateField.JUMPING);
+		state.sprintTriggerTime = getInt(StateField.SPRINT_TRIGGER_TIME);
+		state.jumpTriggerTime = getInt(StateField.JUMP_TRIGGER_TIME);
+		state.autoJumpTime = getInt(StateField.AUTO_JUMP_TIME);
+		state.noJumpDelay = getInt(StateField.NO_JUMP_DELAY);
+		state.crouching = getBoolean(StateField.CROUCHING);
+		state.inputKeyPresses = getFlags(StateField.INPUT_KEY_PRESSES);
+		state.inputMoveVectorX = getFloat(StateField.INPUT_MOVE_VECTOR_X);
+		state.inputMoveVectorY = getFloat(StateField.INPUT_MOVE_VECTOR_Y);
+		state.waterHeight = getDouble(StateField.WATER_HEIGHT);
+		state.lavaHeight = getDouble(StateField.LAVA_HEIGHT);
+		state.eyeInWater = getBoolean(StateField.EYE_IN_WATER);
+		state.mayfly = getBoolean(StateField.MAY_FLY);
+		state.flying = getBoolean(StateField.FLYING);
+		state.flyingSpeed = getFloat(StateField.FLYING_SPEED);
+		state.fallFlyTicks = getInt(StateField.FALL_FLY_TICKS);
+		state.gliderUsable = getBoolean(StateField.GLIDER_USABLE);
+		state.stuckSpeedMultiplierX = getDouble(StateField.STUCK_SPEED_X);
+		state.stuckSpeedMultiplierY = getDouble(StateField.STUCK_SPEED_Y);
+		state.stuckSpeedMultiplierZ = getDouble(StateField.STUCK_SPEED_Z);
+		state.isInPowderSnow = getBoolean(StateField.IN_POWDER_SNOW);
+		state.wasInPowderSnow = getBoolean(StateField.WAS_IN_POWDER_SNOW);
+		state.ticksFrozen = getInt(StateField.TICKS_FROZEN);
+		state.canFreeze = getBoolean(StateField.CAN_FREEZE);
+		state.frostSpeedTicks = getInt(StateField.FROST_SPEED_TICKS);
+		state.canWalkOnPowderSnow = getBoolean(StateField.CAN_WALK_ON_POWDER_SNOW);
+		state.sprintWindowTicks = getInt(StateField.SPRINT_WINDOW_TICKS);
+		state.autoJumpEnabled = getBoolean(StateField.AUTO_JUMP_ENABLED);
+		state.fastLava = getBoolean(StateField.FAST_LAVA);
+		state.movementSpeedMultiplier = getDouble(StateField.MOVEMENT_SPEED_MULTIPLIER);
+		state.jumpBoostPower = getFloat(StateField.JUMP_BOOST_POWER);
 		return state;
 	}
 
-	/** Restore a player state and check the invariants required by movement. */
+	/**
+	 * A new player state carrying these values, checked with
+	 * {@link PlayerState#requireValidForTransition()}; refuses with {@link IllegalStateException}.
+	 */
 	public PlayerState toPlayerStateForTransition() {
 		PlayerState state = toPlayerState();
 		state.requireValidForTransition();
 		return state;
 	}
 
-	/** The audited vector of one simulator player state. */
+	/** The recorded vector of one player state; the state is not modified. */
 	public static StateVector of(final PlayerState state) {
 		StateVector.Builder builder = StateVector.builder()
 		                                  .set(StateField.POS_X, state.x)
@@ -250,46 +255,55 @@ public final class StateVector {
 		return builder.build();
 	}
 
-	/** A mutable builder that assigns raw values before publishing an immutable state vector. */
+	/** Assigns every field once, then {@link #build() builds} an immutable vector. Not thread-safe. */
 	public static final class Builder {
-		private final long[] raw = new long[StateField.ALL.length];
-		private final String[] labels = new String[StateField.ALL.length];
-		private final boolean[] assigned = new boolean[StateField.ALL.length];
+		private final long[] raw = new long[StateField.ALL.size()];
+		private final String[] labels = new String[StateField.ALL.size()];
+		private final boolean[] assigned = new boolean[StateField.ALL.size()];
 
 		private Builder() {}
 
+		/** Sets a {@link StateField.Kind#DOUBLE} field from its raw bits; refuses another kind. */
 		public Builder set(final StateField field, final double value) {
 			require(field, StateField.Kind.DOUBLE);
 			return put(field, Double.doubleToRawLongBits(value));
 		}
 
+		/** Sets a {@link StateField.Kind#FLOAT} field from its raw bits; refuses another kind. */
 		public Builder set(final StateField field, final float value) {
 			require(field, StateField.Kind.FLOAT);
 			return put(field, Integer.toUnsignedLong(Float.floatToRawIntBits(value)));
 		}
 
+		/** Sets a {@link StateField.Kind#BOOLEAN} field; refuses another kind. */
 		public Builder set(final StateField field, final boolean value) {
 			require(field, StateField.Kind.BOOLEAN);
 			return put(field, value ? 1L : 0L);
 		}
 
+		/** Sets a {@link StateField.Kind#INT} field; refuses another kind. */
 		public Builder set(final StateField field, final int value) {
 			require(field, StateField.Kind.INT);
 			return put(field, value);
 		}
 
+		/** Sets a {@link StateField.Kind#BYTE_FLAGS} field from its unsigned byte; refuses another kind. */
 		public Builder setFlags(final StateField field, final byte value) {
 			require(field, StateField.Kind.BYTE_FLAGS);
 			return put(field, Byte.toUnsignedLong(value));
 		}
 
-		public Builder setEnum(final StateField field, final int ordinal, final String label) {
+		/**
+		 * Sets a {@link StateField.Kind#ENUM} field from its vanilla numeric id and a diagnostic
+		 * label; refuses another kind.
+		 */
+		public Builder setEnum(final StateField field, final int id, final String label) {
 			require(field, StateField.Kind.ENUM);
 			this.labels[field.ordinal()] = Objects.requireNonNull(label, "label");
-			return put(field, ordinal);
+			return put(field, id);
 		}
 
-		/** Sets a field from bits already in trace form, for the trace reader. */
+		/** Sets a field from bits already in trace form, with an optional label, for the trace reader. */
 		public Builder setRawBits(final StateField field, final long bits, final String label) {
 			this.labels[field.ordinal()] = label;
 			return put(field, bits);
@@ -302,14 +316,14 @@ public final class StateVector {
 		}
 
 		/**
-		 * Fails closed: a field nobody assigned would otherwise compare equal
-		 * to another implementation's unassigned field and hide a real gap in a implementation's
-		 * capture.
+		 * The immutable vector; refuses with {@link IllegalStateException} when any field was never
+		 * assigned, since an unassigned field would compare equal to another producer's unassigned
+		 * field and hide a gap in a capture.
 		 */
 		public StateVector build() {
 			for (StateField field : StateField.ALL) {
 				if (!this.assigned[field.ordinal()]) {
-					throw new IllegalStateException("audited state field " + field + " was never assigned");
+					throw new IllegalStateException("state field " + field + " was never assigned");
 				}
 			}
 			return new StateVector(this.raw.clone(), this.labels.clone());

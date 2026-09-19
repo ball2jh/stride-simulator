@@ -1,16 +1,46 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.world.WorldView;
 
-/** Exact fluid tracker sampling and current application for one player state. */
+/**
+ * The fluid the player's box holds and the current it applies: vanilla's
+ * {@code EntityFluidInteraction} for one player state.
+ *
+ * <p>Transcribes {@code EntityFluidInteraction.update} (the per-cell scan of the box deflated by a
+ * thousandth, its {@code hasFluidAndLoaded} gate, the water and lava height trackers, and the eye
+ * latch), {@code EntityFluidInteraction.Tracker.applyCurrentTo} (the averaged current, its minimum
+ * push, and its scale per fluid), and the dry-tracker refresh {@code LivingEntity.checkFallDamage}
+ * opens with. Writes {@code waterHeight}, {@code lavaHeight}, {@code eyeInWater},
+ * {@code fallDistance} and velocity on the state; reads one cell at a time through
+ * {@link Scratch#fluidCell}.
+ *
+ * <p>Refuses when a scanned cell holds a fluid other than water or lava ({@code UNMODELED_BLOCK}),
+ * and when a column within one block of the box in X or Z is unknown ({@code OUTSIDE_REGION}),
+ * since vanilla's client and server answer differently there.
+ */
 public final class EntityFluidInteraction {
+	/** {@code Entity.updateFluidHeightAndDoFluidPushing}: the water current scale. */
+	private static final double WATER_FLOW_SCALE = 0.014;
+
+	/** The lava current scale outside {@code ultraWarm} dimensions, {@code 0.007 / 3.0} as vanilla spells it. */
 	private static final double SLOW_LAVA_FLOW_SCALE = 0.0023333333333333335;
+
+	/** The lava current scale in {@code ultraWarm} dimensions. */
 	private static final double FAST_LAVA_FLOW_SCALE = 0.007;
+
+	/**
+	 * {@code Tracker.applyCurrentTo}: a resting player is pushed at least this hard by any current,
+	 * spelled as the double vanilla's literal is.
+	 */
+	private static final double MINIMUM_PUSH = 0.0045000000000000005;
+
+	/** {@code Tracker.applyCurrentTo}: a horizontal velocity below this counts as resting. */
+	private static final double RESTING_VELOCITY = 0.003;
 
 	private EntityFluidInteraction() {}
 
@@ -29,9 +59,9 @@ public final class EntityFluidInteraction {
 	}
 
 	/**
-	 * The tracker refresh {@code LivingEntity.checkFallDamage} opens with: only
-	 * when the player was dry before the movement, so first water contact is
-	 * visible at the post-move boundary on both the client and the server's copy.
+	 * The tracker refresh {@code LivingEntity.checkFallDamage} opens with: only when the player was
+	 * dry before the movement, so first water contact is visible after the move on both the client
+	 * and the server's copy.
 	 */
 	public static void refreshWhenDry(final PlayerState state, final WorldView world, final Scratch scratch) {
 		if (!(state.waterHeight > 0.0) && mayContainFluid(state, world)) {
@@ -42,17 +72,15 @@ public final class EntityFluidInteraction {
 	/**
 	 * {@code EntityFluidInteraction.update} for the default, unmounted player box.
 	 *
-	 * <p>Vanilla's {@code hasFluidAndLoaded} first asks that every chunk under
-	 * the deflated box widened by one block in X and Z be loaded, and answers
-	 * "no fluid at all" when one is not, whatever the box's own cells hold.
-	 * The server's copy stands in loaded chunks and answers from them, so an
-	 * unloaded neighbour makes the two copies disagree the way an unloaded
-	 * column below does for gravity in {@link Travel}; neither outcome is a
-	 * captured fact, so the refresh refuses whenever those cells could hold
-	 * fluid and a column of the widened footprint is unknown.
+	 * <p>Vanilla's {@code hasFluidAndLoaded} first asks that every chunk under the deflated box
+	 * widened by one block in X and Z be loaded, and answers "no fluid at all" when one is not,
+	 * whatever the box's own cells hold. The server's copy stands in loaded chunks and answers from
+	 * them, so an unloaded neighbor makes the two copies disagree the way an unloaded column below
+	 * does for gravity in {@link Travel}; neither outcome is a captured fact, so the refresh refuses
+	 * whenever those cells could hold fluid and a column of the widened footprint is unknown.
 	 *
-	 * @throws UnimplementedMechanicException when a column within one block of
-	 *         the box in X or Z is not loaded and the box's cells may hold fluid
+	 * @throws UnimplementedMechanicException when a column within one block of the box in X or Z is
+	 *         not loaded and the box's cells may hold fluid
 	 */
 	static void update(final PlayerState state, final WorldView world, final Scratch scratch) {
 		state.waterHeight = 0.0;
@@ -138,16 +166,16 @@ public final class EntityFluidInteraction {
 			state.fallDistance = 0.0;
 		}
 		if (!state.flying) {
-			applyCurrentTo(state, currentX, currentY, currentZ, currentCount, 0.014);
+			applyCurrentTo(state, currentX, currentY, currentZ, currentCount, WATER_FLOW_SCALE);
 			applyCurrentTo(state, lavaCurrentX, lavaCurrentY, lavaCurrentZ, lavaCurrentCount,
 			    state.fastLava ? FAST_LAVA_FLOW_SCALE : SLOW_LAVA_FLOW_SCALE);
 		}
 	}
 
 	/**
-	 * The loaded-chunk half of vanilla's {@code hasFluidAndLoaded}: every column
-	 * of the widened footprint must be known. The view answers per column, so
-	 * the columns are asked one by one; there are at most sixteen.
+	 * The loaded-chunk half of vanilla's {@code hasFluidAndLoaded}: every column of the widened
+	 * footprint must be known. The view answers per column, so the columns are asked one by one;
+	 * there are at most sixteen.
 	 */
 	private static void requireLoadedAround(
 	    final WorldView world, final int x0, final int z0, final int x1, final int z1) {
@@ -156,7 +184,7 @@ public final class EntityFluidInteraction {
 				if (!world.hasChunkAt(x, z)) {
 					int atX = x;
 					int atZ = z;
-					throw UnimplementedMechanicException.deferred(Refusal.OUTSIDE_REGION,
+					throw UnimplementedMechanicException.deferred(RefusalCause.OUTSIDE_REGION,
 					    ()
 					        -> "unknown space beside the player at " + atX + "," + atZ
 					        + "; vanilla's fluid refresh finds no fluid there and the"
@@ -166,6 +194,12 @@ public final class EntityFluidInteraction {
 		}
 	}
 
+	/**
+	 * The kind of fluid in one cell, or {@code EMPTY}, refusing an unmodeled kind. As a side effect the
+	 * sample is left in {@code scratch.fluidCell}, whose height {@code BlockEffects.Contact} reads.
+	 *
+	 * @throws UnimplementedMechanicException when the cell holds a fluid other than water or lava
+	 */
 	public static FluidSample.Kind kindAt(
 	    final WorldView world, final int x, final int y, final int z, final Scratch scratch) {
 		if (world.propertiesIn(WorldView.PROPERTY_FLUID, x, y, z, x, y, z) == 0) {
@@ -180,7 +214,7 @@ public final class EntityFluidInteraction {
 
 	static void requireSupported(final FluidSample cell, final int x, final int y, final int z) {
 		if (cell.kind != FluidSample.Kind.WATER && cell.kind != FluidSample.Kind.LAVA) {
-			throw UnimplementedMechanicException.deferred(Refusal.UNMODELLED_BLOCK,
+			throw UnimplementedMechanicException.deferred(RefusalCause.UNMODELED_BLOCK,
 			    ()
 			        -> "unsupported fluid at " + x + "," + y + "," + z + ": kind=" + cell.kind
 			        + ", source=" + cell.source + ", flow=" + cell.flowX + "," + cell.flowY + "," + cell.flowZ);
@@ -205,7 +239,9 @@ public final class EntityFluidInteraction {
 		impulseY *= scale;
 		impulseZ *= scale;
 		double impulseLength = Math.sqrt(impulseX * impulseX + impulseY * impulseY + impulseZ * impulseZ);
-		if (Math.abs(oldX) < 0.003 && Math.abs(oldZ) < 0.003 && impulseLength < 0.0045000000000000005) {
+		if (Math.abs(oldX) < RESTING_VELOCITY && Math.abs(oldZ) < RESTING_VELOCITY && impulseLength < MINIMUM_PUSH) {
+			// Vec3.normalize: a vector shorter than 1.0E-4 (squared 1.0E-5F here,
+			// as vanilla compares it) is the zero vector.
 			if (impulseLength < 1.0E-5F) {
 				impulseX = 0.0;
 				impulseY = 0.0;
@@ -214,9 +250,9 @@ public final class EntityFluidInteraction {
 				impulseX /= impulseLength;
 				impulseY /= impulseLength;
 				impulseZ /= impulseLength;
-				impulseX *= 0.0045000000000000005;
-				impulseY *= 0.0045000000000000005;
-				impulseZ *= 0.0045000000000000005;
+				impulseX *= MINIMUM_PUSH;
+				impulseY *= MINIMUM_PUSH;
+				impulseZ *= MINIMUM_PUSH;
 			}
 		}
 

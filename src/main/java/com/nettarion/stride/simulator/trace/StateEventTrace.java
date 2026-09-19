@@ -12,72 +12,64 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
-/** Server-authoritative state values observed before or after named client ticks. */
+/**
+ * Server-written state values a capture observed arriving at the client, before or after named
+ * client ticks.
+ *
+ * <p>The file layout is specified in {@code docs/trace-formats.md}. Instances are immutable.
+ *
+ * @param scenario the scenario name shared by every file of the capture
+ * @param events the observed writes, in tick order and {@code PRE} before {@code POST} within a tick
+ */
 public record StateEventTrace(String scenario, List<StateEvent> events) {
+	/** The state-event file format this library reads and writes; no other version is read. */
+	public static final int FORMAT_VERSION = 2;
+
 	private static final String MAGIC = "#stride-state-events";
-	private static final int VERSION = 2;
+	private static final String COLUMNS = "tick\tphase\tfield\traw_value";
+	private static final long HIGH_32_BITS = 0xffff_ffff_0000_0000L;
+
 	/**
 	 * Every field a server write can install, and the one place that says so.
 	 *
-	 * <p>Still a whitelist rather than "any field", for the reason it always was:
-	 * an authority event overrides the audited vector, so an unreviewed entry can
-	 * silently paper over a real physics disagreement. What changed is that
-	 * membership is now decided by a rule and stated once, instead of by three
-	 * private lists and two switch statements that each had to be taught the same
-	 * field separately.
+	 * <p>A field belongs here when the vanilla client itself assigns it from a packet handler,
+	 * outside {@code LocalPlayer.tick()}: position and velocity ({@code handleMovePlayer},
+	 * {@code handleSetEntityMotion}), the synchronized entity-data byte and pose, the abilities
+	 * packet, and the two freeze values. A state event overrides the recorded vector, so the list
+	 * is closed rather than "any field": an unreviewed entry could paper over a real disagreement.
 	 *
-	 * <p>{@code SPRINTING} is the worked example. Validation concluded it was
-	 * client-computed, which holds for sustained inputs; under per-tick sprint
-	 * toggling validation measured its value at the head of a tick differing from the
-	 * previous tick's post value, which places the write between ticks and
-	 * therefore outside the movement path. headless vanilla (real {@code LocalPlayer}, no
-	 * server) agrees with the kernel on those same inputs, which is what rules
-	 * out a physics defect.
-	 *
-	 * <p>The rule, rather than the list, is what to check a candidate against:
-	 * **a field belongs here when the client itself assigns it from a packet
-	 * handler, outside {@code LocalPlayer.tick()}**. Position and velocity
-	 * ({@code handleMovePlayer}, {@code handleSetEntityMotion}), the synchronised entity-data
-	 * byte and pose, the abilities packet, and the two freeze values are all such
-	 * writes.
-	 *
-	 * <p>Everything else is deliberately absent, and its absence is a gate rather
-	 * than an omission. The bounding box is recomputed from position and pose;
-	 * the collision flags, the input vector and the fluid heights are computed
-	 * inside the transition; rotation is carried by the action, since
-	 * {@code MouseHandler} applies it between ticks and every implementation installs it at its
-	 * own tick head. A trace asking to inject one of those describes something no
-	 * client does, and reading it fails rather than reproducing it.
-	 *
-	 * <p>Public because it is consumed, not copied: the capture publishes against
-	 * it and both replay implementations apply against it. It used to be three private
-	 * lists plus two switch statements, and every field discovered by a capture
-	 * cost a round trip through all five.
+	 * <p>Everything else is deliberately absent. The bounding box is recomputed from position and
+	 * pose; the collision flags, the input vector and the fluid heights are computed inside the
+	 * transition; rotation is carried by the action, since {@code MouseHandler} applies it
+	 * between ticks. A file asking to inject one of those describes something no client does, and
+	 * reading it fails.
 	 */
 	public static final Set<StateField> SUPPORTED = Set.of(
-	    // handleMovePlayer -> setValuesFromPositionPacket -> Entity.setPos, which
-	    // recomputes the box rather than shifting it.
+	    // handleMovePlayer -> setValuesFromPositionPacket -> Entity.setPos, which recomputes the
+	    // box rather than shifting it.
 	    StateField.POS_X, StateField.POS_Y, StateField.POS_Z,
-	    // handleSetEntityMotion -> Entity.lerpMotion, a wholesale assignment.
-	    // ServerEntity publishes it with sendToTrackingPlayersAndSelf whenever
-	    // `hurtMarked` is set, so in practice this is damage knockback.
+	    // handleSetEntityMotion -> Entity.lerpMotion, a wholesale assignment. ServerEntity sends
+	    // it with sendToTrackingPlayersAndSelf whenever `hurtMarked` is set, so in practice this
+	    // is damage knockback.
 	    StateField.DELTA_X, StateField.DELTA_Y, StateField.DELTA_Z,
-	    // The synchronised shared-flags byte, echoed back to its own player
-	    // , and the pose that travels with it.
+	    // The synchronized shared-flags byte, echoed back to its own player, and the pose that
+	    // travels with it.
 	    StateField.SPRINTING, StateField.SPRINTING_ATTRIBUTE, StateField.FOOD_LEVEL, StateField.SWIMMING,
 	    StateField.FALL_FLYING, StateField.SHIFT_KEY_DOWN, StateField.SHARED_FLAGS_RESIDUAL, StateField.POSE,
 	    // ClientboundPlayerAbilitiesPacket.
 	    StateField.MAY_FLY, StateField.FLYING, StateField.FLYING_SPEED,
-	    // Server-owned freeze accounting and the attribute modifier behind it
-	    // , plus the equipment-derived facts that arrive with a sync.
+	    // Server-owned freeze accounting and the attribute modifier behind it, plus the
+	    // equipment-derived facts that arrive with a sync.
 	    StateField.TICKS_FROZEN, StateField.FROST_SPEED_TICKS, StateField.CAN_FREEZE, StateField.GLIDER_USABLE,
 	    StateField.CAN_WALK_ON_POWDER_SNOW, StateField.SPRINT_WINDOW_TICKS, StateField.AUTO_JUMP_ENABLED,
 	    StateField.FAST_LAVA,
 	    // Reset by a teleport alongside the position it corrects.
 	    StateField.FALL_DISTANCE);
 
+	/** Copies the event list; refuses a blank scenario. */
 	public StateEventTrace {
 		if (scenario == null || scenario.isBlank()) {
 			throw new IllegalArgumentException("scenario must not be blank");
@@ -85,34 +77,44 @@ public record StateEventTrace(String scenario, List<StateEvent> events) {
 		events = List.copyOf(events);
 	}
 
+	/**
+	 * Reads the state events at {@code path}. Refuses with an {@link IOException} any other format
+	 * version, an unsupported field, an out-of-order or duplicate event, or a value wider than the
+	 * field's kind.
+	 */
 	public static StateEventTrace read(final Path path) throws IOException {
 		try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
 			return read(reader);
 		}
 	}
 
+	/** Writes {@code trace} to {@code path} as UTF-8, replacing any existing file. */
 	public static void write(final StateEventTrace trace, final Path path) throws IOException {
 		try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-			writer.write(MAGIC + "\t" + VERSION + "\n");
-			writer.write("#scenario\t" + trace.scenario() + "\n");
-			writer.write("tick\tphase\tfield\traw_value\n");
-			for (StateEvent event : trace.events()) {
-				writer.write(event.tick() + "\t" + event.phase().name() + "\t" + event.field().name() + "\t"
-				    + String.format(java.util.Locale.ROOT, "%016x", event.rawBits()) + "\n");
-			}
+			write(trace, writer);
+		}
+	}
+
+	static void write(final StateEventTrace trace, final Writer writer) throws IOException {
+		writer.write(MAGIC + "\t" + FORMAT_VERSION + "\n");
+		writer.write("#scenario\t" + trace.scenario() + "\n");
+		writer.write(COLUMNS + "\n");
+		for (StateEvent event : trace.events()) {
+			writer.write(event.tick() + "\t" + event.phase().name() + "\t" + event.field().name() + "\t"
+			    + String.format(Locale.ROOT, "%016x", event.rawBits()) + "\n");
 		}
 	}
 
 	static StateEventTrace read(final BufferedReader reader) throws IOException {
 		String[] magic = requireLine(reader, "magic").split("\\t", -1);
-		if (magic.length != 2 || !MAGIC.equals(magic[0]) || !Integer.toString(VERSION).equals(magic[1])) {
-			throw new IOException("expected " + MAGIC + "\t" + VERSION);
+		if (magic.length != 2 || !MAGIC.equals(magic[0]) || !Integer.toString(FORMAT_VERSION).equals(magic[1])) {
+			throw new IOException("expected " + MAGIC + "\t" + FORMAT_VERSION);
 		}
 		String[] scenarioLine = requireLine(reader, "scenario").split("\\t", -1);
 		if (scenarioLine.length != 2 || !"#scenario".equals(scenarioLine[0]) || scenarioLine[1].isBlank()) {
 			throw new IOException("invalid state-event scenario header");
 		}
-		if (!"tick\tphase\tfield\traw_value".equals(requireLine(reader, "columns"))) {
+		if (!COLUMNS.equals(requireLine(reader, "columns"))) {
 			throw new IOException("invalid state-event columns");
 		}
 
@@ -148,17 +150,9 @@ public record StateEventTrace(String scenario, List<StateEvent> events) {
 				throw new IOException("PRE state events must precede POST events at a tick");
 			}
 			if (!SUPPORTED.contains(field)) {
-				throw new IOException("unsupported authoritative state field " + field);
+				throw new IOException("unsupported server-written state field " + field);
 			}
-			// Width is checked against the field's own kind. This used to be a
-			// blanket 32-bit bound, which was right while every authoritative
-			// field was an int or a flag bit and silently wrong the moment one
-			// carried a double: half of every velocity would have been rejected as
-			// out of range, and the half that fit would have been read as a
-			// different number.
-			if (field.kind() != StateField.Kind.DOUBLE && (rawBits & 0xffff_ffff_0000_0000L) != 0L) {
-				throw new IOException("authoritative " + field.kind() + " value exceeds 32 raw bits for " + field);
-			}
+			requireWidth(field, rawBits);
 			long identity = ((long) tick << 33) | ((long) phase.ordinal() << 32) | field.ordinal();
 			if (!tickPhaseFields.add(identity)) {
 				throw new IOException("duplicate " + phase + " state event for " + field + " at tick " + tick);
@@ -170,6 +164,28 @@ public record StateEventTrace(String scenario, List<StateEvent> events) {
 		return new StateEventTrace(scenarioLine[1], events);
 	}
 
+	/**
+	 * Checks the raw value against the field's own kind: a double may use all 64 bits, a boolean
+	 * only 0 or 1, everything else the low 32 bits. A blanket 32-bit bound would silently reject
+	 * half of every velocity and misread the other half.
+	 */
+	private static void requireWidth(final StateField field, final long rawBits) throws IOException {
+		switch (field.kind()) {
+			case DOUBLE -> {
+			}
+			case BOOLEAN -> {
+				if (rawBits != 0L && rawBits != 1L) {
+					throw new IOException("server-written BOOLEAN value must be 0 or 1 for " + field);
+				}
+			}
+			default -> {
+				if ((rawBits & HIGH_32_BITS) != 0L) {
+					throw new IOException("server-written " + field.kind() + " value exceeds 32 raw bits for " + field);
+				}
+			}
+		}
+	}
+
 	private static String requireLine(final BufferedReader reader, final String what) throws IOException {
 		String line = reader.readLine();
 		if (line == null) {
@@ -178,16 +194,33 @@ public record StateEventTrace(String scenario, List<StateEvent> events) {
 		return line;
 	}
 
-	/** The boundary at which an externally observed state update takes effect. */
-	public enum Phase { PRE, POST }
+	/** When, relative to the named client tick, a server-written value takes effect. */
+	public enum Phase {
+		/** Before the tick runs. */
+		PRE,
+		/** After the tick completed. */
+		POST
+	}
 
-	/** A raw field update applied at the declared tick boundary. */
+	/**
+	 * One server-written field value, in the raw-bit form of the field's {@link StateField.Kind}.
+	 *
+	 * @param tick the zero-based client tick the write is attached to
+	 * @param phase whether the write lands before or after that tick
+	 * @param field the written field, one of {@link #SUPPORTED}
+	 * @param rawBits the value in the field's raw-bit encoding
+	 */
 	public record StateEvent(int tick, Phase phase, StateField field, long rawBits) {}
 
-	/** Apply one server-written value to a player state, preserving its invariants. */
+	/**
+	 * Installs one server-written value on {@code state}, preserving its invariants: a position
+	 * write recomputes the bounding box, a pose write recomputes it too. Refuses a field outside
+	 * {@link #SUPPORTED} with {@link IllegalArgumentException}. The sneak flag is installed only
+	 * on a {@code ServerPlayerState}, since the client copy has nowhere to keep it.
+	 */
 	public static void apply(final PlayerState state, final StateEvent event) {
 		if (!SUPPORTED.contains(event.field())) {
-			throw new IllegalArgumentException("unsupported authoritative state field " + event.field());
+			throw new IllegalArgumentException("unsupported server-written state field " + event.field());
 		}
 		int value = (int) event.rawBits();
 		double raw = Double.longBitsToDouble(event.rawBits());
@@ -200,16 +233,17 @@ public record StateEventTrace(String scenario, List<StateEvent> events) {
 			case FOOD_LEVEL -> state.foodLevel = value;
 			case SWIMMING -> state.swimming = flag;
 			case FALL_FLYING -> state.fallFlying = flag;
-			// The named bits live in their own fields; a byte carrying them would
-			// double-count on the way back into an audited vector.
+			// The named bits live in their own fields; a byte carrying them would double-count on
+			// the way back into a recorded vector.
 			case SHARED_FLAGS_RESIDUAL -> state.sharedFlagsResidual = SharedFlagBits.residual((byte) value);
-			// The client copy has nowhere to put it: the bit is server-written and
-			// the client never reads it back, since LocalPlayer overrides
-			// isShiftKeyDown() to answer the input, so the audited column is
-			// excluded from comparison for the same reason. The server's copy
-			// does hold it, as the flag its own tick reads for careful stepping.
+			// The client copy has nowhere to put it: the bit is server-written and the client never
+			// reads it back, since LocalPlayer overrides isShiftKeyDown() to answer the input, so
+			// the recorded column is excluded from comparison for the same reason. The server's
+			// copy does hold it, as the flag its own tick reads.
 			case SHIFT_KEY_DOWN -> {
-				if (state instanceof ServerPlayerState server) server.shiftKeyDown = flag;
+				if (state instanceof ServerPlayerState server) {
+					server.shiftKeyDown = flag;
+				}
 			}
 			case POSE -> {
 				state.pose = PlayerState.Pose.fromVanillaId(value);
@@ -231,7 +265,7 @@ public record StateEventTrace(String scenario, List<StateEvent> events) {
 			case POS_X -> state.placeAt(raw, state.y, state.z);
 			case POS_Y -> state.placeAt(state.x, raw, state.z);
 			case POS_Z -> state.placeAt(state.x, state.y, raw);
-			default -> throw new IllegalArgumentException("unsupported authoritative state field " + event.field());
+			default -> throw new IllegalArgumentException("unsupported server-written state field " + event.field());
 		}
 	}
 }

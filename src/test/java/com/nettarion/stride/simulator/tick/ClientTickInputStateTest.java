@@ -1,25 +1,26 @@
 package com.nettarion.stride.simulator.tick;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.world.FlatFloorView;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
-class ClientTickInputStateTest {
+final class ClientTickInputStateTest {
 	@Test
 	void previousForwardVectorChangesTheSprintTriggerTransition() {
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 		PlayerInput forward = new PlayerInput(true, false, false, false, false, false, false, 0.0F, 0.0F);
 		PlayerState firstPress = initialState();
 		PlayerState heldFromPriorTick = initialState();
 		heldFromPriorTick.inputKeyPresses = (byte) PlayerInput.FLAG_FORWARD;
 		heldFromPriorTick.inputMoveVectorY = 1.0F;
 
-		kernel.tick(firstPress, forward, FlatFloorView.ordinary(0, -64));
-		kernel.tick(heldFromPriorTick, forward, FlatFloorView.ordinary(0, -64));
+		simulator.tick(firstPress, forward, FlatFloorView.ordinary(0, -64));
+		simulator.tick(heldFromPriorTick, forward, FlatFloorView.ordinary(0, -64));
 
 		assertEquals(7, firstPress.sprintTriggerTime, "a new forward press opens the double-tap sprint window");
 		assertEquals(0, heldFromPriorTick.sprintTriggerTime, "held forward is not a new press");

@@ -1,13 +1,22 @@
 package com.nettarion.stride.simulator.geometry;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 
-/** Admission for one vanilla-style closed integer collision cursor. */
+/**
+ * Admission of a collision query box to vanilla's closed integer cell cursor.
+ *
+ * <p>Vanilla walks the cells a query reaches with an {@code int}-indexed {@code Cursor3D} over the
+ * box expanded by {@code 1.0E-7} and one ring of cells. A box whose cursor would not fit that
+ * indexing is refused here rather than walked wrongly. Stateless and thread-safe.
+ */
 public final class CollisionQuerySpan {
 	private static final double EPSILON = 1.0E-7;
+
 	private static final double FAST_MINIMUM_FACE = (double) Integer.MIN_VALUE + 2.0;
+
 	private static final double FAST_MAXIMUM_FACE = (double) Integer.MAX_VALUE - 2.0;
+
 	// An extent of 1280 can occupy at most 1284 cursor cells after epsilon,
 	// flooring, and the two-cell outer ring; 1284^3 fits in a signed int.
 	private static final double MAXIMUM_FAST_EXTENT = 1280.0;
@@ -15,11 +24,15 @@ public final class CollisionQuerySpan {
 	private CollisionQuerySpan() {}
 
 	/**
-	 * Proves the epsilon-expanded, one-cell-ring cursor before any narrowing.
+	 * Refuses a query box, in blocks, whose epsilon-expanded one-ring cursor leaves the {@code int}
+	 * domain or whose cell count overflows an {@code int}.
 	 *
-	 * <p>The upper bound deliberately stops below {@link Integer#MAX_VALUE}:
-	 * an inclusive {@code int} loop ending there would wrap when incremented.
-	 * The dense cardinality check matches vanilla's int-sized cursor indexing.
+	 * <p>The upper bound deliberately stops below {@link Integer#MAX_VALUE}: an inclusive
+	 * {@code int} loop ending there would wrap when incremented. The dense cardinality check matches
+	 * vanilla's int-sized cursor indexing.
+	 *
+	 * @throws UnimplementedMechanicException with {@code INADMISSIBLE_COORDINATE} when a face is not
+	 *         finite, the box is inverted, or the cursor would not fit
 	 */
 	public static void requireSupported(final double minX, final double minY, final double minZ, final double maxX,
 	    final double maxY, final double maxZ) {
@@ -44,22 +57,6 @@ public final class CollisionQuerySpan {
 		    && maximum - minimum <= MAXIMUM_FAST_EXTENT;
 	}
 
-	/**
-	 * Whether the exact outer-ring cursor for a collision query lies inside an
-	 * inclusive integer region. Invalid or nonrepresentable queries are refused.
-	 *
-	 * <p>This lets a world-capture owner prove that its first kernel query is
-	 * answerable without duplicating the kernel's epsilon and cursor arithmetic.
-	 */
-	public static boolean fitsInside(final double minX, final double minY, final double minZ, final double maxX,
-	    final double maxY, final double maxZ, final int regionMinX, final int regionMinY, final int regionMinZ,
-	    final int regionMaxX, final int regionMaxY, final int regionMaxZ) {
-		requireSupported(minX, minY, minZ, maxX, maxY, maxZ);
-		return Mth.floor(minX - EPSILON) - 1 >= regionMinX && Mth.floor(minY - EPSILON) - 1 >= regionMinY
-		    && Mth.floor(minZ - EPSILON) - 1 >= regionMinZ && Mth.floor(maxX + EPSILON) + 1 <= regionMaxX
-		    && Mth.floor(maxY + EPSILON) + 1 <= regionMaxY && Mth.floor(maxZ + EPSILON) + 1 <= regionMaxZ;
-	}
-
 	private static long cursorWidth(final double minimum, final double maximum) {
 		double expandedMinimum = minimum - EPSILON;
 		double expandedMaximum = maximum + EPSILON;
@@ -79,6 +76,6 @@ public final class CollisionQuerySpan {
 
 	private static UnimplementedMechanicException unsupported() {
 		return new UnimplementedMechanicException(
-		    Refusal.INADMISSIBLE_COORDINATE, "collision query exceeds the exact integer-cursor domain");
+		    RefusalCause.INADMISSIBLE_COORDINATE, "collision query exceeds the exact integer-cursor domain");
 	}
 }

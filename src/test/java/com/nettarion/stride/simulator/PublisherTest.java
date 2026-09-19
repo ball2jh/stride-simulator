@@ -1,23 +1,23 @@
 package com.nettarion.stride.simulator;
 
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+
 import org.junit.jupiter.api.Test;
 
 /**
- * The retained publisher, rule by rule from {@code LocalPlayer.sendPosition}.
- *
- * <p>Every expectation is read off the pinned source: the strict squared
- * threshold {@code Mth.square(2.0E-4)} against the last <em>published</em>
- * position, the twentieth reminder, the packet priority, and which baselines
- * each form advances. {@code PublicationParityVanillaTest} runs the same
- * publisher on a real client for a whole plan.
+ * The publisher, rule by rule from vanilla's {@code LocalPlayer.sendPosition}: the strict squared
+ * threshold {@code Mth.square(2.0E-4)} against the last published position, the twentieth reminder,
+ * the packet priority, and which baselines each form advances.
  */
-class PublisherTest {
+final class PublisherTest {
 	private static final double THRESHOLD = Math.sqrt(2.0E-4 * 2.0E-4);
 
 	@Test
@@ -172,14 +172,9 @@ class PublisherTest {
 
 	private static WorldSnapshot flatWorld() {
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -6, -4, 9, 24, 9)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air")
-		                     .suffocation(WorldSnapshot.Suffocation.NO)
-		                     .build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
-		                .suffocation(WorldSnapshot.Suffocation.YES)
-		                .fullCube()
-		                .build());
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
+		        .palette(BlockEntry.builder(0, "minecraft:air").suffocation(Suffocation.NO).build(),
+		            BlockEntry.builder(1, "minecraft:stone").suffocation(Suffocation.YES).fullCube().build());
 		for (int z = -4; z <= 4; z++) {
 			for (int x = -4; x <= 4; x++) {
 				world.set(x, -1, z, 1);

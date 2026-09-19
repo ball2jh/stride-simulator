@@ -6,21 +6,26 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
+
 import java.util.ArrayList;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /**
- * The owned rollout is the published step on other storage: the same
- * boundaries tick for tick, the same writes, and no successor after a refusal.
+ * The rollout is the composed step on owned storage: the same boundaries tick for tick, the same
+ * writes, and no successor after a refusal.
  */
-class RolloutTest {
+final class RolloutTest {
 	private static final PlayerInput SPRINT_JUMP =
-	    new PlayerInput(true, false, false, false, true, false, true, 30.0F, 0.0F);
-	private static final PlayerInput WALK =
-	    new PlayerInput(true, false, false, false, false, false, false, -45.0F, 10.0F);
+	    PlayerInput.of(30.0F, 0.0F, PlayerInput.Key.FORWARD, PlayerInput.Key.JUMP, PlayerInput.Key.SPRINT);
+
+	private static final PlayerInput WALK = PlayerInput.of(-45.0F, 10.0F, PlayerInput.Key.FORWARD);
+
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 
 	@Test
@@ -29,8 +34,8 @@ class RolloutTest {
 		List<PlayerInput> actions = schedule();
 		Simulator published = new Simulator();
 		Rollout rollout = new Rollout();
-		SimulationState boundary = published.start(
-		    Worlds.groundedAt(0.5, 5.0, 0.5), ServerPlayerState.atBoundary(Worlds.groundedAt(0.5, 5.0, 0.5)));
+		SimulationState boundary = new SimulationState(
+		    Worlds.groundedAt(0.5, 5.0, 0.5), ServerPlayerState.atBoundary(Worlds.groundedAt(0.5, 5.0, 0.5)), 0);
 		rollout.load(boundary);
 		assertEquals(boundary.digest(), rollout.digest());
 		boolean sawWrite = false;
@@ -40,7 +45,7 @@ class RolloutTest {
 			boolean pending = rollout.tick(action, world, writes::add);
 			boundary = step.state();
 			assertEquals(step.writes(), writes);
-			assertEquals(boundary.hasPendingEffect(), pending);
+			assertEquals(boundary.hasPendingHurt(), pending);
 			assertEquals(boundary.digest(), rollout.digest());
 			assertEquals(boundary.digest(), rollout.boundary().digest());
 			assertTrue(PlayerState.rawEquals(boundary.clientState(), rollout.client()));
@@ -61,7 +66,7 @@ class RolloutTest {
 		SimulationState boundary = new SimulationState(client, ServerPlayerState.atBoundary(client), 0);
 		rollout.load(boundary);
 		// Walk off the captured region: the first tick that reads outside refuses.
-		PlayerInput away = new PlayerInput(true, false, false, false, false, false, true, 0.0F, 0.0F);
+		PlayerInput away = PlayerInput.of(0.0F, 0.0F, PlayerInput.Key.FORWARD, PlayerInput.Key.SPRINT);
 		boolean refused = false;
 		for (int tick = 0; tick < 400 && !refused; tick++) {
 			try {
@@ -71,11 +76,11 @@ class RolloutTest {
 			}
 		}
 		assertTrue(refused, "the fixture must leave its region");
-		assertFalse(rollout.holdsBoundary());
+		assertFalse(rollout.isLoaded());
 		assertThrows(IllegalStateException.class, () -> rollout.tick(IDLE, world));
 		assertThrows(IllegalStateException.class, rollout::boundary);
 		rollout.load(boundary);
-		assertTrue(rollout.holdsBoundary());
+		assertTrue(rollout.isLoaded());
 		assertEquals(boundary.digest(), rollout.digest());
 	}
 
@@ -93,24 +98,25 @@ class RolloutTest {
 	}
 
 	@Test
-	void carryingKeepsProofsAcrossARepublicationThatKeptTheSections() {
+	void carryingKeepsThePoseFitCacheAcrossARepublicationThatKeptTheSections() {
 		SnapshotView first = Worlds.ledge();
 		// The same snapshot compiled again: every section object is shared, so
-		// a carried proof holds; an uncarried one is keyed on the first view alone.
+		// a carried cache entry holds; an uncarried one is keyed on the first view alone.
 		SnapshotView again = SnapshotView.compile(first.snapshot());
 		assertNotEquals(first.identity(), again.identity());
 		Rollout rollout = new Rollout();
 		PlayerState start = Worlds.groundedAt(0.5, 5.0, -8.5);
 		rollout.load(new SimulationState(start, ServerPlayerState.atBoundary(start), 0));
-		for (int tick = 0; tick < 4; tick++)
+		for (int tick = 0; tick < 4; tick++) {
 			rollout.tick(WALK, first);
-		assertTrue(rollout.client().hasPoseFitCertificate(first, rollout.client().pose));
-		assertFalse(rollout.client().hasPoseFitCertificate(again, rollout.client().pose));
+		}
+		assertTrue(rollout.client().hasCachedPoseFit(first, rollout.client().pose));
+		assertFalse(rollout.client().hasCachedPoseFit(again, rollout.client().pose));
 		rollout.carry(first);
-		assertTrue(rollout.client().hasPoseFitCertificate(again, rollout.client().pose));
+		assertTrue(rollout.client().hasCachedPoseFit(again, rollout.client().pose));
 		SimulationState kept = rollout.boundary();
-		assertTrue(kept.clientState().hasPoseFitCertificate(again, kept.clientState().pose),
-		    "a published boundary carries the carried proof");
+		assertTrue(kept.clientState().hasCachedPoseFit(again, kept.clientState().pose),
+		    "a published boundary carries the carried cache entry");
 		// Stepping on in the new view agrees bit for bit with a fresh rollout there.
 		Rollout fresh = new Rollout().load(kept);
 		for (int tick = 0; tick < 8; tick++) {
@@ -134,17 +140,17 @@ class RolloutTest {
 
 		/** A stone floor at y 0 with a raised ledge whose edge a sprint jump clears and falls from. */
 		static SnapshotView ledge() {
-			WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build();
-			WorldSnapshot.BlockEntry stone = WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build();
+			BlockEntry air = BlockEntry.builder(0, "minecraft:air").build();
+			BlockEntry stone = BlockEntry.builder(1, "minecraft:stone").fullCube().build();
 			WorldSnapshot.Builder builder =
-			    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -16, -1, -16, 32, 16, 32)
-			        .palette(air, stone);
+			    WorldSnapshot.builder(OutsidePolicy.REFUSING, -16, -1, -16, 32, 16, 32).palette(air, stone);
 			for (int x = -16; x < 16; x++) {
 				for (int z = -16; z < 16; z++) {
 					builder.set(x, -1, z, 1);
 					if (z < 3) {
-						for (int y = 0; y < 5; y++)
+						for (int y = 0; y < 5; y++) {
 							builder.set(x, y, z, 1);
+						}
 					}
 				}
 			}

@@ -102,21 +102,6 @@ die () {
     exit 1
 } >&2
 
-# Independent Gradle daemons do not coordinate project build directories. Keep
-# the canonical lane single-writer; named lanes use isolated outputs and their
-# own lock in tools/gradle-lane.
-if [ -z "${STRIDE_GRADLE_LANE:-}" ]; then
-    if ! command -v flock >/dev/null 2>&1; then
-        die "ERROR: flock is required to protect the canonical Gradle outputs."
-    fi
-    mkdir -p -- "$APP_HOME/.gradle" || exit
-    exec 9>"$APP_HOME/.gradle/stride-canonical.lock"
-    if ! flock --nonblock 9; then
-        warn "gradlew: waiting for the canonical build lane"
-        flock 9
-    fi
-fi
-
 # OS specific support (must be 'true' or 'false').
 cygwin=false
 msys=false

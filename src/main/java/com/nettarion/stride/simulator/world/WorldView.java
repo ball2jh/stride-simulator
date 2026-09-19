@@ -1,9 +1,9 @@
 package com.nettarion.stride.simulator.world;
 
 import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.geometry.Mth;
 
@@ -11,42 +11,61 @@ import com.nettarion.stride.simulator.geometry.Mth;
  * The read interface the simulator calls: every world fact a tick may ask for,
  * and nothing it may change.
  *
- * <p>This is the complete movement-fact seam for one admitted transition, not
- * a general level API. Its closure includes every collision shape and source
- * identity, fluid sample, support fact, block coefficient, traversal/contact
- * effect, pose fit, and context-sensitive block answer the kernel can query
- * from the initial state through its successor. Implementations must also keep
- * those answers coherent under the collision and immutability version
- * contracts below.
+ * <p>This is the complete movement-fact seam for one transition, not a general
+ * level API: every collision shape and its provenance, fluid sample, support
+ * fact, block coefficient, traversal or contact effect, pose fit, and
+ * context-sensitive block answer the simulator can ask for between one state
+ * and its successor. Implementations must also keep those answers coherent
+ * under the collision-version and immutability contracts below.
  *
- * <p>A default answer means the implementation has proved that fact absent in
- * its admitted region. It must not translate unavailable cells, unknown block
- * state, or unmodelled dynamic context into a neutral answer. Such a
- * transition is refused with {@link UnimplementedMechanicException}.
+ * <p>A default answer means the implementation knows that fact is absent in
+ * its region. It must not translate unavailable cells, unknown block state, or
+ * unmodeled dynamic context into a neutral answer; such a transition is
+ * refused with {@link UnimplementedMechanicException}. The coarse per-span
+ * questions are inherited from {@link SpanQueries}.
  */
-public interface WorldView {
+public interface WorldView extends SpanQueries {
 	/**
-	 * Explicit acknowledgement that this view can resolve every movement fact the
-	 * proposed transition may reach in the kernel's supported slice. The neutral
-	 * defaults below are conveniences for complete implementations that can prove
-	 * a fact absent; they are not a license for a partial adapter to turn an
-	 * unknown fact into vanilla's default.
+	 * The 1.0E-7 vanilla's collision and clip code uses to deflate a query box
+	 * and to widen a cell test, so that a box resting exactly on a face neither
+	 * collides with the block behind it nor slips past a shape it touches.
+	 * Implementations reproduce it wherever they reproduce that arithmetic.
+	 */
+	double VANILLA_EPSILON = 1.0E-7;
+
+	/**
+	 * Explicit acknowledgement that this view can resolve every movement fact a
+	 * transition may reach in the admitted domain. The neutral defaults below
+	 * are conveniences for complete implementations that know a fact is absent;
+	 * they are not a license for a partial implementation to turn an unknown
+	 * fact into vanilla's default.
 	 *
 	 * <p>Every implementation must make this promise explicitly after auditing
-	 * its answers. {@link com.nettarion.stride.simulator.tick.ClientTick} checks it before mutating caller state.
-	 * Returning {@code false} causes a typed refusal; returning {@code true} while
-	 * an answer is unavailable violates this interface.
+	 * its answers. The tick checks it before mutating caller state. Returning
+	 * {@code false} causes a typed refusal; returning {@code true} while an
+	 * answer is unavailable violates this interface.
 	 */
 	boolean movementFactsComplete();
 
 	/** The vertical effect applied by a captured bubble-column state. */
-	enum BubbleColumnMode { NONE, DRAG_DOWN, PUSH_UP }
+	enum BubbleColumnMode {
+		/** Not a bubble column. */
+		NONE,
+		/** A whirlpool over a magma block, which pulls the player down. */
+		DRAG_DOWN,
+		/** An upward column over soul sand, which pushes the player up. */
+		PUSH_UP
+	}
 
 	/** State-dependent collision rules that cannot be represented by static boxes alone. */
 	enum CollisionBehavior {
+		/** The captured boxes are the shape. */
 		ORDINARY,
+		/** Scaffolding that is supported: a top plate the player may stand on or sneak through. */
 		SCAFFOLDING_SUPPORTED,
+		/** Scaffolding's bottom-unstable state: a bottom plate for a player below it. */
 		SCAFFOLDING_UNSTABLE_BOTTOM,
+		/** Powder snow for a player without leather boots: solid only past the falling distance. */
 		POWDER_SNOW_NO_BOOTS,
 		/** Captured geometry whose server can change after player contact. */
 		SERVER_MUTABLE_SUPPORT
@@ -56,44 +75,72 @@ public interface WorldView {
 	enum CollisionShapeProtocol {
 		/** Each {@link CollisionBuffer#add} is only an independent box. */
 		LEGACY_BOXES,
-		/** Source-shape groups and canonical-full identity are both preserved. */
+		/** Vanilla shape groups and canonical-full identity are both preserved. */
 		SOURCE_GROUPS_V1
 	}
 
 	/** Resolved block-state role used by {@code LivingEntity.onClimbable}. */
 	enum Climbability {
+		/** Not climbable. */
 		NONE,
+		/** In {@code BlockTags.CLIMBABLE}. */
 		CLIMBABLE,
+		/** Climbable except while gliding: in both the climbable and the can-glide-through tag. */
 		GLIDE_THROUGH,
+		/** A ladder facing north; a matching open trapdoor above it is climbable. */
 		LADDER_NORTH,
+		/** A ladder facing east. */
 		LADDER_EAST,
+		/** A ladder facing south. */
 		LADDER_SOUTH,
+		/** A ladder facing west. */
 		LADDER_WEST,
+		/** An open trapdoor facing north, climbable over a ladder facing the same way. */
 		OPEN_TRAPDOOR_NORTH,
+		/** An open trapdoor facing east. */
 		OPEN_TRAPDOOR_EAST,
+		/** An open trapdoor facing south. */
 		OPEN_TRAPDOOR_SOUTH,
+		/** An open trapdoor facing west. */
 		OPEN_TRAPDOOR_WEST
 	}
 
 	/** Which {@code Block.stepOn} body this cell runs when it is underfoot. */
-	enum StepOn { NONE, SLIME }
+	enum StepOn {
+		/** No client-visible step-on body. */
+		NONE,
+		/** {@code SlimeBlock.stepOn}: the horizontal slow-down of a player who is not sneaking. */
+		SLIME
+	}
 
 	/**
 	 * Which {@code entityInside} body the inside-block traversal runs at a cell
-	 * when that body changes audited client state. Bubble columns and powder snow
+	 * when that body changes client-visible state. Bubble columns and powder snow
 	 * keep their own captured facts.
 	 */
-	enum InsideEffect { NONE, COBWEB, SWEET_BERRY_BUSH, HONEY, LAVA_CAULDRON }
+	enum InsideEffect {
+		/** No client-visible inside body. */
+		NONE,
+		/** {@code WebBlock.entityInside}: the stuck-multiplier slow-down. */
+		COBWEB,
+		/** {@code SweetBerryBushBlock.entityInside}: the slow-down of a grown bush. */
+		SWEET_BERRY_BUSH,
+		/** {@code HoneyBlock}: the sliding-down speed cap. */
+		HONEY,
+		/** {@code LavaCauldronBlock.entityInside}: the lava contact. */
+		LAVA_CAULDRON
+	}
 
 	/**
 	 * Which server-only contact body a cell runs on the player: the
 	 * {@code entityInside} or {@code stepOn} that hurts, ignites, or refuses.
 	 * The client-visible bodies are {@link InsideEffect} and {@link StepOn};
-	 * this is what only the server's copy sees. A cell with a body the slice
-	 * does not model refuses on contact rather than passing as inert, which
-	 * is how an unmodelled hazard fails closed inside the tick.
+	 * this is what only the server's copy sees. A cell with a body outside the
+	 * admitted domain refuses on contact rather than passing as inert, which
+	 * is how an unmodeled hazard fails closed inside the tick.
 	 */
 	enum Contact {
+		/** No server-only contact body. */
 		NONE,
 		/** {@code CactusBlock.entityInside}: one point on every visit. */
 		CACTUS,
@@ -111,10 +158,10 @@ public interface WorldView {
 		SOUL_FIRE,
 		/** {@code LavaCauldronBlock}: clear freeze, lava ignition, four points. */
 		LAVA_CAULDRON,
-		/** A body the slice does not model; a visit refuses. */
-		UNMODELLED,
+		/** A body outside the admitted domain; a visit refuses. */
+		UNMODELED,
 		/** A capture that predates this fact for a body that depends on block state; a visit refuses. */
-		UNKNOWN
+		UNRECORDED
 	}
 
 	/**
@@ -138,15 +185,25 @@ public interface WorldView {
 		FARMLAND,
 		/** {@code PowderSnowBlock}: a sound and no hit. */
 		POWDER_SNOW,
-		/** A body the slice does not model; a landing refuses. */
-		UNMODELLED,
+		/** A body outside the admitted domain; a landing refuses. */
+		UNMODELED,
 		/** A capture that predates this fact for a body that depends on block state; a landing refuses. */
+		UNRECORDED
+	}
+
+	/** The answer to {@link #airIn}: air is the block identity, not the absence of a shape. */
+	enum Air {
+		/** Every cell in the range is an air block state. */
+		ALL_AIR,
+		/** At least one cell in the range is known not to be air. */
+		NOT_AIR,
+		/** No known cell is non-air, but some cell's identity is not declared. */
 		UNKNOWN
 	}
 
 	/**
 	 * Version of every fact that can affect {@link #collectCollisionBoxes}.
-	 * Mutable worlds must change this value before publishing changed collision
+	 * Mutable worlds must change this value before exposing changed collision
 	 * geometry. Immutable worlds may return a constant. Cache users also compare
 	 * the {@code WorldView} object by identity; equal versions across two world
 	 * objects do not make their collision answers interchangeable.
@@ -155,16 +212,17 @@ public interface WorldView {
 
 	/**
 	 * A number that names this exact object among every view alive in this
-	 * process, so retained proofs can be keyed to the world they were proven in
-	 * without holding it.
+	 * process, so a pose-fit cache or retained span can be keyed to the world
+	 * it was computed in without holding it.
 	 *
 	 * <p>Two views never share a non-zero identity, and a fork is a new view
-	 * with a new one. Zero is the identity of a view that declines to be
-	 * proven against: every retained proof keyed to it is a miss, so a view
-	 * that does not implement this keeps the ordinary, unretained path. A
-	 * proof compares this number, never the object, so a retained state does
-	 * not pin the corridor it was last proven in and a collected view cannot
-	 * turn a hit into a miss.
+	 * with a new one. Zero is the identity of a view that declines to be cached
+	 * against: every cache entry keyed to it is a miss, so a view that does not
+	 * implement this keeps the ordinary, uncached path. A cache compares this
+	 * number, never the object, so a retained state does not pin the world it
+	 * was last computed in and a collected view cannot turn a hit into a miss.
+	 * An implementation takes its number from {@code WorldIdentity.next()} once,
+	 * in its constructor.
 	 */
 	default long identity() {
 		return 0L;
@@ -175,7 +233,7 @@ public interface WorldView {
 	 *
 	 * <p>This is stronger than returning a constant {@link #collisionVersion}:
 	 * collision geometry, fluids, coefficients, and every other answer must remain
-	 * unchanged for the lifetime of this exact object. Retained proofs may omit
+	 * unchanged for the lifetime of this exact object. A pose-fit cache may omit
 	 * version reads only when this returns {@code true}.
 	 */
 	default boolean movementFactsImmutable() {
@@ -188,8 +246,8 @@ public interface WorldView {
 	 * value promise the span's collision answers did not change between them.
 	 *
 	 * <p>Separate from {@link #collisionVersion} because a single counter answers
-	 * a local question globally: an edit anywhere changes it, so every cached
-	 * proof everywhere is discarded. That costs nothing in a snapshot nobody
+	 * a local question globally: an edit anywhere changes it, so every cache
+	 * entry everywhere is discarded. That costs nothing in a snapshot nobody
 	 * edits and everything in a streaming world where chunks arrive continuously.
 	 *
 	 * <p>The default is the global answer, which is correct but coarse: it may
@@ -204,11 +262,11 @@ public interface WorldView {
 	 * A number naming the collision facts inside this closed cell span, across
 	 * views: two views that answer the same non-zero number for the same span
 	 * promise the same collision answers inside it, whichever world each was
-	 * compiled from and whether or not either was edited elsewhere. A
-	 * retained proof keyed on it survives a republication that kept the
-	 * sections it touched. Zero means no such number is available for the
-	 * span, and a proof falls back to {@link #identity} and
-	 * {@link #collisionVersionIn}, which name this one view.
+	 * compiled from and whether or not either was edited elsewhere. A cache
+	 * entry keyed on it survives a later snapshot that kept the sections it
+	 * touched. Zero means no such number is available for the span, and a cache
+	 * falls back to {@link #identity} and {@link #collisionVersionIn}, which
+	 * name this one view.
 	 *
 	 * <p>The default is zero: a view that does not page its world by section
 	 * has nothing to key across views on.
@@ -228,15 +286,15 @@ public interface WorldView {
 	 */
 	default void fluidAt(final int x, final int y, final int z, final FluidSample target) {
 		throw UnimplementedMechanicException.deferred(
-		    Refusal.UNDECLARED_WORLD_FACT, () -> "this world cannot resolve fluid at " + x + "," + y + "," + z);
+		    RefusalCause.UNDECLARED_WORLD_FACT, () -> "this world cannot resolve fluid at " + x + "," + y + "," + z);
 	}
 
-	/** Frozen BubbleColumnBlock direction for this block-state cell. */
+	/** Frozen {@code BubbleColumnBlock} direction for this block-state cell. */
 	default BubbleColumnMode bubbleColumnModeAt(final int x, final int y, final int z) {
 		return BubbleColumnMode.NONE;
 	}
 
-	/** Whether any captured cell can invoke BubbleColumnBlock.entityInside. */
+	/** Whether any captured cell can invoke {@code BubbleColumnBlock.entityInside}. */
 	default boolean hasBubbleColumns() {
 		return false;
 	}
@@ -246,24 +304,14 @@ public interface WorldView {
 		return false;
 	}
 
-	/** The answer to {@link #airIn}: air is the block identity, not the absence of a shape. */
-	enum Air {
-		/** Every cell in the range is an air block state. */
-		ALL_AIR,
-		/** At least one cell in the range is known not to be air. */
-		NOT_AIR,
-		/** No known cell is non-air, but some cell's identity is not declared. */
-		UNKNOWN
-	}
-
 	/**
 	 * Whether every cell in the closed cell range is an air block state, the
 	 * question {@code ServerGamePacketListenerImpl.noBlocksAround} asks for the
 	 * floating latch. One known non-air cell decides {@link Air#NOT_AIR}
 	 * whatever else is unknown; a range of known air is {@link Air#ALL_AIR}; a
-	 * range with no known non-air cell and an undeclared identity is
-	 * {@link Air#UNKNOWN}, which the caller carries rather than resolves. A view
-	 * that declares no block identities answers unknown.
+	 * range with no known non-air cell and an undeclared identity, including a
+	 * missing section, is {@link Air#UNKNOWN}, which the caller carries rather
+	 * than resolves. A view that declares no block identities answers unknown.
 	 */
 	default Air airIn(final int x0, final int y0, final int z0, final int x1, final int y1, final int z1) {
 		return Air.UNKNOWN;
@@ -287,15 +335,13 @@ public interface WorldView {
 	 * Whole-view coefficient facts. Movement asks for friction, speed factor,
 	 * jump factor and climbability of specific cells every tick, and in almost
 	 * every real world every cell answers the default. A view that knows this
-	 * about itself lets the kernel skip the lookup rather than perform it and
+	 * about itself lets the tick skip the lookup rather than perform it and
 	 * discard the result.
 	 *
 	 * Each default is the conservative answer, so a view that does not implement
-	 * them keeps taking the ordinary path.
-	 *
-	 * Whole-view predicates become less selective as regions grow.
-	 * {@link #propertiesIn} asks the same questions of the scanned span; these
-	 * predicates remain its conservative fallback.
+	 * them keeps taking the ordinary path. Whole-view predicates become less
+	 * selective as regions grow; SpanQueries.propertiesIn asks the same
+	 * questions of the scanned span, and these remain its conservative fallback.
 	 */
 
 	/** Whether any cell is climbable. False permits skipping climbable lookups. */
@@ -318,6 +364,11 @@ public interface WorldView {
 		return true;
 	}
 
+	/** Whether any cell is powder snow a bootless player sinks into. */
+	default boolean hasPowderSnow() {
+		return false;
+	}
+
 	/**
 	 * {@code LocalPlayer.suffocatesAt}: whether any suffocating block's collision
 	 * shape reaches the deflated box that covers one whole block column over the
@@ -326,30 +377,28 @@ public interface WorldView {
 	 * <p>{@code LocalPlayer.aiStep} asks this four times a tick, once per box
 	 * corner, and nudges {@code deltaMovement} towards the nearest non-suffocating
 	 * side when it answers yes. The Y span is the player's, and the X/Z span is
-	 * the cell's — wider than the player — so this is not "is the player inside a
+	 * the cell's, wider than the player, so this is not "is the player inside a
 	 * block", and a view must answer it as posed.
 	 *
-	 * <p>The default answers for a view that does not carry the fact, and it is
-	 * exact exactly where the answer cannot be yes. {@code isSuffocating} defaults
-	 * to {@code blocksMotion() && isCollisionShapeFullBlock()}, and the four
-	 * blocks that replace the predicate with {@code Blocks::always} at this pin —
-	 * farmland, soul sand, dirt path and mud — all carry collision geometry, so a
-	 * column with no collision in this span cannot suffocate whatever its states
-	 * are. Anything that does collide fails closed: exact movement forbids
-	 * the convenient {@code false}, and geometry cannot imply the predicate (stone
-	 * and glass are one shape and disagree).
-	 *
-	 * <p>It allocates. A view that intends to be fast overrides this.
+	 * <p>The default is exact exactly where the answer cannot be yes, and refuses
+	 * elsewhere. It allocates; a view that intends to be fast overrides this.
 	 */
 	default boolean suffocatesAt(
 	    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
+		// isSuffocating defaults to blocksMotion() && isCollisionShapeFullBlock(),
+		// and the four blocks that replace the predicate with Blocks::always in
+		// vanilla (farmland, soul sand, dirt path and mud) all carry collision
+		// geometry, so a column with no collision in this span cannot suffocate
+		// whatever its states are. Anything that does collide fails closed:
+		// geometry cannot imply the predicate, since stone and glass are one
+		// shape and disagree.
 		CollisionBuffer probe = new CollisionBuffer(1);
-		collectCollisionBoxes(cellX + 1.0E-7, boundingBoxMinY + 1.0E-7, cellZ + 1.0E-7, cellX + 1.0 - 1.0E-7,
-		    boundingBoxMaxY - 1.0E-7, cellZ + 1.0 - 1.0E-7, probe);
+		collectCollisionBoxes(cellX + VANILLA_EPSILON, boundingBoxMinY + VANILLA_EPSILON, cellZ + VANILLA_EPSILON,
+		    cellX + 1.0 - VANILLA_EPSILON, boundingBoxMaxY - VANILLA_EPSILON, cellZ + 1.0 - VANILLA_EPSILON, probe);
 		if (probe.size() == 0) {
 			return false;
 		}
-		throw UnimplementedMechanicException.deferred(Refusal.UNDECLARED_WORLD_FACT,
+		throw UnimplementedMechanicException.deferred(RefusalCause.UNDECLARED_WORLD_FACT,
 		    ()
 		        -> "this world cannot resolve suffocation for the collision it has at " + cellX + "," + cellZ + " over "
 		        + boundingBoxMinY + ".." + boundingBoxMaxY);
@@ -386,19 +435,32 @@ public interface WorldView {
 		return false;
 	}
 
+	/*
+	 * Player context. Scaffolding and powder snow resolve their collision shape
+	 * from the player rather than from the block state, so the support and
+	 * collision queries come in a chain of overloads: the context-free form,
+	 * then one adding the player's feet Y and sneak key, then the fall distance,
+	 * then whether powder snow bears the player, and finally one taking the
+	 * whole CollisionContext. Each default delegates to the next shorter form,
+	 * dropping the extra fact, so an implementation overrides the longest form
+	 * it can answer and a world with no context-sensitive block need override
+	 * only the context-free one. A context-sensitive world refuses the
+	 * context-free form rather than substituting defaults.
+	 */
+
 	/**
 	 * {@code CollisionGetter.findSupportingBlock}: the cell of the collision
 	 * nearest {@code (atX, atY, atZ)} whose shape reaches the box, or absent.
 	 *
 	 * <p>"Nearest" is {@code BlockPos.distToCenterSqr} to the player's position,
-	 * with ties broken by keeping the larger {@code Vec3i.compareTo} — Y, then Z,
+	 * with ties broken by keeping the larger {@code Vec3i.compareTo}: Y, then Z,
 	 * then X. A tie is not exotic: a box straddling a cell boundary on a flat
 	 * floor produces two cells equidistant from it, so the tie-break decides the
 	 * answer on ordinary ground.
 	 *
 	 * <p>The default refuses. Every other unimplemented fact on this interface has
 	 * a safe conservative answer; this one does not, because absent is a
-	 * *different branch* of {@code getOnPos} rather than a weaker version of the
+	 * different branch of {@code getOnPos} rather than a weaker version of the
 	 * same one, and guessing it silently names the wrong cell. Ground movement
 	 * resolves it every tick because the following tick's friction, jump and
 	 * speed-factor lookups all observe the retained identity.
@@ -407,22 +469,31 @@ public interface WorldView {
 	    final double maxY, final double maxZ, final double atX, final double atY, final double atZ,
 	    final SupportCell out) {
 		throw new UnimplementedMechanicException(
-		    Refusal.UNDECLARED_WORLD_FACT, "this world cannot resolve the supporting block");
+		    RefusalCause.UNDECLARED_WORLD_FACT, "this world cannot resolve the supporting block");
 	}
 
-	/** Player-context form for scaffolding and powder-snow support shapes. */
+	/** {@link #findSupportingBlock} with the player's feet Y and sneak key, for scaffolding. */
 	default void findSupportingBlock(final double minX, final double minY, final double minZ, final double maxX,
 	    final double maxY, final double maxZ, final double atX, final double atY, final double atZ,
 	    final double entityBottom, final boolean descending, final double fallDistance, final SupportCell out) {
 		findSupportingBlock(minX, minY, minZ, maxX, maxY, maxZ, atX, atY, atZ, out);
 	}
 
+	/** {@link #findSupportingBlock} with whether powder snow bears the player as well. */
 	default void findSupportingBlock(final double minX, final double minY, final double minZ, final double maxX,
 	    final double maxY, final double maxZ, final double atX, final double atY, final double atZ,
 	    final double entityBottom, final boolean descending, final double fallDistance,
 	    final boolean canWalkOnPowderSnow, final SupportCell out) {
 		findSupportingBlock(
 		    minX, minY, minZ, maxX, maxY, maxZ, atX, atY, atZ, entityBottom, descending, fallDistance, out);
+	}
+
+	/** {@link #findSupportingBlock} taking the whole player context at once. */
+	default void findSupportingBlock(final double minX, final double minY, final double minZ, final double maxX,
+	    final double maxY, final double maxZ, final double atX, final double atY, final double atZ,
+	    final CollisionContext context, final SupportCell out) {
+		findSupportingBlock(minX, minY, minZ, maxX, maxY, maxZ, atX, atY, atZ, context.entityBottom(),
+		    context.descending(), context.fallDistance(), context.canWalkOnPowderSnow(), out);
 	}
 
 	/**
@@ -443,19 +514,19 @@ public interface WorldView {
 	default boolean resetsFallDistanceAlong(final double fromX, final double fromY, final double fromZ,
 	    final double toX, final double toY, final double toZ) {
 		throw new UnimplementedMechanicException(
-		    Refusal.UNDECLARED_WORLD_FACT, "this world cannot resolve a fall-distance-resetting segment");
+		    RefusalCause.UNDECLARED_WORLD_FACT, "this world cannot resolve a fall-distance-resetting segment");
 	}
 
 	/**
 	 * What the block at this cell does to a player who reaches it: the
-	 * {@link BlockBehaviour} resolved from the cell's palette entry, asked at
+	 * {@link BlockBehavior} resolved from the cell's palette entry, asked at
 	 * every cell the inside-block traversal visits, at the block underfoot,
 	 * and at the landed block. A compiled view resolves it once per entry.
-	 * There is no default: a view answers {@link BlockBehaviour#INERT} only
-	 * where it has proved the cell holds no body, and a body it cannot name
+	 * There is no default: a view answers {@link BlockBehavior#INERT} only
+	 * where it knows the cell holds no body, and a body it cannot name
 	 * must refuse rather than pass as inert.
 	 */
-	BlockBehaviour behaviourAt(int x, int y, int z);
+	BlockBehavior behaviorAt(int x, int y, int z);
 
 	/**
 	 * {@code Entity.isInWall}'s test: whether a block state that suffocates
@@ -475,7 +546,7 @@ public interface WorldView {
 						int atX = x;
 						int atY = y;
 						int atZ = z;
-						throw UnimplementedMechanicException.deferred(Refusal.UNDECLARED_WORLD_FACT,
+						throw UnimplementedMechanicException.deferred(RefusalCause.UNDECLARED_WORLD_FACT,
 						    () -> "this world cannot resolve suffocation at " + atX + "," + atY + "," + atZ);
 					}
 				}
@@ -491,7 +562,7 @@ public interface WorldView {
 	 * on fire, which is when the answer changes the server's state.
 	 */
 	default boolean rainReaches(final int x, final int y, final int z, final int topY) {
-		throw UnimplementedMechanicException.deferred(Refusal.UNDECLARED_WORLD_FACT,
+		throw UnimplementedMechanicException.deferred(RefusalCause.UNDECLARED_WORLD_FACT,
 		    () -> "this world cannot resolve whether rain reaches " + x + "," + y + "," + z);
 	}
 
@@ -500,63 +571,22 @@ public interface WorldView {
 		return false;
 	}
 
-	default boolean hasPowderSnow() {
-		return false;
-	}
-
-	/*
-	 * Per-span behaviour facts, one bit each. Validation: every whole-view flag above
-	 * is permanently true in a region big enough to route through, so the gates
-	 * built on them stop rejecting anything at realistic scale. These ask the
-	 * same questions of the closed cell span the guarded code would actually
-	 * scan, which is a handful of cells around the player rather than a million.
-	 */
-
-	int PROPERTY_FLUID = 1;
-	int PROPERTY_BUBBLE_COLUMN = 1 << 1;
-	int PROPERTY_CLIMBABLE = 1 << 2;
-	int PROPERTY_FRICTION = 1 << 3;
-	int PROPERTY_SPEED_FACTOR = 1 << 4;
-	int PROPERTY_JUMP_FACTOR = 1 << 5;
-	int PROPERTY_POWDER_SNOW = 1 << 6;
-	int PROPERTY_INSIDE_EFFECT = 1 << 7;
-	/** Any cell whose {@code Block.getBounceRestitution()} is non-zero. */
-	int PROPERTY_BOUNCE = 1 << 8;
-	/** Any cell with a {@code stepOn} body the kernel runs. */
-	int PROPERTY_STEP_ON = 1 << 9;
-	/** Any cell with a server-only contact body, including one that refuses. */
-	int PROPERTY_CONTACT = 1 << 11;
-	int PROPERTIES_ALL = (1 << 10) - 1 | PROPERTY_CONTACT;
-
 	/**
-	 * Which of {@code wanted}'s behaviours any cell of the closed cell span may
-	 * have. Never returns a bit outside {@code wanted}.
+	 * Which of {@code wanted}'s behaviors any cell of the closed cell span may
+	 * have, answered from the whole-view flags: a view that does not carry
+	 * section detail keeps exactly the behavior the flags gave it.
 	 *
-	 * <p>Callers ask for the bits they will act on rather than for all of them,
-	 * because that is what lets an implementation answer without looking: a view
-	 * that has no fluid anywhere can reject a fluid question with one field test,
-	 * and it is worth keeping that cheap. The dry, wet, and working-set benchmark
-	 * rows own whether an unconditional query is worthwhile. Small fixtures can
-	 * make the skipped lookup cheaper than the mask itself.
-	 *
-	 * <p>Conservative in one direction only: a set bit the span does not actually
-	 * contain costs a lookup, a clear bit the span does contain is a fidelity
-	 * defect. Implementations may therefore leave a bit set after the cell that
-	 * justified it is replaced, and must never clear one speculatively.
-	 *
-	 * <p>The default is the whole-view answer, so a view that does not carry
-	 * section detail keeps exactly the behaviour it had before this existed.
-	 *
-	 * <p>{@link #PROPERTY_INSIDE_EFFECT} is the one bit the default leaves clear,
-	 * and that is not an oversight. The other bits pair with an accessor that
-	 * fails closed off the end of what the view knows, so guessing them true only
-	 * costs a lookup; {@link #behaviourAt} instead *defaults* to the block with
-	 * no body, so a set bit would claim an effect the view has
-	 * already said it does not have. It would also be expensive rather than
-	 * merely wasteful: {@code applyEffectsFromBlocks} refuses movement past the
-	 * {@code movedFar} threshold once it is past its gate, so a spuriously set bit
-	 * would make every elytra world start refusing transitions it passes today.
+	 * <p>{@link #PROPERTY_INSIDE_EFFECT} is the one bit this default leaves
+	 * clear, and that is not an oversight. The other bits pair with an accessor
+	 * that fails closed off the end of what the view knows, so guessing them true
+	 * only costs a lookup; {@link #behaviorAt} instead defaults to the block with
+	 * no body, so a set bit would claim an effect the view has already said it
+	 * does not have. It would also be expensive rather than merely wasteful:
+	 * {@code applyEffectsFromBlocks} refuses movement past the {@code movedFar}
+	 * threshold once it is past its gate, so a spuriously set bit would make
+	 * every glide refuse transitions it passes today.
 	 */
+	@Override
 	default int propertiesIn(
 	    final int wanted, final int x0, final int y0, final int z0, final int x1, final int y1, final int z1) {
 		int properties = 0;
@@ -584,28 +614,13 @@ public interface WorldView {
 		return properties;
 	}
 
-	/**
-	 * Which of {@code wanted}'s behaviours any cell of the whole view may have:
-	 * {@link #propertiesIn} over every cell, asked without a span.
-	 *
-	 * <p>Every span answer must be a subset of this one, so a caller asks it
-	 * first and computes the span only when a bit survives. Most movement
-	 * questions are asked of a view that has no such cell anywhere, and the
-	 * coordinate arithmetic for a span that will be answered zero is the whole
-	 * cost of the question. The default answers every bit, which keeps any
-	 * {@link #propertiesIn} override exact; a view with a compiled whole-view
-	 * mask answers from it in one load.
-	 */
-	default int propertiesAnywhere(final int wanted) {
-		return wanted;
-	}
-
 	/*
 	 * Span reuse. A movement query scans a closed cell span, and because that
-	 * span is integer it is usually the *same* span several queries running --
-	 * consecutive ticks quantize to one cell, and a search's siblings share their
-	 * parent's position. A view that can hand over a span's boxes unfiltered lets
-	 * the caller retain them and refilter, instead of walking the cells again.
+	 * span is integer it is usually the same span several queries running:
+	 * consecutive ticks quantize to one cell, and a caller branching from one
+	 * state shares its position. A view that can hand over a span's boxes
+	 * unfiltered lets the caller retain them and refilter, instead of walking
+	 * the cells again.
 	 *
 	 * The default answers no, so a view that does not implement this keeps taking
 	 * the ordinary path.
@@ -623,7 +638,7 @@ public interface WorldView {
 	/**
 	 * Collision-buffer semantics implemented by this view. The legacy default is
 	 * deliberate: a pre-grouping implementation can keep compiling, but retained
-	 * refiltering will fall back to ordinary collection instead of guessing source
+	 * refiltering will fall back to ordinary collection instead of guessing shape
 	 * identity from its boxes.
 	 */
 	default CollisionShapeProtocol collisionShapeProtocol() {
@@ -636,9 +651,8 @@ public interface WorldView {
 	 * this collision version, so the caller may answer the query empty outright.
 	 *
 	 * <p>Empty spans are already answered by one section test, and routing them
-	 * through a retained span only adds bookkeeping they never amortize. Mobility
-	 * and working-set benchmarks own the hit-rate tradeoff. This keeps empty spans
-	 * on the short path.
+	 * through a retained span only adds bookkeeping they never amortize. This
+	 * keeps empty spans on the short path.
 	 */
 	default boolean spanHasCollisionPotential(
 	    final int x0, final int y0, final int z0, final int x1, final int y1, final int z1) {
@@ -647,12 +661,12 @@ public interface WorldView {
 
 	/**
 	 * Collect every collision shape owned by the closed cell span, in the order
-	 * {@link #collectCollisionBoxes} visits cells and *without* its query-box
+	 * {@link #collectCollisionBoxes} visits cells and without its query-box
 	 * filter. The unfiltered set is required: a later query can lie inside this
 	 * span while its own bounds still reach a box this span's filter would have
 	 * dropped.
 	 *
-	 * <p>Under {@link CollisionShapeProtocol#SOURCE_GROUPS_V1}, start each source
+	 * <p>Under {@link CollisionShapeProtocol#SOURCE_GROUPS_V1}, start each vanilla
 	 * shape with {@link CollisionBuffer#add}, append its remaining primitive boxes
 	 * with {@link CollisionBuffer#addPart}, and retain canonical singleton full
 	 * blocks with {@link CollisionBuffer#addCanonicalFullCube}. Span collection
@@ -670,10 +684,10 @@ public interface WorldView {
 	/**
 	 * Collect collision shapes reached by the query into caller-owned storage.
 	 * Implementations clear {@code target} before appending results. A view that
-	 * declares {@link CollisionShapeProtocol#SOURCE_GROUPS_V1} makes each source
+	 * declares {@link CollisionShapeProtocol#SOURCE_GROUPS_V1} makes each vanilla
 	 * shape one buffer group: use {@link CollisionBuffer#add} for its first
 	 * primitive box, {@link CollisionBuffer#addPart} for any remaining boxes, and
-	 * {@link CollisionBuffer#addCanonicalFullCube} only for Minecraft's canonical
+	 * {@link CollisionBuffer#addCanonicalFullCube} only for vanilla's canonical
 	 * singleton full-block shape. The legacy protocol treats every added box as
 	 * an independent group and is not eligible for retained refiltering.
 	 */
@@ -681,8 +695,9 @@ public interface WorldView {
 	    double minX, double minY, double minZ, double maxX, double maxY, double maxZ, CollisionBuffer target);
 
 	/**
-	 * Player-context form used by movement and fit queries. {@code entityBottom}
-	 * is the player's feet Y; descending is vanilla {@code isShiftKeyDown()}.
+	 * {@link #collectCollisionBoxes} with the player's feet Y and sneak key, for
+	 * scaffolding. {@code entityBottom} is the player's feet Y in blocks;
+	 * {@code descending} is vanilla {@code isShiftKeyDown()}.
 	 */
 	default void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
 	    final double maxY, final double maxZ, final double entityBottom, final boolean descending,
@@ -690,16 +705,25 @@ public interface WorldView {
 		collectCollisionBoxes(minX, minY, minZ, maxX, maxY, maxZ, target);
 	}
 
+	/** {@link #collectCollisionBoxes} with the fall distance as well, in blocks, for powder snow. */
 	default void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
 	    final double maxY, final double maxZ, final double entityBottom, final boolean descending,
 	    final double fallDistance, final CollisionBuffer target) {
 		collectCollisionBoxes(minX, minY, minZ, maxX, maxY, maxZ, entityBottom, descending, target);
 	}
 
+	/** {@link #collectCollisionBoxes} with whether powder snow bears the player as well. */
 	default void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
 	    final double maxY, final double maxZ, final double entityBottom, final boolean descending,
 	    final double fallDistance, final boolean canWalkOnPowderSnow, final CollisionBuffer target) {
 		collectCollisionBoxes(minX, minY, minZ, maxX, maxY, maxZ, entityBottom, descending, fallDistance, target);
+	}
+
+	/** {@link #collectCollisionBoxes} taking the whole player context at once. */
+	default void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
+	    final double maxY, final double maxZ, final CollisionContext context, final CollisionBuffer target) {
+		collectCollisionBoxes(minX, minY, minZ, maxX, maxY, maxZ, context.entityBottom(), context.descending(),
+		    context.fallDistance(), context.canWalkOnPowderSnow(), target);
 	}
 
 	/** {@code Block.getFriction()} for the block at these coordinates. */
@@ -717,13 +741,15 @@ public interface WorldView {
 	float jumpFactor(int x, int y, int z);
 
 	/**
-	 * False where the snapshot has no information. Unknown space
-	 * is an explicit semantic, never silently air. {@code travelInAir} reads this —
-	 * on the client a missing chunk below replaces gravity with a flat -0.1 —
-	 * and so does the fluid refresh, where a missing chunk within one block of
-	 * the box in X or Z makes vanilla's client find no fluid at all.
+	 * Whether the view holds the column: false where it has no information.
+	 * Unknown space is an explicit semantic, never silently air.
+	 * {@code travelInAir} reads this, since on the client a missing chunk below
+	 * replaces gravity with a flat -0.1, and so does the fluid refresh, where a
+	 * missing chunk within one block of the box in X or Z makes vanilla's
+	 * client find no fluid at all.
 	 */
 	boolean hasChunkAt(int x, int z);
 
+	/** The lowest cell Y this view holds, in blocks: vanilla's {@code Level.getMinY()}. */
 	int minY();
 }

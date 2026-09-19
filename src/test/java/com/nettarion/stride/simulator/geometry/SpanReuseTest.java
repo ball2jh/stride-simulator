@@ -1,34 +1,40 @@
 package com.nettarion.stride.simulator.geometry;
 
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.StateDigest;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
-import com.nettarion.stride.simulator.tick.ClientTick;
-import com.nettarion.stride.simulator.tick.Scratch;
-import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.SupportCell;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.FluidSample;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.StateDigest;
+import com.nettarion.stride.simulator.block.BlockBehavior;
+import com.nettarion.stride.simulator.tick.ClientTick;
+import com.nettarion.stride.simulator.tick.Scratch;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.SupportCell;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.Random;
+
 import org.junit.jupiter.api.Test;
 
 /**
- * Retained-span reuse must be an acceleration and nothing else.
+ * Retained-span reuse must be an acceleration and nothing else: the same boxes, in the same order,
+ * as the ordinary per-query collection.
  *
- * <p>The risk is not that a box is missed outright — the fuzz suite would see
- * that — but that reuse returns the right boxes in the wrong order, or drops a
- * box the *building* query's filter excluded and a later one needs. Both are
- * invisible until a specific query shape reaches them, so they are pinned here.
+ * <p>The risk is not that a box is missed outright but that reuse returns the right boxes in the
+ * wrong order, or drops a box the building query's filter excluded and a later one needs. Both are
+ * invisible until a specific query shape reaches them, so they are checked here.
  */
-class SpanReuseTest {
+final class SpanReuseTest {
 	/**
 	 * The retained set must be unfiltered. A slab lying in the lower half of a
 	 * cell is inside the span of a query whose own bounds start above it, so a
@@ -57,14 +63,16 @@ class SpanReuseTest {
 
 	@Test
 	void expandedFaceContainmentMatchesIntegerCursorAtBoundariesAndAfterEdits() {
-		SnapshotView world = terrainWorld();
+		SnapshotView world = terrainWorld().fork();
 		Scratch scratch = new Scratch();
 		scratch.span.retain(world, -2, -2, -2, 2, 2, 2);
 		double[] faces = {-3.0, -2.0000001, Math.nextDown(-2.0), -2.0, Math.nextUp(-2.0), -1.0, -0.0, 0.0, 1.0, 2.0,
 		    Math.nextDown(3.0), 3.0, Math.nextUp(3.0), 3.0000001};
-		for (double minimum : faces)
+		for (double minimum : faces) {
 			for (double maximum : faces) {
-				if (minimum > maximum) continue;
+				if (minimum > maximum) {
+					continue;
+				}
 				for (int axis = 0; axis < 3; axis++) {
 					double[] low = {0.0, 0.0, 0.0};
 					double[] high = {1.0, 1.0, 1.0};
@@ -75,6 +83,7 @@ class SpanReuseTest {
 					    scratch.span.covers(world, low[0], low[1], low[2], high[0], high[1], high[2]));
 				}
 			}
+		}
 		assertTrue(scratch.span.covers(world, -1, -1, -1, 1, 1, 1));
 		assertFalse(scratch.span.covers(terrainWorld(), -1, -1, -1, 1, 1, 1));
 		world.replaceCell(0, 0, 0, 1);
@@ -83,14 +92,15 @@ class SpanReuseTest {
 
 	@Test
 	void canonicalSupportOwnersMatchDirectQueriesAcrossNegativeCellsAndTies() {
-		var builder = WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -3, -4, 8, 6, 8)
-		                  .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		                      WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build());
-		for (int x = -3; x <= 2; x++)
+		var builder = WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -3, -4, 8, 6, 8)
+		                  .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		                      BlockEntry.builder(1, "minecraft:stone").fullCube().build());
+		for (int x = -3; x <= 2; x++) {
 			for (int z = -3; z <= 2; z++) {
 				builder.set(x, -1, z, 1);
 			}
-		SnapshotView world = new SnapshotView(builder.build());
+		}
+		SnapshotView world = SnapshotView.compile(builder.build());
 		Scratch scratch = new Scratch();
 		assertTrue(world.collectSpanBoxes(-3, -2, -3, 2, 1, 2, scratch.span.boxes));
 		scratch.span.retain(world, -3, -2, -3, 2, 1, 2);
@@ -128,9 +138,8 @@ class SpanReuseTest {
 	}
 
 	/**
-	 * Span reuse may not change a transition. Stepping the same schedule against
-	 * a view that offers reuse and one that refuses it must agree raw-bit, which
-	 * is the same equality the cross-implementation suites use.
+	 * Span reuse may not change a transition. Stepping the same actions against a view that offers
+	 * reuse and one that refuses it must agree raw-bit.
 	 */
 	@Test
 	void reuseAgreesRawBitWithTheOrdinaryPathOverARandomizedWalk() {
@@ -139,7 +148,7 @@ class SpanReuseTest {
 		assertTrue(reusing.supportsSpanReuse());
 		assertFalse(ordinary.supportsSpanReuse());
 
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 		PlayerState reused = seed();
 		PlayerState plain = seed();
 		Scratch reusedScratch = new Scratch();
@@ -150,12 +159,11 @@ class SpanReuseTest {
 			PlayerInput action =
 			    new PlayerInput(random.nextBoolean(), random.nextBoolean(), random.nextBoolean(), random.nextBoolean(),
 			        random.nextBoolean(), random.nextBoolean(), random.nextBoolean(), random.nextInt(8) * 45.0F, 0.0F);
-			kernel.tick(reused, action, reusing, reusedScratch);
-			kernel.tick(plain, action, ordinary, plainScratch);
+			simulator.tick(reused, action, reusing, reusedScratch);
+			simulator.tick(plain, action, ordinary, plainScratch);
 			assertEquals(StateDigest.state(plain), StateDigest.state(reused), "span reuse diverged at tick " + tick);
-			// The digest is the audited vector; compare the resolved box and the
-			// collision flags raw as well, since those are what a gathering change
-			// would corrupt first.
+			// Compare the resolved box and the collision flags raw as well as the
+			// digest, since those are what a gathering change would corrupt first.
 			assertEquals(rawState(plain), rawState(reused), "span reuse diverged outside the digest at tick " + tick);
 		}
 	}
@@ -234,7 +242,7 @@ class SpanReuseTest {
 			for (int index = buffer.groupStart(group); index < buffer.groupEnd(group); index++) {
 				result.append(result.isEmpty() ? "" : ";")
 				    .append(buffer.startsGroup(index) ? 'g' : 'p')
-				    .append(buffer.canonicalFullGroup(index) ? 'c' : '-')
+				    .append(buffer.groupCanonicalFull(group) ? 'c' : '-')
 				    .append(':')
 				    .append(raw(buffer, index));
 			}
@@ -254,9 +262,9 @@ class SpanReuseTest {
 	}
 
 	private static SnapshotView slabWorld() {
-		return new SnapshotView(WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, 0, 0, 0, 1, 1, 1)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:stone_slab")
-		                .boxes(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0))
+		return SnapshotView.compile(WorldSnapshot.builder(OutsidePolicy.REFUSING, 0, 0, 0, 1, 1, 1)
+		        .palette(BlockEntry.builder(0, "minecraft:stone_slab")
+		                .boxes(new ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0))
 		                .build())
 		        .build());
 	}
@@ -267,21 +275,16 @@ class SpanReuseTest {
 		// randomized walk through this terrain does put a box corner in a column
 		// these occupy.
 		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -8, -8, -8, 16, 16, 16)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air")
-		                     .suffocation(WorldSnapshot.Suffocation.NO)
-		                     .build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
-		                .fullCube()
-		                .suffocation(WorldSnapshot.Suffocation.YES)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -8, -8, 16, 16, 16)
+		        .palette(BlockEntry.builder(0, "minecraft:air").suffocation(Suffocation.NO).build(),
+		            BlockEntry.builder(1, "minecraft:stone").fullCube().suffocation(Suffocation.YES).build(),
+		            BlockEntry.builder(2, "minecraft:stone_slab")
+		                .boxes(new ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0))
+		                .suffocation(Suffocation.NO)
 		                .build(),
-		            WorldSnapshot.BlockEntry.builder(2, "minecraft:stone_slab")
-		                .boxes(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0))
-		                .suffocation(WorldSnapshot.Suffocation.NO)
-		                .build(),
-		            WorldSnapshot.BlockEntry.builder(3, "minecraft:fence")
-		                .boxes(new WorldSnapshot.ShapeBox(0.375, 0.0, 0.375, 0.625, 1.0, 0.625))
-		                .suffocation(WorldSnapshot.Suffocation.NO)
+		            BlockEntry.builder(3, "minecraft:fence")
+		                .boxes(new ShapeBox(0.375, 0.0, 0.375, 0.625, 1.0, 0.625))
+		                .suffocation(Suffocation.NO)
 		                .build());
 		Random random = new Random(99L);
 		for (int y = -8; y < 8; y++) {
@@ -294,7 +297,7 @@ class SpanReuseTest {
 				}
 			}
 		}
-		return new SnapshotView(grid.build());
+		return SnapshotView.compile(grid.build());
 	}
 
 	/** A view that refuses span reuse, so the ordinary path can be compared to. */
@@ -335,8 +338,8 @@ class SpanReuseTest {
 		}
 
 		@Override
-		public BlockBehaviour behaviourAt(final int x, final int y, final int z) {
-			return this.delegate.behaviourAt(x, y, z);
+		public BlockBehavior behaviorAt(final int x, final int y, final int z) {
+			return this.delegate.behaviorAt(x, y, z);
 		}
 
 		@Override

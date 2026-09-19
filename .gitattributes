@@ -2,3 +2,5 @@
 *.bat text eol=crlf
 *.jar binary
 *.bin binary
+*.catalog binary
+src/test/resources/captures/** -text

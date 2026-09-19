@@ -1,23 +1,31 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.SupportCell;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.UnimplementedMechanicException;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.SupportCell;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
-class ClientTickScaffoldingTest {
+final class ClientTickScaffoldingTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 	private static final PlayerInput SHIFT =
 	    new PlayerInput(false, false, false, false, false, true, false, 0.0F, 0.0F);
@@ -134,11 +142,11 @@ class ClientTickScaffoldingTest {
 	void releasedDescentLandsBackOnSupportedTop() {
 		PlayerState state = stateAt(3.45);
 		state.deltaMovementY = -0.25;
-		ClientTick kernel = new ClientTick();
+		ClientTick simulator = new ClientTick();
 		SnapshotView world = scaffoldingColumn();
 
 		for (int i = 0; i < 8 && !state.onGround; i++) {
-			kernel.tick(state, IDLE, world);
+			simulator.tick(state, IDLE, world);
 		}
 
 		assertTrue(state.onGround);
@@ -160,20 +168,19 @@ class ClientTickScaffoldingTest {
 	}
 
 	private static SnapshotView scaffoldingColumn(final WorldView.CollisionBehavior collisionBehavior) {
-		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -2, -2, -2, 5, 8, 5)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build(),
-		            WorldSnapshot.BlockEntry.builder(2, "minecraft:scaffolding")
-		                .fallDistanceResetting(true)
-		                .collisionBehavior(collisionBehavior)
-		                // Not a full cube in any context, so isSuffocating's default
-		                // predicate answers no and moveTowardsClosestSpace never sees
-		                // this column.
-		                .suffocation(WorldSnapshot.Suffocation.NO)
-		                .climbability(WorldView.Climbability.CLIMBABLE)
-		                .boxes(stableScaffoldingBoxes())
-		                .build());
+		WorldSnapshot.Builder grid = WorldSnapshot.builder(OutsidePolicy.REFUSING, -2, -2, -2, 5, 8, 5)
+		                                 .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		                                     BlockEntry.builder(1, "minecraft:stone").fullCube().build(),
+		                                     BlockEntry.builder(2, "minecraft:scaffolding")
+		                                         .fallDistanceResetting(true)
+		                                         .collisionBehavior(collisionBehavior)
+		                                         // Not a full cube in any context, so isSuffocating's default
+		                                         // predicate answers no and moveTowardsClosestSpace never sees
+		                                         // this column.
+		                                         .suffocation(Suffocation.NO)
+		                                         .climbability(WorldView.Climbability.CLIMBABLE)
+		                                         .boxes(stableScaffoldingBoxes())
+		                                         .build());
 		for (int z = -2; z <= 2; z++) {
 			for (int x = -2; x <= 2; x++) {
 				grid.set(x, -1, z, 1);
@@ -182,16 +189,12 @@ class ClientTickScaffoldingTest {
 		for (int y = 0; y < 3; y++) {
 			grid.set(0, y, 0, 2);
 		}
-		return new SnapshotView(grid.build());
+		return SnapshotView.compile(grid.build());
 	}
 
-	private static List<WorldSnapshot.ShapeBox> stableScaffoldingBoxes() {
-		return List.of(new WorldSnapshot.ShapeBox(0, 0.875, 0, 1, 1, 1),
-		    new WorldSnapshot.ShapeBox(0, 0, 0, 0.125, 1, 0.125), new WorldSnapshot.ShapeBox(0.875, 0, 0, 1, 1, 0.125),
-		    new WorldSnapshot.ShapeBox(0, 0, 0.875, 0.125, 1, 1), new WorldSnapshot.ShapeBox(0.875, 0, 0.875, 1, 1, 1));
-	}
-
-	private static void assertRaw(final double expected, final double actual) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual));
+	private static List<ShapeBox> stableScaffoldingBoxes() {
+		return List.of(new ShapeBox(0, 0.875, 0, 1, 1, 1), new ShapeBox(0, 0, 0, 0.125, 1, 0.125),
+		    new ShapeBox(0.875, 0, 0, 1, 1, 0.125), new ShapeBox(0, 0, 0.875, 0.125, 1, 1),
+		    new ShapeBox(0.875, 0, 0.875, 1, 1, 1));
 	}
 }

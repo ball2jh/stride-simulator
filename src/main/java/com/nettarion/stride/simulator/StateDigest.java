@@ -1,23 +1,26 @@
 package com.nettarion.stride.simulator;
 
 /**
- * Deterministic raw-bit digest of semantic kernel state: the client copy
- * through {@link #state}, the server copy with its survival and listener
- * facts through {@link #server}, the composed boundary through
- * {@link #boundary}, and a chain over a run through {@link #chain}.
+ * Deterministic raw-bit digest of simulator state: the client copy through {@link #state}, the
+ * server copy with its damage and listener facts through {@link #server}, the composed
+ * boundary through {@link #boundary}, and a chain over a run through {@link #chain}.
+ *
+ * <p>Each digest folds the raw bits of every public field in the order of
+ * {@code src/main/fields/state-fields.tsv}; equal digests are a fast comparison signal, not a
+ * guarantee of equality.
  */
 public final class StateDigest {
 	private static final long FNV_OFFSET_BASIS = 0xcbf29ce484222325L;
 
 	private StateDigest() {}
 
-	/** Hashes the semantic client fields in their pinned raw-bit order; a hash match is not proof of equality. */
+	/** Digests every client field in table order; a digest match does not guarantee equality. */
 	public static long state(final PlayerState state) {
 		return StateFields.digest(FNV_OFFSET_BASIS, state);
 	}
 
 	/**
-	 * The server copy: every client field, then the survival and listener
+	 * The server copy: every client field, then the damage and listener
 	 * facts only the server holds. Equal digests are a fast comparison signal,
 	 * not a substitute for {@link ServerPlayerState#rawEquals}.
 	 */
@@ -26,10 +29,9 @@ public final class StateDigest {
 	}
 
 	/**
-	 * The composed boundary: the client copy, its publisher, the server copy,
-	 * the completed-action count and the pending hit. Distinct boundaries can
-	 * share this finite digest; use {@link SimulationState#rawEquals} to resolve
-	 * hash matches. The planner's search uses a coarser kinematic identity.
+	 * The composed boundary: the client copy, its publisher, the server copy, the completed-action
+	 * count and the pending hurt. Distinct boundaries can share this finite digest; use
+	 * {@link SimulationState#rawEquals} to resolve hash matches.
 	 */
 	public static long boundary(final SimulationState state) {
 		return boundary(state.client, state.publisher, state.server, state.completedActions, state.pendingHurt);

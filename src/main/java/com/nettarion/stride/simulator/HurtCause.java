@@ -1,16 +1,12 @@
 package com.nettarion.stride.simulator;
 
 /**
- * The damage source of one server hit on the player, as the server's
- * {@code DamageSources} names it.
+ * The damage source of one server hit on the player, as vanilla's {@code DamageSources} names it.
  *
- * <p>Every source here is in vanilla's {@code no_knockback} damage-type tag,
- * so a full hit adds no velocity of its own; every source but
- * {@link #DROWN} is outside {@code no_impact}, so its full hit calls
- * {@code markHurt} and {@code ServerEntity} then republishes the server's
- * current velocity at the next publication. A source that changes velocity
- * (attack knockback, an explosion's impulse) is an {@link ImpulseWrite}, not
- * a hurt cause.
+ * <p>Every source here is in vanilla 26.2's {@code no_knockback} damage-type tag, so a full hit adds no velocity of
+ * its own; every source but {@link #DROWN} is outside {@code no_impact}, so its full hit calls {@code markHurt} and the
+ * entity tracker then republishes the server's current velocity at its next sample. A source that changes velocity
+ * (attack knockback, an explosion's impulse) is an {@link ImpulseWrite}, not a hurt cause.
  */
 public enum HurtCause {
 	/** {@code Entity.checkFallDamage} on the accepted movement packet's landing. */
@@ -18,9 +14,8 @@ public enum HurtCause {
 	/** The same landing on an upward pointed dripstone tip: the fall plus two and a half, doubled. */
 	STALAGMITE,
 	/**
-	 * {@code LivingEntity.handleFallFlyingCollisions} in the server's own
-	 * glide travel: a horizontal collision that shed more than three tenths
-	 * of a block per tick of horizontal speed.
+	 * {@code LivingEntity.handleFallFlyingCollisions} in the server's own glide travel: a horizontal collision that
+	 * shed more than three tenths of a block per tick of horizontal speed.
 	 */
 	FLY_INTO_WALL,
 	/** {@code CactusBlock.entityInside}: one point on every visit. */
@@ -45,10 +40,10 @@ public enum HurtCause {
 	IN_WALL,
 	/** {@code Entity.checkBelowWorld}: four points every tick sixty-four blocks below the world. */
 	FELL_OUT_OF_WORLD,
-	/** FoodData.tick: one point every eightieth starving tick above the difficulty threshold. */
+	/** {@code FoodData.tick}: one point every eightieth starving tick above the difficulty threshold. */
 	STARVE;
 
-	/** The pinned damage type's exhaustion, charged only for damage past absorption. */
+	/** The damage type's exhaustion in vanilla 26.2, in food points, charged only for damage past absorption. */
 	public float foodExhaustion() {
 		return switch (this) {
 			case CACTUS, SWEET_BERRY_BUSH, HOT_FLOOR, CAMPFIRE, IN_FIRE, LAVA -> 0.1F;
@@ -62,20 +57,19 @@ public enum HurtCause {
 	}
 
 	/**
-	 * Whether the pinned {@code bypasses_invulnerability} tag holds this type,
-	 * so {@code Player.hurtServer} deals it to an invulnerable player too.
-	 * Falling out of the world is the only admitted member.
+	 * Whether vanilla 26.2's {@code bypasses_invulnerability} tag holds this type, so {@code Player.hurtServer} deals
+	 * it to an invulnerable player too. Falling out of the world is the only admitted member.
 	 */
 	public boolean bypassesInvulnerability() {
 		return this == FELL_OUT_OF_WORLD;
 	}
 
 	/**
-	 * Whether the level's damage gamerules admit this cause: {@code Player.isInvulnerableTo}
-	 * by the pinned damage type tags, where fall and stalagmite are falls, in-fire, campfire,
-	 * on-fire, lava and hot-floor are fire, and the rest answer to no rule.
+	 * Whether the level's damage game rules admit this cause: {@code Player.isInvulnerableTo} by vanilla 26.2's
+	 * damage-type tags, where fall and stalagmite are falls; in-fire, campfire, on-fire, lava and hot-floor are fire;
+	 * and the rest answer to no rule.
 	 */
-	public boolean permittedBy(final ServerPlayerState server) {
+	public boolean allowedByGameRules(final ServerPlayerState server) {
 		return switch (this) {
 			case FALL, STALAGMITE -> server.fallDamage;
 			case IN_FIRE, CAMPFIRE, ON_FIRE, LAVA, HOT_FLOOR -> server.fireDamage;

@@ -1,4 +1,5 @@
 {
+  "note": "origin_path values refer to the private repository this library was extracted from",
   "source_project": "Stride",
   "source_revision": "e6a9a080094b341b1197e6b7b14bb0de06b57019",
   "source_directory": "modules/simulator",

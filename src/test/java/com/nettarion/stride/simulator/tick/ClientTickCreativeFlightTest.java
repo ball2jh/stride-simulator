@@ -1,24 +1,26 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
-import com.nettarion.stride.simulator.block.BubbleColumnBlock;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.world.FlatFloorView;
-import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.world.WorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.FluidSample;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.UnimplementedMechanicException;
+import com.nettarion.stride.simulator.block.BlockBehavior;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.FlatFloorView;
+import com.nettarion.stride.simulator.world.WorldView;
+
 import org.junit.jupiter.api.Test;
 
-class ClientTickCreativeFlightTest {
+final class ClientTickCreativeFlightTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 	private static final WorldView EMPTY = new EmptyWorld();
 
@@ -136,54 +138,15 @@ class ClientTickCreativeFlightTest {
 	}
 
 	private static PlayerInput action(
-	    final boolean forward, final boolean jump, final boolean shift, final boolean sprint) {
-		return new PlayerInput(forward, false, false, false, jump, shift, sprint, 0.0F, 0.0F);
-	}
-
-	private static void assertRaw(final double expected, final double actual) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual));
-	}
-
-	private static void assertRaw(final double expected, final double actual, final String message) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual), message);
+	    final boolean forward, final boolean jump, final boolean sneak, final boolean sprint) {
+		return new PlayerInput(forward, false, false, false, jump, sneak, sprint, 0.0F, 0.0F);
 	}
 
 	private static class EmptyWorld implements CompleteWorldView {
-		/** Defined, not derived: no block in this fixture suffocates. */
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
-
-		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
 		@Override
 		public void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
 		    final double maxY, final double maxZ, final CollisionBuffer target) {
 			target.clear();
-		}
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 
@@ -209,8 +172,8 @@ class ClientTickCreativeFlightTest {
 			return x == 0 && y == 0 && z == 0 ? BubbleColumnMode.PUSH_UP : BubbleColumnMode.NONE;
 		}
 		@Override
-		public BlockBehaviour behaviourAt(final int x, final int y, final int z) {
-			return x == 0 && y == 0 && z == 0 ? BubbleColumnBlock.PUSH_UP : BlockBehaviour.INERT;
+		public BlockBehavior behaviorAt(final int x, final int y, final int z) {
+			return BlockBehavior.bubbleColumn(bubbleColumnModeAt(x, y, z));
 		}
 	}
 }

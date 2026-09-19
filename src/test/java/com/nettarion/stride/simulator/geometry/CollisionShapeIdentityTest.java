@@ -1,28 +1,34 @@
 package com.nettarion.stride.simulator.geometry;
 
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.tick.Scratch;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.tick.Scratch;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
+
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-/** Source-shape facts that cannot be reconstructed from a flattened box list. */
-class CollisionShapeIdentityTest {
+/**
+ * Source-shape facts that cannot be reconstructed from a flattened box list. The last test guards
+ * which buffer answers, an optimization rather than a behavior; it is tagged {@code optimization}.
+ */
+final class CollisionShapeIdentityTest {
 	private static final double EPSILON = 1.0E-7;
 
 	@Test
 	void canonicalAndGeneralUnitCubesUseTheirDistinctBroadphaseRules() {
-		WorldSnapshot.BlockEntry canonical = WorldSnapshot.BlockEntry.builder(1, "test:canonical").fullCube().build();
-		WorldSnapshot.BlockEntry general = WorldSnapshot.BlockEntry.builder(1, "test:general-unit-cube")
-		                                       .boxes(WorldSnapshot.ShapeBox.FULL_CUBE)
-		                                       .build();
+		BlockEntry canonical = BlockEntry.builder(1, "test:canonical").fullCube().build();
+		BlockEntry general = BlockEntry.builder(1, "test:general-unit-cube").boxes(ShapeBox.FULL_CUBE).build();
 		double[] overlap = {Math.nextDown(EPSILON), EPSILON, Math.nextUp(EPSILON)};
 
 		assertTrue(canonical.canonicalFullCollisionShape());
@@ -38,9 +44,7 @@ class CollisionShapeIdentityTest {
 
 	@Test
 	void subEpsilonQueryShapeIsEmptyForGeneralBroadphase() {
-		WorldSnapshot.BlockEntry general = WorldSnapshot.BlockEntry.builder(1, "test:general-unit-cube")
-		                                       .boxes(WorldSnapshot.ShapeBox.FULL_CUBE)
-		                                       .build();
+		BlockEntry general = BlockEntry.builder(1, "test:general-unit-cube").boxes(ShapeBox.FULL_CUBE).build();
 		CollisionBuffer collisions = new CollisionBuffer();
 		double thinMaxY = 0.25 + 5.0E-8;
 
@@ -51,10 +55,10 @@ class CollisionShapeIdentityTest {
 
 	@Test
 	void ordinaryAndRetainedCollectionKeepOneCompositeSourceShapeTogether() {
-		WorldSnapshot.BlockEntry composite = WorldSnapshot.BlockEntry.builder(1, "test:composite")
-		                                         .boxes(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 0.25, 1.0, 1.0),
-		                                             new WorldSnapshot.ShapeBox(0.75, 0.0, 0.0, 1.0, 1.0, 1.0))
-		                                         .build();
+		BlockEntry composite =
+		    BlockEntry.builder(1, "test:composite")
+		        .boxes(new ShapeBox(0.0, 0.0, 0.0, 0.25, 1.0, 1.0), new ShapeBox(0.75, 0.0, 0.0, 1.0, 1.0, 1.0))
+		        .build();
 		SnapshotView world = world(composite);
 		assertEquals(WorldView.CollisionShapeProtocol.SOURCE_GROUPS_V1, world.collisionShapeProtocol());
 		CollisionBuffer direct = new CollisionBuffer();
@@ -67,10 +71,11 @@ class CollisionShapeIdentityTest {
 		    CollisionCollector.collect(world, scratch, 0.8, 0.1, 0.1, 0.9, 0.9, 0.9, 0.1, false, 0.0, false));
 	}
 
+	@Tag("optimization")
 	@Test
 	void legacyBoxProtocolFallsBackBeforeRetainedRefiltering() {
 		LegacySpanProvider legacy =
-		    new LegacySpanProvider(world(WorldSnapshot.BlockEntry.builder(1, "test:stone").fullCube().build()));
+		    new LegacySpanProvider(world(BlockEntry.builder(1, "test:stone").fullCube().build()));
 		Scratch scratch = new Scratch();
 
 		CollisionBuffer collected =
@@ -81,20 +86,19 @@ class CollisionShapeIdentityTest {
 		assertEquals(1, collected.size());
 	}
 
-	private static CollisionBuffer collect(final WorldSnapshot.BlockEntry entry, final double maxX) {
+	private static CollisionBuffer collect(final BlockEntry entry, final double maxX) {
 		CollisionBuffer result = new CollisionBuffer();
 		world(entry).collectCollisionBoxes(-0.5, 0.1, 0.1, maxX, 0.9, 0.9, result);
 		return result;
 	}
 
-	private static SnapshotView world(final WorldSnapshot.BlockEntry entry) {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "test:air").build();
-		WorldSnapshot snapshot =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -2, -2, -2, 5, 5, 5)
-		        .palette(air, entry)
-		        .set(0, 0, 0, 1)
-		        .build();
-		return new SnapshotView(snapshot);
+	private static SnapshotView world(final BlockEntry entry) {
+		BlockEntry air = BlockEntry.builder(0, "test:air").build();
+		WorldSnapshot snapshot = WorldSnapshot.builder(OutsidePolicy.REFUSING, -2, -2, -2, 5, 5, 5)
+		                             .palette(air, entry)
+		                             .set(0, 0, 0, 1)
+		                             .build();
+		return SnapshotView.compile(snapshot);
 	}
 
 	private static void assertCompositeGroup(final CollisionBuffer shapes) {
@@ -113,6 +117,7 @@ class CollisionShapeIdentityTest {
 		public long collisionVersion() {
 			return this.delegate.collisionVersion();
 		}
+
 		@Override
 		public long identity() {
 			return this.delegate.identity();

@@ -1,14 +1,20 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
 
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +25,7 @@ import org.junit.jupiter.api.Test;
  * effects, which run after {@code KeyboardInput.tick()} and therefore read
  * this tick's action, not the one retained from the previous tick.
  */
-class ClientTickSlimeTest {
+final class ClientTickSlimeTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 	private static final PlayerInput SHIFT =
 	    new PlayerInput(false, false, false, false, false, true, false, 0.0F, 0.0F);
@@ -59,8 +65,8 @@ class ClientTickSlimeTest {
 
 	@Test
 	void shiftReleasedThisTickDampsEvenWhenPreviousInputWasShift() {
-		PlayerState slime = walkingState((byte) PlayerInput.FLAG_SHIFT);
-		PlayerState control = walkingState((byte) PlayerInput.FLAG_SHIFT);
+		PlayerState slime = walkingState((byte) PlayerInput.FLAG_SNEAK);
+		PlayerState control = walkingState((byte) PlayerInput.FLAG_SNEAK);
 
 		new ClientTick().tick(slime, IDLE, floor(true));
 		new ClientTick().tick(control, IDLE, floor(false));
@@ -74,8 +80,8 @@ class ClientTickSlimeTest {
 
 	@Test
 	void shiftHeldAcrossTicksSuppressesDamping() {
-		PlayerState slime = walkingState((byte) PlayerInput.FLAG_SHIFT);
-		PlayerState control = walkingState((byte) PlayerInput.FLAG_SHIFT);
+		PlayerState slime = walkingState((byte) PlayerInput.FLAG_SNEAK);
+		PlayerState control = walkingState((byte) PlayerInput.FLAG_SNEAK);
 
 		new ClientTick().tick(slime, SHIFT, floor(true));
 		new ClientTick().tick(control, SHIFT, floor(false));
@@ -108,28 +114,22 @@ class ClientTickSlimeTest {
 	 * difference between the paired ticks is the body under test.
 	 */
 	private static SnapshotView floor(final boolean slime) {
-		WorldSnapshot.BlockEntry.Builder floor =
-		    WorldSnapshot.BlockEntry.builder(1, slime ? "minecraft:slime_block" : "test:slime_without_step_on")
-		        .fullCube()
-		        .friction(0.8F)
-		        .bounceRestitution(1.0F)
-		        .landing(slime ? WorldView.Landing.SLIME : WorldView.Landing.ORDINARY)
-		        .suffocation(WorldSnapshot.Suffocation.NO);
+		BlockEntry.Builder floor = BlockEntry.builder(1, slime ? "minecraft:slime_block" : "test:slime_without_step_on")
+		                               .fullCube()
+		                               .friction(0.8F)
+		                               .bounceRestitution(1.0F)
+		                               .landing(slime ? WorldView.Landing.SLIME : WorldView.Landing.ORDINARY)
+		                               .suffocation(Suffocation.NO);
 		if (slime) {
 			floor.stepOn(WorldView.StepOn.SLIME);
 		}
-		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -2, -2, -2, 5, 5, 5)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(), floor.build());
+		WorldSnapshot.Builder grid = WorldSnapshot.builder(OutsidePolicy.REFUSING, -2, -2, -2, 5, 5, 5)
+		                                 .palette(BlockEntry.builder(0, "minecraft:air").build(), floor.build());
 		for (int z = -2; z <= 2; z++) {
 			for (int x = -2; x <= 2; x++) {
 				grid.set(x, -1, z, 1);
 			}
 		}
-		return new SnapshotView(grid.build());
-	}
-
-	private static void assertRaw(final double expected, final double actual) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual));
+		return SnapshotView.compile(grid.build());
 	}
 }

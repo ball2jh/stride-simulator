@@ -1,39 +1,39 @@
 package com.nettarion.stride.simulator.block;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.geometry.Mth;
 import com.nettarion.stride.simulator.tick.ClientTick;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
 import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.Suffocation;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import com.nettarion.stride.simulator.world.WorldView;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
 /**
- * Inside-block traversal order is observable through the stuck vector, because
- * {@code Entity.makeStuckInBlock} overwrites it and the last visited stuck
- * block wins.
+ * Inside-block traversal order is observable through the stuck vector, because {@code Entity.makeStuckInBlock}
+ * overwrites it and the last visited stuck block wins.
  *
- * <p>{@code Entity.checkInsideBlocks} splits a recorded movement into axis
- * sub-movements ordered by the <em>requested</em> movement's magnitudes
- * ({@code Direction.axisStepOrder}: Y, then X before Z unless |X| &lt; |Z|),
- * each swept with its own origin box, DDA corner ray, and destination box over
- * one shared visited set. A cobweb on the Z arm and a sweet berry bush on the X
- * arm of the same diagonal therefore swap which vector survives when the
- * requested Z grows from equal to one hundredth larger than X. A chest face
- * clips the resolved Z to well under the resolved X in both cases, so the
- * order is provably the requested one and not the resolved one. The headless
- * twin is {@code InsideBlockTraversalVanillaTest}.
+ * <p>{@code Entity.checkInsideBlocks} splits a recorded movement into axis sub-movements ordered by the requested
+ * movement's magnitudes ({@code Direction.axisStepOrder}: Y, then X before Z unless |X| &lt; |Z|), each swept
+ * with its own origin box, DDA corner ray, and destination box over one shared visited set. A cobweb on the Z arm
+ * and a sweet berry bush on the X arm of the same diagonal therefore swap which vector survives when the requested
+ * Z grows from equal to one hundredth larger than X. A chest face clips the resolved Z to well under the resolved
+ * X in both cases, so the order is provably the requested one and not the resolved one.
  */
-class InsideBlockTraversalOrderTest {
+final class InsideBlockTraversalOrderTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 
 	@Test
 	void requestedAxisOrderDecidesWhichStuckVectorSurvives() {
-		SnapshotView world = new SnapshotView(cobwebOnZArmBushOnXArm());
+		SnapshotView world = SnapshotView.compile(cobwebOnZArmBushOnXArm());
 
 		PlayerState xThenZ = grounded(0.5, 0.5);
 		xThenZ.deltaMovementX = 0.6;
@@ -55,7 +55,7 @@ class InsideBlockTraversalOrderTest {
 
 	@Test
 	void stationaryTraversalCoversTheTickStartBoxAndNothingElse() {
-		SnapshotView world = new SnapshotView(cobwebOnZArmBushOnXArm());
+		SnapshotView world = SnapshotView.compile(cobwebOnZArmBushOnXArm());
 
 		PlayerState inside = grounded(0.5, 1.5);
 		inside.deltaMovementY = (0.0 - 0.08) * (double) 0.98F;
@@ -91,28 +91,26 @@ class InsideBlockTraversalOrderTest {
 	}
 
 	/**
-	 * Stone floor, a cobweb at (0,0,1), a sweet berry bush at (1,0,0), and a
-	 * single chest at (0,1,1) whose near face at z=1.0625 clips the diagonal's Z.
+	 * Stone floor, a cobweb at (0,0,1), a sweet berry bush at (1,0,0), and a single chest at (0,1,1) whose near
+	 * face at z=1.0625 clips the diagonal's Z.
 	 */
 	static WorldSnapshot cobwebOnZArmBushOnXArm() {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "test:air").build();
-		WorldSnapshot.BlockEntry stone = WorldSnapshot.BlockEntry.builder(1, "test:stone").fullCube().build();
-		WorldSnapshot.BlockEntry cobweb = WorldSnapshot.BlockEntry.builder(2, "test:cobweb")
-		                                      .suffocation(WorldSnapshot.Suffocation.NO)
-		                                      .insideEffect(WorldView.InsideEffect.COBWEB)
-		                                      .build();
-		WorldSnapshot.BlockEntry bush = WorldSnapshot.BlockEntry.builder(3, "test:bush")
-		                                    .suffocation(WorldSnapshot.Suffocation.NO)
-		                                    .insideEffect(WorldView.InsideEffect.SWEET_BERRY_BUSH)
-		                                    .build();
-		WorldSnapshot.BlockEntry chest =
-		    WorldSnapshot.BlockEntry.builder(4, "test:chest")
-		        .suffocation(WorldSnapshot.Suffocation.NO)
-		        .boxes(new WorldSnapshot.ShapeBox(0.0625, 0.0, 0.0625, 0.9375, 0.875, 0.9375))
-		        .build();
-		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -4, -4, 9, 10, 12)
-		        .palette(air, stone, cobweb, bush, chest);
+		BlockEntry air = BlockEntry.builder(0, "test:air").build();
+		BlockEntry stone = BlockEntry.builder(1, "test:stone").fullCube().build();
+		BlockEntry cobweb = BlockEntry.builder(2, "test:cobweb")
+		                        .suffocation(Suffocation.NO)
+		                        .insideEffect(WorldView.InsideEffect.COBWEB)
+		                        .build();
+		BlockEntry bush = BlockEntry.builder(3, "test:bush")
+		                      .suffocation(Suffocation.NO)
+		                      .insideEffect(WorldView.InsideEffect.SWEET_BERRY_BUSH)
+		                      .build();
+		BlockEntry chest = BlockEntry.builder(4, "test:chest")
+		                       .suffocation(Suffocation.NO)
+		                       .boxes(new ShapeBox(0.0625, 0.0, 0.0625, 0.9375, 0.875, 0.9375))
+		                       .build();
+		WorldSnapshot.Builder world = WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -4, -4, 9, 10, 12)
+		                                  .palette(air, stone, cobweb, bush, chest);
 		for (int z = -4; z <= 7; z++) {
 			for (int x = -4; x <= 4; x++) {
 				world.set(x, -1, z, 1);

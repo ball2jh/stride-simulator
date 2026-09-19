@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator.world;
 
 import com.nettarion.stride.simulator.FluidSample;
+
 /**
  * Caller-owned storage for {@code Entity.mainSupportingBlockPos}, on the model
  * of {@link FluidSample}: the query writes into it rather than allocating an
@@ -10,17 +11,23 @@ import com.nettarion.stride.simulator.FluidSample;
  * coordinates are then meaningless. Vanilla distinguishes the two cases in
  * {@code Entity.getOnPos}, which takes a completely different branch when the
  * position is absent, so a caller must test {@link #present} rather than
- * comparing coordinates against a sentinel.
+ * comparing coordinates against a sentinel. Not thread-safe.
  */
 public final class SupportCell {
 	/** Whether the coordinates hold a resolved support cell. */
 	public boolean present;
-	/** X coordinate of the resolved support cell. */
+
+	/** X coordinate of the resolved support cell, in blocks. */
 	public int x;
-	/** Y coordinate of the resolved support cell. */
+
+	/** Y coordinate of the resolved support cell, in blocks. */
 	public int y;
-	/** Z coordinate of the resolved support cell. */
+
+	/** Z coordinate of the resolved support cell, in blocks. */
 	public int z;
+
+	/** An absent support answer. */
+	public SupportCell() {}
 
 	/** Marks this result absent; existing coordinates become unspecified. */
 	public void clear() {
@@ -35,8 +42,12 @@ public final class SupportCell {
 		this.z = cellZ;
 	}
 
-	/** {@code Vec3i.compareTo} of this cell against another: Y, then Z, then X. */
-	public int compareTo(final int cellX, final int cellY, final int cellZ) {
+	/**
+	 * {@code Vec3i.compareTo} of this cell against another: negative when this
+	 * cell orders before the other by Y, then Z, then X. Meaningful only while
+	 * {@link #present}.
+	 */
+	public int compareCell(final int cellX, final int cellY, final int cellZ) {
 		if (this.y == cellY) {
 			return this.z == cellZ ? this.x - cellX : this.z - cellZ;
 		}

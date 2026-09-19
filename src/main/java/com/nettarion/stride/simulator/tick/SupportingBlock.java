@@ -7,48 +7,48 @@ import com.nettarion.stride.simulator.world.SupportCell;
 import com.nettarion.stride.simulator.world.WorldView;
 
 /**
- * The block underfoot: which cell supports the player, and the friction,
- * speed, and jump factors that block applies.
+ * The block underfoot: which cell supports the player, and the friction, speed, and jump factors
+ * that block applies.
  *
  * <p>Vanilla's {@code Entity.checkSupportingBlock} with its retained
  * {@code mainSupportingBlockPos}, {@code Entity.getOnPosLegacy},
- * {@code Entity.getBlockPosBelowThatAffectsMyMovement}, and the
- * {@code getBlockSpeedFactor} and {@code getBlockJumpFactor} reads, each
- * transcribed. A query the tick asks from {@link Travel} (friction),
- * {@link AiStep} (the jump), {@link Move} (support, the destination speed
- * factor, restitution), {@link com.nettarion.stride.simulator.block.BlockEffects} (the {@code stepOn} cell), and
- * {@link com.nettarion.stride.simulator.server.ServerTick} (the landed cell).
+ * {@code Entity.getBlockPosBelowThatAffectsMyMovement}, and the {@code getBlockSpeedFactor} and
+ * {@code getBlockJumpFactor} reads, each transcribed. A query the tick asks from {@link Travel}
+ * (friction), {@link AiStep} (the jump), {@link Move} (support, the destination speed factor,
+ * restitution), {@code BlockEffects} (the {@code stepOn} cell), and the server package's
+ * {@code ServerMovementListener} (the landed cell of an accepted packet).
  *
- * <p>Reads position, box, ground, and the retained support; {@link #checkSupportingBlock}
- * writes the retained support identity and {@code onGroundNoBlocks}, and
- * nothing else here writes state. {@link #getOnPosLegacy} writes the derived
- * cell into {@link Scratch#support}.
+ * <p>Reads position, box, ground, and the retained support; {@link #checkSupportingBlock} writes
+ * the retained support identity and {@code onGroundNoBlocks}, and nothing else here writes state.
+ * {@link #getOnPosLegacy} writes the derived cell into {@link Scratch#support}. Refuses through the
+ * support query when the slab reaches an unclassified block.
  */
 public final class SupportingBlock {
 	private SupportingBlock() {}
 
 	/**
-	 * {@code Entity.checkSupportingBlock} for the on-ground case a step can reach.
+	 * {@code Entity.checkSupportingBlock} for the on-ground case a step can reach, with the state's
+	 * own {@code onGround}.
 	 *
-	 * <p>The slab is a micron under the box, so on ordinary ground it always finds
-	 * something: {@code onGround} means a collision stopped the descent, which
-	 * puts a shape's top face exactly at {@code boundingBoxMinY}, and the slab reaches it.
+	 * <p>The slab is a micron under the box, so on ordinary ground it always finds something:
+	 * {@code onGround} means a collision stopped the descent, which puts a shape's top face exactly
+	 * at {@code boundingBoxMinY}, and the slab reaches it.
 	 *
-	 * <p>The previous {@code onGroundNoBlocks} latch decides whether an empty first
-	 * search clears the retained position or triggers the backward second search.
+	 * <p>The previous {@code onGroundNoBlocks} latch decides whether an empty first search clears the
+	 * retained position or triggers the backward second search.
 	 */
 	public static void checkSupportingBlock(final PlayerState state, final double movedX, final double movedZ,
 	    final boolean descending, final WorldView world, final Scratch scratch) {
-		checkSupportingBlock(state, state.onGround, movedX, movedZ, descending, world, scratch);
+		checkSupportingBlockWithGround(state, state.onGround, movedX, movedZ, descending, world, scratch);
 	}
 
 	/**
-	 * {@code Entity.checkSupportingBlock(onGround, movement)} with the ground
-	 * answer supplied by the caller, as the listener's corrected path passes the
-	 * packet's bit without installing it.
+	 * {@code Entity.checkSupportingBlock(onGround, movement)} with the ground answer supplied by the
+	 * caller, as the listener's corrected path passes the packet's bit without installing it.
 	 */
-	public static void checkSupportingBlock(final PlayerState state, final boolean onGround, final double movedX,
-	    final double movedZ, final boolean descending, final WorldView world, final Scratch scratch) {
+	public static void checkSupportingBlockWithGround(final PlayerState state, final boolean onGround,
+	    final double movedX, final double movedZ, final boolean descending, final WorldView world,
+	    final Scratch scratch) {
 		if (!onGround) {
 			scratch.support.clear();
 			commit(state, scratch.support);
@@ -72,14 +72,13 @@ public final class SupportingBlock {
 	/**
 	 * {@code Entity.getOnPosLegacy}, which is {@code getOnPos(0.2F)}.
 	 *
-	 * <p>X and Z come from the supporting block and Y from the player, except for
-	 * fences, walls and fence gates, which keep the supporting block's own Y. With
-	 * no supporting block the whole position is {@code floor} of the player's,
-	 * which is a different cell near an edge — that difference is the reason this
-	 * exists rather than the kernel keeping its old approximation.
+	 * <p>X and Z come from the supporting block and Y from the player, except for fences, walls and
+	 * fence gates, which keep the supporting block's own Y. With no supporting block the whole
+	 * position is {@code floor} of the player's, which is a different cell near an edge — that
+	 * difference is why this is transcribed rather than approximated.
 	 *
-	 * <p>Writes a derived cell into {@code scratch.support} without mutating the
-	 * retained identity in {@link PlayerState}.
+	 * <p>Writes a derived cell into {@code scratch.support} without mutating the retained identity in
+	 * {@link PlayerState}.
 	 */
 	public static void getOnPosLegacy(final PlayerState state, final WorldView world, final Scratch scratch) {
 		if (!state.mainSupportingBlockPosPresent) {

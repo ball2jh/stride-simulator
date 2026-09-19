@@ -1,31 +1,44 @@
 package com.nettarion.stride.simulator.world;
 
-import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.geometry.CollisionQuerySpan;
 import com.nettarion.stride.simulator.geometry.Mth;
 
 /**
- * A uniform full-cube floor everywhere below
- * {@code floorTopY}, air above, unbounded horizontally.
+ * The synthetic reference {@link WorldView}: a uniform full-cube floor
+ * everywhere below {@code floorTopY} and above {@code minY}, air above,
+ * unbounded horizontally.
  *
- * <p>Provides the same declared geometry to scalar tests, planner fixtures, and
- * benchmarks without involving snapshot persistence.
+ * <p>It exists to exercise the tick against declared geometry without a
+ * snapshot: every answer is a closed form over {@code y}, so a test can name
+ * the exact collision it expects. The floor's blocks have no identity, only
+ * coefficients, so it cannot answer suffocation for a cell inside the floor
+ * and refuses there. Immutable and safe to share.
  */
 public final class FlatFloorView implements WorldView {
 	private final int floorTopY;
+
 	private final int minY;
+
 	private final float friction;
+
 	private final float speedFactor;
+
 	private final float jumpFactor;
+
 	private final int properties;
+
 	private final long identity = WorldIdentity.next();
 
-	/** Creates a uniform floor with explicit friction, speed and jump coefficients; {@code minY} is its lower bound. */
+	/**
+	 * A uniform floor with explicit friction, speed and jump coefficients.
+	 * Cells with {@code minY <= y < floorTopY} are solid; {@code minY} is also
+	 * the view's {@link #minY()}.
+	 */
 	public FlatFloorView(
 	    final int floorTopY, final int minY, final float friction, final float speedFactor, final float jumpFactor) {
 		this.floorTopY = floorTopY;
@@ -35,17 +48,13 @@ public final class FlatFloorView implements WorldView {
 		this.jumpFactor = jumpFactor;
 		// One block everywhere, so every span has the same answer and the
 		// interface default's seven virtual calls would recompute a constant.
-		this.properties = (friction != 0.6F ? PROPERTY_FRICTION : 0) | (speedFactor != 1.0F ? PROPERTY_SPEED_FACTOR : 0)
-		    | (jumpFactor != 1.0F ? PROPERTY_JUMP_FACTOR : 0);
+		this.properties = (friction != BlockEntry.DEFAULT_FRICTION ? PROPERTY_FRICTION : 0)
+		    | (speedFactor != 1.0F ? PROPERTY_SPEED_FACTOR : 0) | (jumpFactor != 1.0F ? PROPERTY_JUMP_FACTOR : 0);
 	}
 
 	/** Ordinary blocks: friction 0.6, no speed or jump modification. */
 	public static FlatFloorView ordinary(final int floorTopY, final int minY) {
-		return new FlatFloorView(floorTopY, minY, 0.6F, 1.0F, 1.0F);
-	}
-
-	private boolean solid(final int y) {
-		return y < this.floorTopY && y >= this.minY;
+		return new FlatFloorView(floorTopY, minY, BlockEntry.DEFAULT_FRICTION, 1.0F, 1.0F);
 	}
 
 	@Override
@@ -75,8 +84,8 @@ public final class FlatFloorView implements WorldView {
 
 	/** One ordinary block everywhere: no body anywhere. */
 	@Override
-	public BlockBehaviour behaviourAt(final int x, final int y, final int z) {
-		return BlockBehaviour.INERT;
+	public BlockBehavior behaviorAt(final int x, final int y, final int z) {
+		return BlockBehavior.INERT;
 	}
 
 	@Override
@@ -113,18 +122,20 @@ public final class FlatFloorView implements WorldView {
 
 	/**
 	 * This world names one block by its coefficients, never by its identity, so
-	 * it cannot say whether the floor suffocates — stone and glass are the same
+	 * it cannot say whether the floor suffocates: stone and glass are the same
 	 * block here. It can say that air does not, which is every cell the query box
 	 * reaches while the player is standing on the floor rather than inside it.
+	 *
+	 * @throws UnimplementedMechanicException when the column's Y span reaches a floor cell
 	 */
 	@Override
 	public boolean suffocatesAt(
 	    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-		int y0 = Mth.floor(boundingBoxMinY + 1.0E-7);
-		int y1 = Mth.floor(boundingBoxMaxY - 1.0E-7);
+		int y0 = Mth.floor(boundingBoxMinY + VANILLA_EPSILON);
+		int y1 = Mth.floor(boundingBoxMaxY - VANILLA_EPSILON);
 		for (int y = y0; y <= y1; y++) {
 			if (solid(y)) {
-				throw UnimplementedMechanicException.at(Refusal.UNDECLARED_WORLD_FACT,
+				throw UnimplementedMechanicException.at(RefusalCause.UNDECLARED_WORLD_FACT,
 				    "a flat-floor world cannot resolve suffocation for the block at ", cellX, y, cellZ, "");
 			}
 		}
@@ -134,7 +145,7 @@ public final class FlatFloorView implements WorldView {
 	/**
 	 * Every solid cell here is the same full cube, so the supporting block is
 	 * decided entirely by {@code distToCenterSqr} and the {@code compareTo}
-	 * tie-break — which is exactly the part of {@code findSupportingBlock} a
+	 * tie-break, which is exactly the part of {@code findSupportingBlock} a
 	 * uniform floor still exercises, and the part a box straddling a boundary
 	 * depends on.
 	 */
@@ -165,7 +176,7 @@ public final class FlatFloorView implements WorldView {
 					double dy = y + 0.5 - atY;
 					double dz = z + 0.5 - atZ;
 					double distance = dx * dx + dy * dy + dz * dz;
-					if (distance < best || distance == best && (!out.present || out.compareTo(x, y, z) < 0)) {
+					if (distance < best || distance == best && (!out.present || out.compareCell(x, y, z) < 0)) {
 						best = distance;
 						out.set(x, y, z);
 					}
@@ -182,7 +193,7 @@ public final class FlatFloorView implements WorldView {
 
 	@Override
 	public float friction(final int x, final int y, final int z) {
-		return solid(y) ? this.friction : 0.6F;
+		return solid(y) ? this.friction : BlockEntry.DEFAULT_FRICTION;
 	}
 
 	@Override
@@ -207,7 +218,7 @@ public final class FlatFloorView implements WorldView {
 
 	@Override
 	public boolean hasNonDefaultFriction() {
-		return this.friction != 0.6F;
+		return this.friction != BlockEntry.DEFAULT_FRICTION;
 	}
 
 	@Override
@@ -234,5 +245,9 @@ public final class FlatFloorView implements WorldView {
 	@Override
 	public int minY() {
 		return this.minY;
+	}
+
+	private boolean solid(final int y) {
+		return y < this.floorTopY && y >= this.minY;
 	}
 }

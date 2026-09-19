@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stride Simulator</title>
+</head>
+<body>
+<p>Stride Simulator is a deterministic Java library that reproduces Minecraft Java Edition 26.2 player
+movement and the server mechanics that affect it: collision, jumping and sprinting, swimming and crawling
+poses, fluids, climbables, block contact effects, gliding, server movement admission, damage, food and
+health. It has no dependencies beyond the JDK and runs without Minecraft. Positions are in blocks,
+velocities in blocks per tick, rotations in degrees; one step is one client tick at 20 Hz. Anything the
+library does not model refuses with a typed exception instead of guessing.</p>
+
+<h1>Where to start</h1>
+<ul>
+<li>{@link com.nettarion.stride.simulator.Simulator} advances a state by one action and returns the
+successor with the server writes it caused.</li>
+<li>{@link com.nettarion.stride.simulator.SimulationState} is the immutable boundary between two actions:
+the client's {@link com.nettarion.stride.simulator.PlayerState}, the server's
+{@link com.nettarion.stride.simulator.ServerPlayerState}, and the packets in flight.</li>
+<li>{@link com.nettarion.stride.simulator.PlayerInput} is one action: the held keys and the view
+rotation.</li>
+<li>{@link com.nettarion.stride.simulator.world.WorldSnapshot} describes a finite region of block facts
+through its builder; {@link com.nettarion.stride.simulator.world.SnapshotView#compile(WorldSnapshot)}
+turns it into the frozen view the simulator queries.</li>
+<li>{@link com.nettarion.stride.simulator.RefusalException} is the base of every refusal; its
+{@link com.nettarion.stride.simulator.RefusalException#cause() cause()} is the stable
+{@link com.nettarion.stride.simulator.RefusalCause} to classify on.</li>
+</ul>
+
+<p>The exported packages are the supported API: the root package, {@code world}, {@code block},
+{@code geometry} and {@code trace}. The {@code tick} and {@code server} packages are the mechanics behind
+them and are not exported from the module.</p>
+
+<p>Source, issues and the README with a runnable tutorial:
+<a href="https://github.com/ball2jh/stride-simulator">github.com/ball2jh/stride-simulator</a>.</p>
+</body>
+</html>

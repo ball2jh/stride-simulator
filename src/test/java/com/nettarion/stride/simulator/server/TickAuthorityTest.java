@@ -1,5 +1,11 @@
 package com.nettarion.stride.simulator.server;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.ServerPlayerState;
@@ -8,16 +14,11 @@ import com.nettarion.stride.simulator.tick.PlayerTick;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.FlatFloorView;
 import com.nettarion.stride.simulator.world.WorldView;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-/** Authority binding keeps movement and survival on the same server transaction. */
-class TickAuthorityTest {
+/** Authority binding keeps movement and damage on the same server transaction. */
+final class TickAuthorityTest {
 	@Test
 	void rebindingMovesSurvivalAndSyncedInputTogetherAndClearsPreviousHits() {
 		TickAuthority authority = TickAuthority.server();
@@ -26,15 +27,15 @@ class TickAuthorityTest {
 		first.shiftKeyDown = true;
 		authority.begin(first);
 		assertTrue(PlayerTick.isShiftKeyDown(first, scratch));
-		authority.survival().hurtServer(HurtCause.CACTUS, 1.0F);
+		authority.damage().hurtServer(HurtCause.CACTUS, 1.0F);
 		assertEquals(19.0F, first.health);
 
 		ServerPlayerState second = new ServerPlayerState();
 		authority.begin(second);
 		assertSame(second, authority.serverState());
 		assertFalse(PlayerTick.isShiftKeyDown(second, scratch));
-		assertTrue(authority.survival().dealt().isEmpty());
-		authority.survival().hurtServer(HurtCause.LAVA, 4.0F);
+		assertTrue(authority.damage().dealt().isEmpty());
+		authority.damage().hurtServer(HurtCause.LAVA, 4.0F);
 		assertEquals(16.0F, second.health);
 		assertEquals(19.0F, first.health);
 	}
@@ -49,15 +50,23 @@ class TickAuthorityTest {
 		WorldView world = FlatFloorView.ordinary(0, -64);
 		assertThrows(IllegalStateException.class, () -> PlayerTick.serverTick(bound, world, scratch));
 		authority.begin(bound);
-		assertThrows(IllegalArgumentException.class, () -> tick.tick(bound, input, world, scratch));
-		assertThrows(
-		    IllegalArgumentException.class, () -> PlayerTick.serverTick(new ServerPlayerState(), world, scratch));
+		assertThrows(IllegalStateException.class, () -> tick.tick(bound, input, world, scratch));
+		assertThrows(IllegalStateException.class, () -> PlayerTick.serverTick(new ServerPlayerState(), world, scratch));
 	}
 
 	@Test
 	void clientAuthorityCannotAcquireServerEffects() {
 		TickAuthority authority = TickAuthority.client();
-		assertThrows(IllegalStateException.class, authority::survival);
+		assertThrows(IllegalStateException.class, authority::damage);
 		assertThrows(IllegalStateException.class, () -> authority.begin(new ServerPlayerState()));
+	}
+
+	@Test
+	void anUnboundSinkRefusesEveryEffect() {
+		ServerDamage damage = new ServerDamage();
+		assertThrows(IllegalStateException.class, () -> damage.hurtServer(HurtCause.CACTUS, 1.0F));
+		assertThrows(IllegalStateException.class, damage::fireIgnite);
+		assertThrows(IllegalStateException.class, damage::bodyVolume);
+		assertTrue(damage.dealt().isEmpty());
 	}
 }

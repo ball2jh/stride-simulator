@@ -1,8 +1,16 @@
 .gradle/
 build/
+out/
+bin/
 .idea/
 *.iml
 .vscode/
+.settings/
+.classpath
+.project
+.kotlin/
 __pycache__/
 *.pyc
+*.log
+.claude/
 .DS_Store
