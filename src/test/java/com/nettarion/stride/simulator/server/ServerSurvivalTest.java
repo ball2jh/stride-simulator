@@ -1,55 +1,67 @@
 package com.nettarion.stride.simulator.server;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.nettarion.stride.simulator.DamageEvent;
 import com.nettarion.stride.simulator.DamageWrite;
-import com.nettarion.stride.simulator.ServerWriteTimeline;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.MovementPacket;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
+import com.nettarion.stride.simulator.ServerWriteTimeline;
 import com.nettarion.stride.simulator.SimulationState;
 import com.nettarion.stride.simulator.Simulator;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.block.InsideBlockEffectCollector;
 import com.nettarion.stride.simulator.geometry.Mth;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.FluidEntry;
+import com.nettarion.stride.simulator.world.FluidKind;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import com.nettarion.stride.simulator.world.WorldView;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
-import com.nettarion.stride.simulator.world.OutsidePolicy;
-import com.nettarion.stride.simulator.world.ShapeBox;
-import com.nettarion.stride.simulator.world.BlockEntry;
-import com.nettarion.stride.simulator.world.FluidKind;
-import com.nettarion.stride.simulator.world.FluidEntry;
 
 /**
- * The server's survival phases in the composed step, rule by rule from
- * {@code LivingEntity.hurtServer}, {@code Player.actuallyHurt}, and the
- * block bodies that call them: every hit is on the stream at its input, the
- * cooldown decides what a later hit does, and a body the slice does not
- * model refuses inside the tick.
+ * The server's survival phases in the composed step, rule by rule from {@code LivingEntity.hurtServer},
+ * {@code Player.actuallyHurt}, and the block bodies that call them: every hit is on the stream at its action, the
+ * cooldown decides what a later hit does, and a body outside the admitted domain refuses inside the tick.
  */
 final class ServerSurvivalTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
-	private static final int AIR = 0;
+
 	private static final int STONE = 1;
+
 	private static final int CACTUS = 2;
+
 	private static final int MAGMA = 3;
+
 	private static final int HAY = 4;
+
 	private static final int STALAGMITE = 5;
+
 	private static final int WITHER_ROSE = 6;
+
 	private static final int OLD_CAMPFIRE = 7;
+
 	private static final int POWDER_SNOW = 8;
-	private static final int WATER = 1;
+
+	/** The fluid palette index of water; the block palette's index 1 is stone. */
+	private static final int WATER_FLUID = 1;
 
 	@Test
 	void aCactusVisitHurtsOncePerCooldownAndMarksTheFirstHit() {
@@ -60,7 +72,7 @@ final class ServerSurvivalTest {
 		ServerPlayerState server = ServerPlayerState.atBoundary(start);
 		// Isolate repeated contact damage from the default regeneration timer.
 		server.naturalRegeneration = false;
-		SimulationState state = simulator.start(start, server);
+		SimulationState state = new SimulationState(start, server, 0);
 
 		Simulator.Step first = simulator.advance(state, IDLE, world);
 		assertEquals(1, first.damage().size(), first.writes().toString());
@@ -75,8 +87,8 @@ final class ServerSurvivalTest {
 		assertTrue(first.confirmations().stream().anyMatch(confirmation
 		    -> confirmation instanceof Simulator.DamageConfirmation damage && damage.cause() == HurtCause.CACTUS));
 
-		// The next input delivers the hurt motion; the cactus still touches but
-		// the cooldown refuses an equal hit, so no second event and no mark.
+		// The next action delivers the hurt motion; the cactus still touches but
+		// the cooldown blocks an equal hit, so no second event and no mark.
 		Simulator.Step second = simulator.advance(first.state(), IDLE, world);
 		assertEquals(1, second.hurtMotion().size());
 		assertEquals(HurtCause.CACTUS, second.hurtMotion().getFirst().event().cause());
@@ -85,17 +97,17 @@ final class ServerSurvivalTest {
 		assertEquals(19, second.state().serverState().invulnerableTime);
 
 		// The level tick counts the cooldown down before each hit, so the
-		// tenth input after a full hit is the next full hit: one point every
+		// tenth action after a full hit is the next full hit: one point every
 		// ten ticks, as a cactus is known to deal.
 		state = second.state();
 		int fullHits = 0;
-		for (int input = 2; input < 30; input++) {
+		for (int action = 2; action < 30; action++) {
 			Simulator.Step step = simulator.advance(state, IDLE, world);
 			for (DamageWrite write : step.damage()) {
 				if (write.event().full()) {
 					fullHits++;
-					assertEquals(input, write.actionIndex());
-					assertEquals(10 * fullHits, input, "a full hit lands when the cooldown reaches ten");
+					assertEquals(action, write.actionIndex());
+					assertEquals(10 * fullHits, action, "a full hit lands when the cooldown reaches ten");
 				}
 			}
 			state = step.state();
@@ -111,13 +123,13 @@ final class ServerSurvivalTest {
 		start.mainSupportingBlockPosY = -1;
 		Simulator simulator = new Simulator();
 
-		Simulator.Step burned = simulator.advance(simulator.start(start, start), IDLE, world);
+		Simulator.Step burned = simulator.advance(started(start), IDLE, world);
 		assertEquals(HurtCause.HOT_FLOOR, burned.damage().getFirst().event().cause());
 		assertEquals(19.0F, burned.state().serverState().health);
 
 		// The shift bit the transaction installs is the input packet's; the
 		// stepOn body reads it at the following connection tick.
-		PlayerInput shift = new PlayerInput(false, false, false, false, false, true, false, 0.0F, 0.0F);
+		PlayerInput shift = PlayerInput.of(0.0F, 0.0F, PlayerInput.Key.SNEAK);
 		ServerPlayerState careful = ServerPlayerState.atBoundary(start);
 		careful.shiftKeyDown = true;
 		Simulator.Step spared = simulator.advance(new SimulationState(start, careful, 0), shift, world);
@@ -140,9 +152,9 @@ final class ServerSurvivalTest {
 		SnapshotView world = world(builder -> builder.set(1, 0, 0, WITHER_ROSE));
 		PlayerState start = standing(0.75, 0.0, 0.5);
 		Simulator simulator = new Simulator();
-		UnimplementedMechanicException refusal = assertThrows(
-		    UnimplementedMechanicException.class, () -> simulator.advance(simulator.start(start, start), IDLE, world));
-		assertTrue(refusal.getMessage().contains("contact body"), refusal.getMessage());
+		UnimplementedMechanicException refusal =
+		    assertThrows(UnimplementedMechanicException.class, () -> simulator.advance(started(start), IDLE, world));
+		assertEquals(RefusalCause.UNMODELED_BLOCK, refusal.cause());
 	}
 
 	@Test
@@ -154,8 +166,9 @@ final class ServerSurvivalTest {
 		SnapshotView world = world(builder -> builder.set(1, 0, 0, OLD_CAMPFIRE));
 		PlayerState start = standing(0.75, 0.0, 0.5);
 		Simulator simulator = new Simulator();
-		assertThrows(
-		    UnimplementedMechanicException.class, () -> simulator.advance(simulator.start(start, start), IDLE, world));
+		UnimplementedMechanicException refusal =
+		    assertThrows(UnimplementedMechanicException.class, () -> simulator.advance(started(start), IDLE, world));
+		assertEquals(RefusalCause.UNDECLARED_BLOCK_STATE, refusal.cause());
 	}
 
 	@Test
@@ -165,15 +178,15 @@ final class ServerSurvivalTest {
 		SnapshotView pool = world(builder -> {
 			for (int x = -8; x < 8; x++) {
 				for (int z = -8; z < 8; z++) {
-					builder.setFluid(x, 0, z, WATER);
-					builder.setFluid(x, 1, z, WATER);
+					builder.setFluid(x, 0, z, WATER_FLUID);
+					builder.setFluid(x, 1, z, WATER_FLUID);
 				}
 			}
 		});
 		ServerPlayerState server = ServerPlayerState.atBoundary(standing(0.5, 0.0, 0.5));
 		server.airSupply = -19;
 		ServerTick.Transaction drowned =
-		    new ServerTick().transact(server.copy(), MovementPacket.NONE, server, IDLE, pool, false);
+		    new ServerTick().transact(server.copy(), MovementPacket.NONE, server, IDLE, pool);
 		assertEquals(1, drowned.damage().size(), drowned.damage().toString());
 		DamageEvent hit = drowned.damage().getFirst();
 		assertEquals(HurtCause.DROWN, hit.cause());
@@ -184,7 +197,7 @@ final class ServerSurvivalTest {
 
 		ServerPlayerState surfaced = ServerPlayerState.atBoundary(standing(0.5, 0.0, 0.5));
 		surfaced.airSupply = 100;
-		new ServerTick().transact(surfaced.copy(), MovementPacket.NONE, surfaced, IDLE, world(builder -> {}), false);
+		new ServerTick().transact(surfaced.copy(), MovementPacket.NONE, surfaced, IDLE, world(builder -> {}));
 		assertEquals(104, surfaced.airSupply, "air refills by four a tick out of water");
 	}
 
@@ -196,7 +209,7 @@ final class ServerSurvivalTest {
 		server.invulnerableTime = 15;
 		server.lastHurt = 0.25F;
 		ServerTick.Transaction transaction =
-		    new ServerTick().transact(server.copy(), MovementPacket.NONE, server, IDLE, world, false);
+		    new ServerTick().transact(server.copy(), MovementPacket.NONE, server, IDLE, world);
 		DamageEvent hit = transaction.damage().getFirst();
 		assertFalse(hit.full(), "the cooldown was above ten, so the hit is the difference");
 		assertEquals(1.0F, hit.attempted());
@@ -227,7 +240,7 @@ final class ServerSurvivalTest {
 
 		server.remainingFireTicks = 159;
 		PendingServerWriteException refusal = assertThrows(PendingServerWriteException.class, survival::fireIgnite);
-		assertTrue(refusal.getMessage().contains("random"), refusal.getMessage());
+		assertEquals(RefusalCause.PENDING_SERVER_RANDOM, refusal.cause());
 
 		// The step's flush runs the ignition, then the in-fire hit after it,
 		// in InsideBlockEffectType order.
@@ -251,7 +264,7 @@ final class ServerSurvivalTest {
 		ServerPlayerState thawing = ServerPlayerState.atBoundary(standing(0.5, 0.0, 0.5));
 		thawing.ticksFrozen = 140;
 		ServerTick.Transaction thawed =
-		    new ServerTick().transact(thawing.copy(), MovementPacket.NONE, thawing, IDLE, dry, false);
+		    new ServerTick().transact(thawing.copy(), MovementPacket.NONE, thawing, IDLE, dry);
 		assertTrue(thawed.damage().isEmpty(), "the thaw precedes the fully-frozen check");
 		assertEquals(138, thawing.ticksFrozen, "thawing by two outside powder snow");
 		assertEquals(138, thawing.frostSpeedTicks);
@@ -264,14 +277,13 @@ final class ServerSurvivalTest {
 		ServerPlayerState unknown = ServerPlayerState.atBoundary(sunk);
 		unknown.ticksFrozen = 140;
 		PendingServerWriteException refusal = assertThrows(PendingServerWriteException.class,
-		    () -> new ServerTick().transact(unknown.copy(), MovementPacket.NONE, unknown, IDLE, snow, false));
-		assertTrue(refusal.getMessage().contains("tick count"), refusal.getMessage());
+		    () -> new ServerTick().transact(unknown.copy(), MovementPacket.NONE, unknown, IDLE, snow));
+		assertEquals(RefusalCause.PENDING_SERVER_RANDOM, refusal.cause());
 
 		ServerPlayerState known = ServerPlayerState.atBoundary(sunk);
 		known.ticksFrozen = 140;
 		known.tickCount = 39L;
-		ServerTick.Transaction frozen =
-		    new ServerTick().transact(known.copy(), MovementPacket.NONE, known, IDLE, snow, false);
+		ServerTick.Transaction frozen = new ServerTick().transact(known.copy(), MovementPacket.NONE, known, IDLE, snow);
 		assertEquals(HurtCause.FREEZE, frozen.damage().getFirst().cause());
 		assertEquals(40L, known.tickCount);
 		assertEquals(140, known.ticksFrozen);
@@ -283,15 +295,14 @@ final class ServerSurvivalTest {
 		// burning player causes before EXTINGUISH clears the fire. The freeze
 		// counts up through the composed tick; the extinguish keeps a
 		// non-burning player's immune window; the melt is a world write the
-		// slice does not make and refuses at the visit.
+		// admitted domain does not make and refuses at the visit.
 		SnapshotView snow = world(builder -> builder.set(0, 0, 0, POWDER_SNOW));
 		PlayerState sunk = new PlayerState();
 		sunk.placeAt(0.5, 0.0, 0.5);
 		ServerPlayerState cold = ServerPlayerState.atBoundary(sunk);
 		cold.tickCount = 1L;
 		cold.remainingFireTicks = -5;
-		ServerTick.Transaction freezing =
-		    new ServerTick().transact(cold.copy(), MovementPacket.NONE, cold, IDLE, snow, false);
+		ServerTick.Transaction freezing = new ServerTick().transact(cold.copy(), MovementPacket.NONE, cold, IDLE, snow);
 		assertTrue(freezing.damage().isEmpty());
 		assertEquals(1, cold.ticksFrozen, "one FREEZE per visited step");
 		assertEquals(-ServerPlayerState.FIRE_IMMUNE_TICKS, cold.remainingFireTicks,
@@ -301,8 +312,8 @@ final class ServerSurvivalTest {
 		burning.tickCount = 1L;
 		burning.remainingFireTicks = 60;
 		UnimplementedMechanicException refusal = assertThrows(UnimplementedMechanicException.class,
-		    () -> new ServerTick().transact(burning.copy(), MovementPacket.NONE, burning, IDLE, snow, false));
-		assertTrue(refusal.getMessage().contains("melts the powder snow"), refusal.getMessage());
+		    () -> new ServerTick().transact(burning.copy(), MovementPacket.NONE, burning, IDLE, snow));
+		assertEquals(RefusalCause.UNMODELED_WORLD_WRITE, refusal.cause());
 	}
 
 	@Test
@@ -313,12 +324,11 @@ final class ServerSurvivalTest {
 		ServerPlayerState server = ServerPlayerState.atBoundary(standing(0.75, 0.0, 0.5));
 		server.absorption = 0.1F;
 		ServerTick tick = new ServerTick();
-		DamageEvent hit =
-		    tick.transact(server.copy(), MovementPacket.NONE, server, IDLE, world, false).damage().getFirst();
+		DamageEvent hit = tick.transact(server.copy(), MovementPacket.NONE, server, IDLE, world).damage().getFirst();
 		assertEquals(1.0F - 0.9F, hit.absorbed());
 		assertEquals(Float.floatToRawIntBits(0.0F), Float.floatToRawIntBits(server.absorption));
 		assertEquals(20.0F - 0.9F, server.health);
-		tick.transact(server.copy(), MovementPacket.NONE, server, IDLE, world, false);
+		tick.transact(server.copy(), MovementPacket.NONE, server, IDLE, world);
 	}
 
 	@Test
@@ -350,16 +360,31 @@ final class ServerSurvivalTest {
 		SnapshotView world = world(builder -> builder.set(1, 0, 0, CACTUS));
 		ServerPlayerState dying = ServerPlayerState.atBoundary(standing(0.75, 0.0, 0.5));
 		dying.health = 1.0F;
-		assertThrows(UnimplementedMechanicException.class,
-		    () -> new ServerTick().transact(dying.copy(), MovementPacket.NONE, dying, IDLE, world, false));
+		UnimplementedMechanicException death = assertThrows(UnimplementedMechanicException.class,
+		    () -> new ServerTick().transact(dying.copy(), MovementPacket.NONE, dying, IDLE, world));
+		assertEquals(RefusalCause.UNMODELED_SESSION_END, death.cause());
 		ServerPlayerState flier = ServerPlayerState.atBoundary(standing(0.75, 0.0, 0.5));
 		flier.mayfly = true;
-		assertThrows(PendingServerWriteException.class,
-		    () -> new ServerTick().transact(flier.copy(), MovementPacket.NONE, flier, IDLE, world, false));
+		PendingServerWriteException ability = assertThrows(PendingServerWriteException.class,
+		    () -> new ServerTick().transact(flier.copy(), MovementPacket.NONE, flier, IDLE, world));
+		assertEquals(RefusalCause.PENDING_ABILITY, ability.cause());
 	}
 
 	@Test
-	void theTimelineCarriesSeveralHitsAtOneBoundaryButOneVelocityWrite() {
+	void eachDamageGameRuleDropsItsOwnCausesBeforeTheCooldown() {
+		// Player.isInvulnerableTo by the 26.2 damage-type tags: is_fall, is_fire,
+		// is_drowning and is_freezing each answer to one game rule.
+		assertEquals(EnumSet.noneOf(HurtCause.class), dropped(server -> {}));
+		assertEquals(EnumSet.of(HurtCause.FALL, HurtCause.STALAGMITE), dropped(server -> server.fallDamage = false));
+		assertEquals(
+		    EnumSet.of(HurtCause.IN_FIRE, HurtCause.CAMPFIRE, HurtCause.ON_FIRE, HurtCause.LAVA, HurtCause.HOT_FLOOR),
+		    dropped(server -> server.fireDamage = false));
+		assertEquals(EnumSet.of(HurtCause.DROWN), dropped(server -> server.drowningDamage = false));
+		assertEquals(EnumSet.of(HurtCause.FREEZE), dropped(server -> server.freezeDamage = false));
+	}
+
+	@Test
+	void theTimelineCarriesSeveralHitsAtOneActionButOneVelocityWrite() {
 		DamageEvent cactus = new DamageEvent(HurtCause.CACTUS, 1.0F, 0.0F, 1.0F, 19.0F, true);
 		DamageEvent lava = new DamageEvent(HurtCause.LAVA, 4.0F, 0.0F, 3.0F, 16.0F, false);
 		ServerWriteTimeline timeline =
@@ -370,6 +395,25 @@ final class ServerSurvivalTest {
 		timeline.applyAfterAction(3, state);
 		assertEquals(0.0, state.deltaMovementX, "applying a hit is the identity on the client");
 		assertEquals(1, timeline.afterConsuming(2).damage().getFirst().actionIndex());
+	}
+
+	/** The causes a one-point hit drops entirely on a full-health copy with {@code rules} applied. */
+	private static Set<HurtCause> dropped(final Consumer<ServerPlayerState> rules) {
+		Set<HurtCause> dropped = EnumSet.noneOf(HurtCause.class);
+		for (HurtCause cause : HurtCause.values()) {
+			ServerPlayerState server = ServerPlayerState.atBoundary(standing(0.5, 0.0, 0.5));
+			rules.accept(server);
+			Survival survival = new Survival();
+			survival.begin(server);
+			survival.hurtServer(cause, 1.0F);
+			if (survival.dealt().isEmpty()) {
+				assertEquals(20.0F, server.health, cause.name());
+				dropped.add(cause);
+			} else {
+				assertEquals(19.0F, server.health, cause.name());
+			}
+		}
+		return dropped;
 	}
 
 	/** The composed step's fall hit on the given landing block, from a four-block drop. */
@@ -384,8 +428,8 @@ final class ServerSurvivalTest {
 		PlayerState start = new PlayerState();
 		start.placeAt(0.5, 4.0, 0.5);
 		Simulator simulator = new Simulator();
-		SimulationState state = simulator.start(start, start);
-		for (int input = 0; input < 40; input++) {
+		SimulationState state = started(start);
+		for (int action = 0; action < 40; action++) {
 			Simulator.Step step = simulator.advance(state, IDLE, world);
 			state = step.state();
 			if (!step.damage().isEmpty()) {
@@ -395,11 +439,15 @@ final class ServerSurvivalTest {
 				return (int) hit.healthDamage();
 			}
 			if (state.clientState().onGround) {
-				assertEquals(null, expected, "the landing dealt no hit");
+				assertNull(expected, "the landing dealt no hit");
 				return 0;
 			}
 		}
 		throw new AssertionError("the drop did not land");
+	}
+
+	private static SimulationState started(final PlayerState start) {
+		return new SimulationState(start, ServerPlayerState.atBoundary(start), 0);
 	}
 
 	private static PlayerState standing(final double x, final double y, final double z) {
@@ -424,22 +472,22 @@ final class ServerSurvivalTest {
 		BlockEntry cactus = cube(2, "minecraft:cactus").contact(WorldView.Contact.CACTUS).build();
 		BlockEntry magma = cube(3, "minecraft:magma_block").contact(WorldView.Contact.HOT_FLOOR).build();
 		BlockEntry hay = cube(4, "minecraft:hay_block").landing(WorldView.Landing.HAY).build();
-		BlockEntry stalagmite =
-		    cube(5, "minecraft:pointed_dripstone").landing(WorldView.Landing.STALAGMITE).build();
+		BlockEntry stalagmite = cube(5, "minecraft:pointed_dripstone").landing(WorldView.Landing.STALAGMITE).build();
 		BlockEntry witherRose =
 		    BlockEntry.builder(6, "minecraft:wither_rose").contact(WorldView.Contact.UNMODELED).build();
-		BlockEntry oldCampfire = new BlockEntry(7, "minecraft:campfire", 0.6F, 1.0F, 1.0F,
-		    List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 7.0 / 16.0, 1.0)));
+		// The builder leaves a campfire's contact at the name's legacy value, UNKNOWN.
+		BlockEntry oldCampfire = BlockEntry.builder(7, "minecraft:campfire")
+		                             .boxes(new ShapeBox(0.0, 0.0, 0.0, 1.0, 7.0 / 16.0, 1.0))
+		                             .build();
 		BlockEntry powderSnow = BlockEntry.builder(8, "minecraft:powder_snow")
-		                                          .collisionBehavior(WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS)
-		                                          .landing(WorldView.Landing.POWDER_SNOW)
-		                                          .build();
+		                            .collisionBehavior(WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS)
+		                            .landing(WorldView.Landing.POWDER_SNOW)
+		                            .build();
 		WorldSnapshot.Builder builder =
 		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -3, -8, 16, 12, 16)
 		        .palette(air, stone, cactus, magma, hay, stalagmite, witherRose, oldCampfire, powderSnow)
 		        .fluidPalette(FluidEntry.EMPTY,
-		            new FluidEntry(
-		                1, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true));
+		            new FluidEntry(WATER_FLUID, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true));
 		for (int x = -8; x < 8; x++) {
 			for (int z = -8; z < 8; z++) {
 				builder.set(x, -1, z, STONE);

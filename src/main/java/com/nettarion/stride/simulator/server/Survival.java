@@ -1,9 +1,9 @@
 package com.nettarion.stride.simulator.server;
 
 import com.nettarion.stride.simulator.DamageEvent;
-import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.Mth;
@@ -15,52 +15,55 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The server-only survival effects of the transaction in progress on the
- * server's copy: {@code Player.hurtServer} through
- * {@code LivingEntity.hurtServer} and {@code Player.actuallyHurt}, each hit
- * a {@link DamageEvent} on the stream in the order the server dealt it, and
- * the fire ignitions and extinguish the block bodies apply.
+ * The damage and fire sink of one server transaction: every hit and ignition on the server's copy goes through the
+ * one instance {@link ServerTick} bound to it, which records each hit as a {@link DamageEvent} in the order dealt.
  *
- * <p>{@link ServerTick} binds one instance to the server's copy at the start
- * of each transaction and reads the hits off it at the end. The tick's
- * phases and the block behaviors reach it through {@link TickAuthority#survival()}
- * under server authority, so a body deals its hit where vanilla deals it:
- * burning, the void, suffocation, and drowning in {@link com.nettarion.stride.simulator.tick.BaseTick}, the
- * glide's wall impact in {@link com.nettarion.stride.simulator.tick.Travel}, the contact bodies in
- * {@link com.nettarion.stride.simulator.block.BlockEffects}, the freezing hit in {@link com.nettarion.stride.simulator.tick.Freezing}, and the
- * landing in {@link ServerMovementListener}. A hit runs the cooldown branch (a
- * hit inside the cooldown the previous full hit installed is the difference
- * above it, or refused), absorption before health, and the mark: the first
- * full hit of a source outside {@code no_impact} marks the player hurt, and
- * every source is in {@code no_knockback}, so the mark republishes the
- * server's velocity without changing it.
+ * <p>A hit is {@code Player.hurtServer} through {@code LivingEntity.hurtServer} and {@code Player.actuallyHurt}: the
+ * game rules, the ability gate, the cooldown branch, absorption before health, and the mark. The tick phases and the
+ * block behaviors reach the instance through {@link TickAuthority#survival()}, so a body deals its hit where vanilla
+ * deals it; the block package also reads {@link #bodyVolume()} and {@link #suppressingBounce()} here because this is
+ * the only server-side object a block behavior is handed. Amounts are in health points. Not thread-safe.
  *
- * <p>RefusalException a hit on a player who may fly, whose invulnerability is not a
- * captured fact, unless the source bypasses invulnerability (falling out of
- * the world); a hit that kills; and fire contact whose outcome depends on
- * the server's random increment.
+ * <p>Refuses a hit on a player who may fly unless the source bypasses invulnerability, since whether the ability
+ * came with invulnerability is not a captured fact; a hit that kills; and a fire contact whose outcome depends on the
+ * server's random increment.
  */
 public final class Survival {
-	/** Vanilla's {@code SAFE_FALL_DISTANCE} attribute at its player default. */
+	/** Vanilla's {@code SAFE_FALL_DISTANCE} attribute at its player default, in blocks; no enchantment or effect. */
 	static final double SAFE_FALL_DISTANCE = 3.0;
+
 	/** {@code LivingEntity.calculateFallPower} adds this before subtracting the safe distance. */
 	private static final double FALL_POWER_EPSILON = 1.0E-6;
-	/** {@code LivingEntity.hurtServer}: the cooldown a full hit installs. */
+
+	/** {@code LivingEntity.hurtServer}: the cooldown a full hit installs, in ticks. */
 	private static final int HIT_COOLDOWN_TICKS = 20;
-	/** {@code BaseFireBlock.fireIgnite}: eight seconds of burning. */
+
+	/** Above this many cooldown ticks a hit lands inside the cooldown. */
+	private static final int COOLDOWN_GATE_TICKS = 10;
+
+	/** {@code BaseFireBlock.fireIgnite}: eight seconds of burning, in ticks. */
 	private static final int FIRE_BLOCK_TICKS = 160;
-	/** {@code Entity.lavaIgnite}: fifteen seconds of burning. */
+
+	/** {@code Entity.lavaIgnite}: fifteen seconds of burning, in ticks. */
 	private static final int LAVA_TICKS = 300;
 
-	/** Every {@link ServerPlayerState} field a hit may write. */
+	/**
+	 * Every {@link ServerPlayerState} field a hit may write. Public so the declared write sets of the tick phases
+	 * can be checked against the fields they touch ({@code PhaseWriteSetTest}).
+	 */
 	public static final Set<String> HURT_WRITES = Set.of("health", "absorption", "invulnerableTime", "lastHurt",
 	    "exhaustionLevel", "currentImpulseContextResetGraceTime", "currentImpulseImpactPosPresent",
 	    "currentImpulseImpactPosX", "currentImpulseImpactPosY", "currentImpulseImpactPosZ");
 
-	private ServerPlayerState server;
 	/** The hits of the transaction in progress; copied out only when there were any. */
 	private final List<DamageEvent> damage = new ArrayList<>(2);
+
+	private ServerPlayerState server;
+
 	private HurtCause marked;
+
+	/** An unbound sink; {@link #begin} binds it. */
+	public Survival() {}
 
 	/** Bind to the server's copy for one transaction and forget the last one's hits. */
 	void begin(final ServerPlayerState server) {
@@ -79,22 +82,26 @@ public final class Survival {
 		return this.damage.isEmpty() ? List.of() : List.copyOf(this.damage);
 	}
 
+	/** The mark and the hits together, as a transaction reports them. */
+	ServerTick.Effects effects() {
+		return new ServerTick.Effects(marked(), dealt());
+	}
+
 	/**
-	 * {@code Player.hurtServer} through {@code LivingEntity.hurtServer} and
-	 * {@code Player.actuallyHurt} for the bare player: the cooldown branch,
-	 * absorption before health, and the mark. Records the event; the first
-	 * full hit of a marking source marks.
+	 * {@code Player.hurtServer} on the bare player: the game rules, the ability gate, the cooldown branch,
+	 * absorption before health, and the mark. Records the event; the first full hit of a marking source marks.
 	 *
-	 * @throws PendingServerWriteException when the player may fly and the
-	 *         source does not bypass invulnerability, since whether the
-	 *         ability came with invulnerability is not a captured fact
+	 * @param cause the damage source
+	 * @param attempted the amount before the cooldown and absorption, in health points
+	 * @throws PendingServerWriteException when the player may fly and the source does not bypass invulnerability
 	 * @throws UnimplementedMechanicException when the hit kills the player
+	 * @throws IllegalStateException when no transaction is bound
 	 */
 	public void hurtServer(final HurtCause cause, final float attempted) {
-		ServerPlayerState server = this.server;
+		ServerPlayerState server = requireBound();
 		// Player.hurtServer asks isInvulnerableTo first: a disabled damage
-		// gamerule drops the hit before the ability, death and cooldown gates.
-		if (!cause.permittedBy(server)) {
+		// game rule drops the hit before the ability, death and cooldown gates.
+		if (!cause.allowedByGameRules(server)) {
 			return;
 		}
 		// Player.hurtServer drops the hit for abilities.invulnerable unless the
@@ -104,12 +111,15 @@ public final class Survival {
 			    "the server would deal " + cause + " damage to a player who may fly; whether the ability came with"
 			        + " invulnerability is not a captured fact");
 		}
+		// Every admitted source deals at least one point, so the amount gate is
+		// never taken; it is not a vanilla step. Vanilla clamps a negative amount
+		// to zero and still installs the cooldown and the mark for a zero hit.
 		if (server.dead() || attempted <= 0.0F) {
 			return;
 		}
 		boolean full;
 		float applied;
-		if (server.invulnerableTime > 10) {
+		if (server.invulnerableTime > COOLDOWN_GATE_TICKS) {
 			if (attempted <= server.lastHurt) {
 				this.damage.add(new DamageEvent(cause, attempted, 0.0F, 0.0F, server.health, false));
 				return;
@@ -131,67 +141,60 @@ public final class Survival {
 		}
 	}
 
-	/** Player.actuallyHurt for the admitted bare player, after the cooldown gate. */
-	private float actuallyHurt(final HurtCause cause, final float applied) {
-		ServerPlayerState server = this.server;
-		float afterAbsorption = Math.max(applied - server.absorption, 0.0F);
-		float absorbed = applied - afterAbsorption;
-		// setAbsorptionAmount clamps to [0, MAX_ABSORPTION]. The float
-		// subtraction can land a hair below zero when the hit spends the
-		// whole amount; the upper bound is inert, since the amount never
-		// exceeds the attribute and the hit only lowers it.
-		server.absorption = Math.max(server.absorption - absorbed, 0.0F);
-		if (afterAbsorption != 0.0F) {
-			PlayerTick.causeFoodExhaustion(server, cause.foodExhaustion());
-			server.health -= afterAbsorption;
-		}
-		if (server.health <= 0.0F) {
-			server.health = 0.0F;
-			throw UnimplementedMechanicException.deferred(RefusalCause.UNMODELED_SESSION_END,
-			    () -> "the server kills the player with " + cause + " damage; death and respawn are outside the slice");
-		}
-		return afterAbsorption;
-	}
-
 	/** {@code getBbWidth() * getBbWidth() * getBbHeight()} of the server's copy, in float as vanilla multiplies it. */
 	public float bodyVolume() {
-		float width = this.server.pose.width;
+		float width = requireBound().pose.width;
 		return width * width * this.server.pose.height;
 	}
 
 	/** {@code Entity.isSuppressingBounce} on the server's copy: the synced shift flag. */
 	public boolean suppressingBounce() {
-		return this.server.shiftKeyDown;
+		return requireBound().shiftKeyDown;
 	}
 
-	/** {@code Player.causeFallDamage}: nothing when the player may fly, else the floored hit. */
+	/**
+	 * {@code Player.causeFallDamage}: nothing when the player may fly, else the floored fall power times the block's
+	 * multiplier as one {@link HurtCause#FALL}-family hit, with the wind-charge impact height capping the fall.
+	 *
+	 * @param fall the accumulated fall, in blocks
+	 * @param multiplier the landed block's damage multiplier
+	 * @param cause {@link HurtCause#FALL} or {@link HurtCause#STALAGMITE}
+	 */
 	public void causeFallDamage(final double fall, final float multiplier, final HurtCause cause) {
-		if (this.server.mayfly) {
+		ServerPlayerState server = requireBound();
+		if (server.mayfly) {
 			return;
 		}
 		double effectiveFallDistance = fall;
-		if (this.server.currentImpulseImpactPosPresent) {
-			effectiveFallDistance = Math.min(fall, this.server.currentImpulseImpactPosY - this.server.y);
-			if (effectiveFallDistance <= 0.0)
-				this.server.resetCurrentImpulseContext();
-			else
-				this.server.tryResetCurrentImpulseContext();
+		// Vanilla gates this on currentImpulseImpactPos != null &&
+		// ignoreFallDamageFromCurrentImpulse; the state folds both into one
+		// boolean, so an impact position retained after the ignore flag was
+		// cleared still caps the fall here. See the ServerPlayerState request
+		// to split the pair.
+		if (server.currentImpulseImpactPosPresent) {
+			effectiveFallDistance = Math.min(fall, server.currentImpulseImpactPosY - server.y);
+			if (effectiveFallDistance <= 0.0) {
+				server.resetCurrentImpulseContext();
+			} else {
+				server.tryResetCurrentImpulseContext();
+			}
 		}
 		int amount = calculateFallDamage(effectiveFallDistance, multiplier);
 		if (amount > 0) {
-			this.server.resetCurrentImpulseContext();
+			server.resetCurrentImpulseContext();
 			hurtServer(cause, amount);
 		}
 	}
 
 	/**
-	 * {@code BaseFireBlock.fireIgnite} on a server player: one tick through
-	 * the immune window, a random one or two while burning, then eight
-	 * seconds. The random increment only changes the outcome from the last
-	 * tick of the eight seconds upward, which refuses.
+	 * {@code BaseFireBlock.fireIgnite} on a server player: one tick through the immune window, a random one or two
+	 * while burning, then eight seconds. The random increment only changes the outcome from the last tick of the
+	 * eight seconds upward, which refuses.
+	 *
+	 * @throws PendingServerWriteException when the outcome depends on the random increment
 	 */
 	public void fireIgnite() {
-		ServerPlayerState server = this.server;
+		ServerPlayerState server = requireBound();
 		if (server.remainingFireTicks < 0) {
 			server.remainingFireTicks++;
 		} else if (server.remainingFireTicks >= FIRE_BLOCK_TICKS - 1) {
@@ -208,29 +211,53 @@ public final class Survival {
 	}
 
 	/**
-	 * {@code Entity.lavaIgnite}: {@code igniteForSeconds(15)}. The clear-freeze
-	 * half of {@code igniteForTicks} is collected with the visit.
+	 * {@code Entity.lavaIgnite}: {@code igniteForSeconds(15)}. The clear-freeze half of {@code igniteForTicks} is
+	 * collected with the visit.
 	 */
 	public void lavaIgnite() {
-		this.server.remainingFireTicks = Math.max(this.server.remainingFireTicks, LAVA_TICKS);
+		ServerPlayerState server = requireBound();
+		server.remainingFireTicks = Math.max(server.remainingFireTicks, LAVA_TICKS);
 	}
 
 	/** {@code Entity.clearFire}: burning stops, the immune window is kept. */
 	public void clearFire() {
-		this.server.remainingFireTicks = Math.min(0, this.server.remainingFireTicks);
-	}
-
-	/**
-	 * {@code LivingEntity.calculateFallDamage} for the bare player on an
-	 * ordinary block: multiplier one, no protection, the player's default
-	 * safe distance.
-	 */
-	static int calculateFallDamage(final double fallDistance) {
-		return calculateFallDamage(fallDistance, 1.0F);
+		ServerPlayerState server = requireBound();
+		server.remainingFireTicks = Math.min(0, server.remainingFireTicks);
 	}
 
 	/** {@code LivingEntity.calculateFallDamage}: the floored fall power times the block's multiplier. */
 	static int calculateFallDamage(final double fallDistance, final float multiplier) {
 		return Mth.floor((fallDistance + FALL_POWER_EPSILON - SAFE_FALL_DISTANCE) * (double) multiplier * 1.0);
+	}
+
+	/** {@code Player.actuallyHurt} for the admitted bare player, after the cooldown gate. */
+	private float actuallyHurt(final HurtCause cause, final float applied) {
+		ServerPlayerState server = this.server;
+		float afterAbsorption = Math.max(applied - server.absorption, 0.0F);
+		float absorbed = applied - afterAbsorption;
+		// setAbsorptionAmount clamps to [0, MAX_ABSORPTION]. The float
+		// subtraction can land a hair below zero when the hit spends the
+		// whole amount; the upper bound is inert, since the amount never
+		// exceeds the attribute and the hit only lowers it.
+		server.absorption = Math.max(server.absorption - absorbed, 0.0F);
+		if (afterAbsorption != 0.0F) {
+			PlayerTick.causeFoodExhaustion(server, cause.foodExhaustion());
+			server.health -= afterAbsorption;
+		}
+		if (server.health <= 0.0F) {
+			server.health = 0.0F;
+			throw UnimplementedMechanicException.deferred(RefusalCause.UNMODELED_SESSION_END,
+			    ()
+			        -> "the server kills the player with " + cause
+			        + " damage; death and respawn are outside the admitted domain");
+		}
+		return afterAbsorption;
+	}
+
+	private ServerPlayerState requireBound() {
+		if (this.server == null) {
+			throw new IllegalStateException("no server transaction is bound");
+		}
+		return this.server;
 	}
 }

@@ -1,11 +1,15 @@
 package com.nettarion.stride.simulator.server;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.nettarion.stride.simulator.HurtCause;
-import com.nettarion.stride.simulator.MovementPacket;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.Publisher;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.StateDigest;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
@@ -13,49 +17,17 @@ import com.nettarion.stride.simulator.geometry.Mth;
 import com.nettarion.stride.simulator.tick.AiStep;
 import com.nettarion.stride.simulator.tick.PlayerTick;
 import com.nettarion.stride.simulator.tick.Scratch;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import static org.junit.jupiter.api.Assertions.*;
-
-import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.FluidEntry;
+import com.nettarion.stride.simulator.world.FluidKind;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.ShapeBox;
-import com.nettarion.stride.simulator.world.BlockEntry;
-import com.nettarion.stride.simulator.world.FluidKind;
-import com.nettarion.stride.simulator.world.FluidEntry;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import org.junit.jupiter.api.Test;
 
-/** Regression cases for server control authority and the first food-driven publication. */
-class ServerControlAndFoodTest {
-	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
-
-	@Test
-	void clientTickEndRetainsAcceptedMovementAndClearsOmittedMovement() {
-		var server = new ServerPlayerState();
-		server.lastKnownClientMovementX = .25;
-		server.lastKnownClientMovementY = -.125;
-		server.lastKnownClientMovementZ = .5;
-		ServerMovementListener.handleClientTickEnd(server, true);
-		assertEquals(.25, server.lastKnownClientMovementX);
-		assertEquals(-.125, server.lastKnownClientMovementY);
-		assertEquals(.5, server.lastKnownClientMovementZ);
-		ServerMovementListener.handleClientTickEnd(server, false);
-		assertEquals(0.0, server.lastKnownClientMovementX);
-		assertEquals(0.0, server.lastKnownClientMovementY);
-		assertEquals(0.0, server.lastKnownClientMovementZ);
-	}
-
-	@Test
-	void emptyMovementStorageDoesNotRetainPriorSegmentIdentity() {
-		var server = new ServerPlayerState();
-		server.movementThisTickPresent = true;
-		server.movementAxisDependent = true;
-		server.movementFromX = 1;
-		server.movementToY = 2;
-		server.movementRequestedZ = .125;
-		server.clearMovementThisTick();
-		assertTrue(ServerPlayerState.rawEquals(new ServerPlayerState(), server));
-	}
-
+/** The server's own player tick: what it shares with the client tick, what it skips, and what it charges. */
+final class ServerPlayerTickTest {
 	@Test
 	void inputFreeServerTickMatchesConstructedInputAndKeepsItsOwnRotationBits() {
 		for (float rotation : new float[] {0.0F, -0.0F, 73.25F, -180.0F, 720.0F}) {
@@ -98,30 +70,6 @@ class ServerControlAndFoodTest {
 	}
 
 	@Test
-	void inputAndSprintCommandsArriveWithoutAMovementPacket() {
-		ServerPlayerState server = new ServerPlayerState();
-		server.placeAt(0.5, 0.0, 0.5);
-		server.onGround = true;
-		ServerTick tick = new ServerTick();
-		SnapshotView world = world(false);
-		for (boolean pressed : new boolean[] {true, false}) {
-			PlayerState client = server.copy();
-			client.setSprinting(pressed);
-			PlayerInput action = new PlayerInput(false, false, false, false, false, pressed, pressed, 0, 0);
-			Publisher publisher = Publisher.atBoundary(client);
-			assertEquals(MovementPacket.NONE, publisher.publish(client));
-			assertInstanceOf(
-			    ServerTick.Unpublished.class, tick.transact(client, MovementPacket.NONE, server, action, world, false));
-			assertEquals(pressed, server.shiftKeyDown);
-			assertEquals(pressed, server.sprinting);
-			// The control packet arrives after this tick's server movement.
-			// Its shift flag affects the following connection tick's pose.
-			tick.transact(client, MovementPacket.NONE, server, action, world, false);
-			assertEquals(pressed ? PlayerState.Pose.CROUCHING : PlayerState.Pose.STANDING, server.pose);
-		}
-	}
-
-	@Test
 	void aZeroChargeOnAPlayerWhoMayFlyRefusesOnlyWhenTheAbilityWouldShow() {
 		// Player.causeFoodExhaustion adds nothing for a walking step unless the
 		// level is negative zero, which the addition alone would sign-flip.
@@ -132,8 +80,9 @@ class ServerControlAndFoodTest {
 		ServerPlayerTick.checkMovementStatistics(flier, 0.1, 0, 0, world(false));
 		assertEquals(0.3F, flier.exhaustionLevel);
 		flier.setSprinting(true);
-		assertThrows(PendingServerWriteException.class,
+		PendingServerWriteException sprinting = assertThrows(PendingServerWriteException.class,
 		    () -> ServerPlayerTick.checkMovementStatistics(flier, 0.1, 0, 0, world(false)));
+		assertEquals(RefusalCause.PENDING_ABILITY, sprinting.cause());
 		flier.setSprinting(false);
 		flier.exhaustionLevel = -0.0F;
 		assertThrows(PendingServerWriteException.class,
@@ -174,7 +123,9 @@ class ServerControlAndFoodTest {
 		server.zza = -0.5F;
 		server.deltaMovementX = 0.01;
 		// Any world query would fail: only LocalPlayer's prefix needs one here.
-		AiStep.run(server, new PlayerInput(true, false, false, false, true, true, true, 0, 0), null, scratch(server));
+		PlayerInput held = PlayerInput.of(
+		    0.0F, 0.0F, PlayerInput.Key.FORWARD, PlayerInput.Key.JUMP, PlayerInput.Key.SNEAK, PlayerInput.Key.SPRINT);
+		AiStep.run(server, held, null, scratch(server));
 		assertTrue(server.sprinting);
 		assertEquals(3, server.sprintTriggerTime);
 		assertEquals(0.25F * 0.98F, server.xxa);
@@ -203,79 +154,6 @@ class ServerControlAndFoodTest {
 	}
 
 	@Test
-	void injuredDefaultServerHealsOnTheTenthFoodTickEvenWithoutPackets() {
-		ServerPlayerState server = new ServerPlayerState();
-		server.placeAt(0.5, 0.0, 0.5);
-		server.onGround = true;
-		server.health = 19.0F;
-		ServerTick tick = new ServerTick();
-		SnapshotView world = world(false);
-		for (int i = 0; i < 9; i++) {
-			tick.transact(server.copy(), MovementPacket.NONE, server, IDLE, world, false);
-		}
-		assertEquals(9, server.tickTimer);
-		tick.transact(server.copy(), MovementPacket.NONE, server, IDLE, world, false);
-		assertEquals(19.0F + 5.0F / 6.0F, server.health);
-		assertEquals(5.0F, server.exhaustionLevel);
-		assertEquals(0, server.tickTimer);
-	}
-
-	@Test
-	void unsaturatedRegenerationUsesEightyTicksAndFullHealthResetsTheTimer() {
-		ServerPlayerState server = new ServerPlayerState();
-		server.saturationLevel = 0;
-		server.foodLevel = 18;
-		server.health = 19;
-		for (int i = 0; i < 79; i++)
-			FoodData.tick(server);
-		FoodData.tick(server);
-		assertEquals(20, server.health);
-		assertEquals(6, server.exhaustionLevel);
-		server.tickTimer = 79;
-		server.health = 20;
-		FoodData.tick(server);
-		assertEquals(0, server.tickTimer);
-	}
-
-	@Test
-	void exhaustionConsumesOneUnitOnlyAboveFourAndPermitsSupportedFoodPublications() {
-		ServerPlayerState server = new ServerPlayerState();
-		server.exhaustionLevel = 4.0F;
-		FoodData.tick(server);
-		assertEquals(5.0F, server.saturationLevel);
-		PlayerTick.causeFoodExhaustion(server, 0.1F);
-		float remainder = (4.0F + 0.1F) - 4.0F;
-		FoodData.tick(server);
-		assertEquals(remainder, server.exhaustionLevel);
-		assertEquals(4.0F, server.saturationLevel);
-		server.exhaustionLevel = 12;
-		FoodData.tick(server);
-		assertEquals(8.0F, server.exhaustionLevel, "one charge per tick, not a while loop");
-		assertEquals(3.0F, server.saturationLevel);
-		server.exhaustionLevel = 5;
-		server.saturationLevel = 1;
-		FoodData.tick(server);
-		assertEquals(0, server.saturationLevel);
-		server.exhaustionLevel = 5;
-		server.saturationLevel = 0;
-		FoodData.tick(server);
-		assertEquals(19, server.foodLevel);
-		server.exhaustionLevel = 0;
-		server.foodLevel = 6;
-		FoodData.tick(server);
-		assertEquals(6, server.foodLevel);
-	}
-
-	@Test
-	void lowFoodDoesNotSuppressTheConnectionTick() {
-		ServerPlayerState server = new ServerPlayerState();
-		server.foodLevel = 6;
-		SnapshotView world = world(false);
-		new ServerTick().transact(server.copy(), MovementPacket.NONE, server, IDLE, world, true);
-		assertEquals(0, server.tickTimer);
-	}
-
-	@Test
 	void jumpMovementAndDamageExhaustionUseTheirDistinctVanillaAmounts() {
 		ServerPlayerState server = new ServerPlayerState();
 		ServerPlayerTick.jumpFromGround(server, world(false));
@@ -298,31 +176,11 @@ class ServerControlAndFoodTest {
 		survival.hurtServer(HurtCause.CACTUS, 1);
 		assertEquals(0.0F, server.exhaustionLevel, "absorbed hits cost no food");
 		survival.hurtServer(HurtCause.CACTUS, 1);
-		assertEquals(0.0F, server.exhaustionLevel, "cooldown-rejected hits cost no food");
+		assertEquals(0.0F, server.exhaustionLevel, "cooldown-blocked hits cost no food");
 		survival.hurtServer(HurtCause.LAVA, 4);
 		assertEquals(0.1F, server.exhaustionLevel, "a partial health hit costs the source amount");
 		PlayerTick.causeFoodExhaustion(server, 100);
 		assertEquals(40.0F, server.exhaustionLevel);
-	}
-
-	@Test
-	void foodFactsSurviveCopyAndParticipateInEqualityDigestAndValidation() {
-		ServerPlayerState server = new ServerPlayerState();
-		server.foodLevel = 18;
-		server.saturationLevel = 2;
-		server.exhaustionLevel = 3;
-		server.tickTimer = 42;
-		server.naturalRegeneration = false;
-		ServerPlayerState copy = server.copy();
-		assertTrue(ServerPlayerState.rawEquals(server, copy));
-		assertEquals(StateDigest.server(server), StateDigest.server(copy));
-		copy.tickTimer++;
-		assertFalse(ServerPlayerState.rawEquals(server, copy));
-		assertNotEquals(StateDigest.server(server), StateDigest.server(copy));
-		copy.exhaustionLevel = Float.NaN;
-		assertThrows(IllegalStateException.class, copy::requireValid);
-		FoodData.tick(server);
-		assertEquals(0, server.tickTimer, "disabled regeneration clears its timer");
 	}
 
 	private static Scratch scratch(final ServerPlayerState server) {
@@ -335,18 +193,17 @@ class ServerControlAndFoodTest {
 		WorldSnapshot.Builder builder =
 		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -3, -8, 16, 12, 16)
 		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
-		            BlockEntry.builder(1, "minecraft:stone")
-		                .boxes(ShapeBox.FULL_CUBE)
-		                .build())
-		        .fluidPalette(FluidEntry.EMPTY,
-		            new FluidEntry(
-		                1, "minecraft:water", FluidKind.WATER, 1, 0, 0, 0, true));
+		            BlockEntry.builder(1, "minecraft:stone").boxes(ShapeBox.FULL_CUBE).build())
+		        .fluidPalette(
+		            FluidEntry.EMPTY, new FluidEntry(1, "minecraft:water", FluidKind.WATER, 1, 0, 0, 0, true));
 		for (int x = -8; x < 8; x++) {
 			for (int z = -8; z < 8; z++) {
 				builder.set(x, -1, z, 1);
-				if (water)
-					for (int y = 0; y < 4; y++)
+				if (water) {
+					for (int y = 0; y < 4; y++) {
 						builder.setFluid(x, y, z, 1);
+					}
+				}
 			}
 		}
 		return SnapshotView.compile(builder.build());

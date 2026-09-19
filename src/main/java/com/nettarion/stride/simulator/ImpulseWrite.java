@@ -1,18 +1,23 @@
 package com.nettarion.stride.simulator;
 
 import java.util.Objects;
-import java.util.Optional;
 
 /**
- * One external actor's velocity operation on the player, delivered after the
- * named input: the event shape every impulse shares, whether observed on the
- * wire or, once an actor can be scheduled, predicted.
+ * One external actor's velocity operation on the player, delivered after the named action.
  *
- * <p>The fold is noncommutative and equal payloads are distinct events, so an
- * exact event needs the actor, its receive sequence, the phase it lands in,
- * and the operation kind; the vector alone is not an identity. Vanilla
- * distinguishes at least three operations, and only two reduce to a velocity
- * write; the third is a collision-resolved displacement and refuses.
+ * <p>Modeled: applying an {@link Operation#ADD} or {@link Operation#REPLACE} a caller observed on the wire, and
+ * attributing it in the {@link WriteLedger}. Not modeled: predicting an impulse. The simulator schedules no external
+ * actor; a rocket refuses at admission and an explosion is only ever supplied by the caller. {@link Operation#MOVE}
+ * refuses when applied. Equal payloads are distinct events, so identity is the actor, sequence, phase and operation.
+ *
+ * @param actionIndex the completed action after which the write is applied
+ * @param actor who wrote the velocity
+ * @param sequence the caller's receive order among impulses of the same actor, not negative
+ * @param phase where in the client's frame the write lands
+ * @param operation what the write does to the velocity
+ * @param x the x component, in blocks per tick
+ * @param y the y component, in blocks per tick
+ * @param z the z component, in blocks per tick
  */
 public record ImpulseWrite(int actionIndex, ExternalActor actor, long sequence, Phase phase, Operation operation,
     double x, double y, double z) implements ServerWrite {
@@ -23,8 +28,8 @@ public record ImpulseWrite(int actionIndex, ExternalActor actor, long sequence, 
 		/** {@code Entity.setDeltaMovement}: {@code v := r}, as an attached rocket's tick and an owner motion packet do. */
 		REPLACE,
 		/**
-		 * A non-{@code SELF} {@code Entity.move}: collision-resolve an external
-		 * displacement through the world. Not reducible to a velocity write.
+		 * A non-{@code SELF} {@code Entity.move}: collision-resolve an external displacement through the world. Not
+		 * reducible to a velocity write.
 		 */
 		MOVE
 	}
@@ -37,6 +42,7 @@ public record ImpulseWrite(int actionIndex, ExternalActor actor, long sequence, 
 		ACTOR_TICK
 	}
 
+	/** Validates the action index, the sequence, and that the vector is finite. */
 	public ImpulseWrite {
 		if (actionIndex < 0) {
 			throw new IllegalArgumentException("actionIndex is out of range");
@@ -52,6 +58,11 @@ public record ImpulseWrite(int actionIndex, ExternalActor actor, long sequence, 
 		}
 	}
 
+	/**
+	 * Apply the operation to the state's velocity when {@code completedAction} is this write's action index.
+	 *
+	 * @throws UnimplementedMechanicException for {@link Operation#MOVE}
+	 */
 	@Override
 	public void applyAfterAction(final int completedAction, final PlayerState state) {
 		Objects.requireNonNull(state, "state");
@@ -85,22 +96,7 @@ public record ImpulseWrite(int actionIndex, ExternalActor actor, long sequence, 
 	}
 
 	@Override
-	public Optional<ImpulseWrite> afterConsuming(final int actions) {
-		if (actions < 0) {
-			throw new IllegalArgumentException("consumed action count is out of range");
-		}
-		return this.actionIndex < actions ? Optional.empty() : Optional.of(withActionIndex(this.actionIndex - actions));
-	}
-
-	@Override
-	public ImpulseWrite delayedBy(final int actions) {
-		if (actions < 0) {
-			throw new IllegalArgumentException("delay is out of range");
-		}
-		return withActionIndex(Math.addExact(this.actionIndex, actions));
-	}
-
-	private ImpulseWrite withActionIndex(final int index) {
+	public ImpulseWrite withActionIndex(final int index) {
 		return new ImpulseWrite(index, this.actor, this.sequence, this.phase, this.operation, this.x, this.y, this.z);
 	}
 }

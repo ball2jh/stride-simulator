@@ -1,20 +1,21 @@
 package com.nettarion.stride.simulator;
 
 import java.util.Objects;
-import java.util.Optional;
 
 /**
- * One server hit on the player, emitted at the input that caused it.
+ * One server hit on the player, delivered at the action that caused it.
  *
- * <p>The health it costs is already applied to the server's copy inside the
- * tick; the client's movement vector does not change, so applying this
- * write to a client state is the identity. It is on the stream so a plan
- * carries every hit the server will deal, the ledger attributes the
- * damage-event packet that follows, and route policy can read damage
- * without computing it. A hit that marks the player hurt is followed by a
- * {@link HurtMotionWrite} at the next input.
+ * <p>The health it costs is already applied to the server's copy inside the tick, and the client's movement vector
+ * does not change, so applying this write to a client state is the identity. It is on the stream so a consumer sees
+ * every hit the server deals at the action that caused it, and so the {@link WriteLedger} can attribute the
+ * damage-event packet that follows. A hit that marks the player hurt is followed by a {@link HurtMotionWrite} at the
+ * next action.
+ *
+ * @param actionIndex the completed action after which the write is applied
+ * @param event the hit as the server dealt it
  */
 public record DamageWrite(int actionIndex, DamageEvent event) implements ServerWrite {
+	/** Validates the action index and the event. */
 	public DamageWrite {
 		if (actionIndex < 0) {
 			throw new IllegalArgumentException("actionIndex is out of range");
@@ -29,19 +30,7 @@ public record DamageWrite(int actionIndex, DamageEvent event) implements ServerW
 	}
 
 	@Override
-	public Optional<DamageWrite> afterConsuming(final int actions) {
-		if (actions < 0) {
-			throw new IllegalArgumentException("consumed action count is out of range");
-		}
-		return this.actionIndex < actions ? Optional.empty()
-		                                  : Optional.of(new DamageWrite(this.actionIndex - actions, this.event));
-	}
-
-	@Override
-	public DamageWrite delayedBy(final int actions) {
-		if (actions < 0) {
-			throw new IllegalArgumentException("delay is out of range");
-		}
-		return new DamageWrite(Math.addExact(this.actionIndex, actions), this.event);
+	public DamageWrite withActionIndex(final int index) {
+		return new DamageWrite(index, this.event);
 	}
 }
