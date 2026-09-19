@@ -1,58 +1,73 @@
 package com.nettarion.stride.simulator.block;
 
-import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.tick.Scratch;
+import com.nettarion.stride.simulator.world.ShapeBox;
 import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
 import com.nettarion.stride.simulator.world.WorldView;
 import java.util.List;
-import com.nettarion.stride.simulator.world.ShapeBox;
 
-/** A source-verified layered cauldron, with its filled shape and lower-water-level successor. */
+/**
+ * A layered water or powder-snow cauldron: {@code LayeredCauldronBlock.entityInside}, which lowers the level
+ * under a burning player.
+ *
+ * <p>One instance per catalog entry, carrying the inside shape the {@code BlockStateCatalog} extracted and the
+ * palette index of the successor state one level lower. On the server's copy a visit queues the lowering to run
+ * before {@code EXTINGUISH}; the world write refuses unless the caller owns the world. The client's copy applies
+ * nothing.
+ *
+ * <p>Public only until {@code BlockStateCatalog} constructs it through {@link BlockBehavior#layeredCauldron};
+ * consumers never instantiate it.
+ */
 public final class LayeredCauldronBlock extends BlockBehavior {
 	private final int successor;
+
 	private final double[] insideShape;
+
+	/** The cauldron whose lowered state is palette index {@code successor} and whose inside shape is {@code boxes}. */
 	public LayeredCauldronBlock(final int successor, final List<ShapeBox> boxes) {
 		this.successor = successor;
-		this.insideShape = compileShape(boxes);
+		this.insideShape = flattenShape(boxes);
 	}
+
+	/** {@link BlockBehavior#flattenShape}, kept under this name for {@code BlockStateCatalog}. */
 	public static double[] compileShape(final List<ShapeBox> boxes) {
-		double[] shape = new double[boxes.size() * 6];
-		for (int i = 0; i < boxes.size(); i++) {
-			var box = boxes.get(i);
-			int at = i * 6;
-			shape[at] = box.minX();
-			shape[at + 1] = box.minY();
-			shape[at + 2] = box.minZ();
-			shape[at + 3] = box.maxX();
-			shape[at + 4] = box.maxY();
-			shape[at + 5] = box.maxZ();
-		}
-		return shape;
+		return flattenShape(boxes);
 	}
+
 	@Override
 	int families() {
 		return CONTACT;
 	}
+
 	@Override
 	boolean hasContact() {
 		return true;
 	}
+
 	@Override
 	boolean entityInsideShapeReached(
 	    final PlayerState state, final int x, final int y, final int z, final Scratch scratch) {
 		return scratch.insideTraversal.collidedWithShapeMovingFrom(state, x, y, z, this.insideShape);
 	}
+
 	@Override
-	void entityInside(final PlayerState state, final int x, final int y, final int z, final boolean precise,
+	void entityInside(final PlayerState state, final int x, final int y, final int z, final boolean isPrecise,
 	    final WorldView world, final Scratch scratch) {
-		if (scratch.authority.isServer()) {
-			if (!(world instanceof SnapshotView snapshot))
-				throw new UnimplementedMechanicException(
-				    RefusalCause.UNMODELED_WORLD_WRITE, "cauldron needs a branch-owned snapshot");
-			scratch.insideEffects.collectCauldron(snapshot, x, y, z, this.successor);
+		if (!scratch.authority.isServer()) {
+			return;
 		}
+		if (!(world instanceof SnapshotView snapshot)) {
+			throw new UnimplementedMechanicException(
+			    RefusalCause.UNMODELED_WORLD_WRITE, "lowering a cauldron needs a snapshot the caller owns");
+		}
+		scratch.insideEffects.collectCauldron(snapshot, x, y, z, this.successor);
+	}
+
+	@Override
+	public String toString() {
+		return "layered cauldron";
 	}
 }

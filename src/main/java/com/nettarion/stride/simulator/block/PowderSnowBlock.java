@@ -7,25 +7,26 @@ import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.WorldView;
 
 /**
- * Powder snow: {@code PowderSnowBlock.entityInside}, the stuck vector, the
- * collected FREEZE, and on the server the EXTINGUISH that follows it with
- * the melt a burning player causes before it; and
- * {@code getEntityInsideCollisionShape}, which is the full cube until the
- * fall distance passes two and a half blocks and a 0.9-high box after;
- * {@code fallOn} plays a sound and deals nothing.
+ * Powder snow: {@code PowderSnowBlock.entityInside}, the stuck vector and the collected FREEZE, behind a shape
+ * that depends on the fall distance.
  *
- * <p>The palette carries powder snow as its collision behavior, since the
- * shape a bootless player collides with is what the capture classifies;
- * the boots themselves are {@link PlayerState#canWalkOnPowderSnow} and are
- * read by the collision, not here. The whole body, its server half
- * included, is owned by that fact, so the block's contact fact is
- * {@code NONE} the way a liquid's is the fluid entry's.
+ * <p>On the server the EXTINGUISH follows the FREEZE, with the melt a burning player causes before it.
+ * {@code getEntityInsideCollisionShape} is the full cube until the fall distance passes two and a half blocks and
+ * a 0.9-high box after; {@code fallOn} plays a sound and deals nothing.
+ *
+ * <p>The palette carries powder snow as its collision behavior, since the shape a bootless player collides with
+ * is what the capture classifies; the boots themselves are {@link PlayerState#canWalkOnPowderSnow} and are read
+ * by the collision, not here. The whole hook, its server half included, is owned by that fact, so the block's
+ * contact fact is {@code NONE} the way a liquid's is the fluid entry's.
  */
 final class PowderSnowBlock extends BlockBehavior {
 	static final PowderSnowBlock INSTANCE = new PowderSnowBlock();
 
 	/** {@code PowderSnowBlock.FALLING_COLLISION_SHAPE}, as one box. */
 	private static final double[] FALLING_COLLISION_SHAPE = {0.0, 0.0, 0.0, 1.0, (double) 0.9F, 1.0};
+
+	/** The fall distance, in blocks, above which {@code getEntityInsideCollisionShape} is the falling shape. */
+	private static final double FALLING_SHAPE_FALL_DISTANCE = 2.5;
 
 	private PowderSnowBlock() {}
 
@@ -40,38 +41,29 @@ final class PowderSnowBlock extends BlockBehavior {
 	}
 
 	/**
-	 * {@code getEntityInsideCollisionShape} returns the block's own collision
-	 * shape, which for a bootless player is empty (and so the default cube,
-	 * short-circuited) while the fall distance stays at or below 2.5, and the
-	 * falling shape above it, which vanilla then has to sweep for. A box that
-	 * came to rest on top of the shape did not reach it, so nothing applies
-	 * and the cell is not even marked visited.
+	 * {@code getEntityInsideCollisionShape} returns the block's own collision shape, which for a bootless player
+	 * is empty (and so the default cube, short-circuited) while the fall distance stays at or below 2.5, and the
+	 * falling shape above it, which vanilla then has to sweep for. A box that came to rest on top of the shape
+	 * did not reach it, so nothing applies and the cell is not even marked visited.
 	 */
 	@Override
 	boolean entityInsideShapeReached(
 	    final PlayerState state, final int x, final int y, final int z, final Scratch scratch) {
-		return !(state.fallDistance > 2.5)
+		// Written as the negation of vanilla's `fallDistance > 2.5F` so that a NaN
+		// fall distance takes the full-cube branch exactly as vanilla's comparison does.
+		return !(state.fallDistance > FALLING_SHAPE_FALL_DISTANCE)
 		    || scratch.insideTraversal.collidedWithShapeMovingFrom(state, x, y, z, FALLING_COLLISION_SHAPE);
 	}
 
 	/**
-	 * {@code PowderSnowBlock.entityInside} collecting FREEZE for the current step.
-	 *
-	 * <p>{@code StepBasedCollector} de-duplicates per step index, so a tick that
-	 * finds powder snow in two steps freezes twice. Two FREEZE contacts separated
-	 * by a sub-movement boundary but sharing a step index are the one case where
-	 * an unmodeled cell decides whether the collector flushed between them: a
-	 * cell that is neither bubble column nor powder snow is invisible to this
-	 * traversal, and one visited at an intermediate step would have split the
-	 * group. That needs the earlier step index to be at least 2, since a
-	 * sub-movement's origin pass can only re-visit cells its predecessor already
-	 * covered. Refuse there rather than guess.
+	 * {@code PowderSnowBlock.entityInside}: the stuck vector behind the feet-cell gate, then FREEZE for the
+	 * current step, de-duplicated per step by the collector, and on the server the melt-then-EXTINGUISH.
 	 */
 	@Override
 	void entityInside(final PlayerState state, final int x, final int y, final int z, final boolean isPrecise,
 	    final WorldView world, final Scratch scratch) {
 		// PowderSnowBlock.entityInside gates the whole makeStuckInBlock call on the
-		// player's own in-block state — the feet cell — rather than the cell being
+		// player's own in-block state, the feet cell, rather than the cell being
 		// visited, so a visit to any powder cell sets it and a tick that visits
 		// none leaves it alone. It runs here, inside the traversal, because
 		// resetFallDistance is one of its effects and the next cell's
