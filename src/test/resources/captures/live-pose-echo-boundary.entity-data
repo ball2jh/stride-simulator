@@ -1,0 +1,18 @@
+#stride-entity-data-echo	2
+tick_at_arrival	pose	flags	sprinting	swimming
+7	-	8	true	false
+31	-	0	false	false
+38	-	8	true	false
+39	-	24	true	true
+39	SWIMMING	-	-	-
+50	-	8	true	false
+50	STANDING	-	-	-
+57	-	0	false	false
+71	-	8	true	false
+76	-	0	false	false
+88	-	8	true	false
+93	-	0	false	false
+103	-	2	false	false
+104	CROUCHING	-	-	-
+111	-	0	false	false
+112	STANDING	-	-	-

@@ -1,0 +1,59 @@
+{
+  "source_project": "Stride",
+  "source_revision": "e6a9a080094b341b1197e6b7b14bb0de06b57019",
+  "source_directory": "modules/simulator",
+  "minecraft_version": "26.2",
+  "scope": "Standalone simulator sources, build-time generators, regression tests, and the small observation fixtures consumed by those tests. No original Git history or sibling module implementation is included.",
+  "fixtures": [
+    {
+      "path": "src/test/resources/captures/live-pose-echo-boundary.tsv",
+      "origin_path": "modules/validation/captures/live-pose-echo-boundary.tsv",
+      "sha256": "280044ba5e98f9b4776975eecd73cf9ff1e66c3a701df8e5308efce4fb27d089"
+    },
+    {
+      "path": "src/test/resources/captures/live-pose-echo-boundary.world",
+      "origin_path": "modules/validation/captures/live-pose-echo-boundary.world",
+      "sha256": "352f6ab53fee3e05d4d755da9d0cf2e21e10ff59e88e29bb927ee036729b2171"
+    },
+    {
+      "path": "src/test/resources/captures/live-pose-echo-boundary.catalog",
+      "origin_path": "modules/validation/captures/live-pose-echo-boundary.catalog",
+      "sha256": "2c22a6722d6bc7295f1654ec0a054a3819e44530c75b4aad0d13fcedd4b5899e"
+    },
+    {
+      "path": "src/test/resources/captures/live-pose-echo-boundary.entity-data",
+      "origin_path": "modules/validation/captures/live-pose-echo-boundary.entity-data",
+      "sha256": "cdb618389756bae14e11edaaa871365e55b76f97044fcff0ef5482ae3a34ff13"
+    },
+    {
+      "path": "src/test/resources/captures/live-pose-echo-boundary.state-events",
+      "origin_path": "modules/validation/captures/live-pose-echo-boundary.state-events",
+      "sha256": "b9f71c900a5cbb57e0c678353e143f4bfc361d28b46461324ee2a78ab2a91530"
+    },
+    {
+      "path": "src/test/resources/captures/live-elytra-glide.tsv",
+      "origin_path": "modules/validation/captures/live-elytra-glide.tsv",
+      "sha256": "1cf8d83ddbd4f9eaf94e9044b9d74f41a8a2d3f5b2bf484a1b704ab1f889e2ab"
+    },
+    {
+      "path": "src/test/resources/captures/live-elytra-glide.world",
+      "origin_path": "modules/validation/captures/live-elytra-glide.world",
+      "sha256": "853f0b12a8e7aad742903ebd6218d94cd4a2c4a6c1836782947392fa0fe5ec73"
+    },
+    {
+      "path": "src/test/resources/captures/live-elytra-glide.catalog",
+      "origin_path": "modules/validation/captures/live-elytra-glide.catalog",
+      "sha256": "8b77de040c2a4348cc63f11edce16e15d58ad1fcb18980394b92aaf64173a076"
+    },
+    {
+      "path": "src/test/resources/captures/live-elytra-glide.entity-data",
+      "origin_path": "modules/validation/captures/live-elytra-glide.entity-data",
+      "sha256": "c17d311ff08eb68d1c4f7e5bb3232e0a7b49dd5356a2ca7533c24c187efc1e4b"
+    },
+    {
+      "path": "src/test/resources/captures/schema-1-boundary.bin",
+      "origin_path": "modules/validation/captures/native/server-correction/boundary-0.bin",
+      "sha256": "bf2f9634ce85d1d1cb9d73ccc6631aa37190db72a9c46c1e38201295798865b1"
+    }
+  ]
+}

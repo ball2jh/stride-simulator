@@ -1,0 +1,23 @@
+# Java formatting; preserve source-order arithmetic and explanatory comments.
+Language: Java
+BasedOnStyle: Google
+IndentWidth: 4
+TabWidth: 4
+UseTab: ForIndentation
+ContinuationIndentWidth: 4
+ColumnLimit: 120
+AlignAfterOpenBracket: DontAlign
+AlignOperands: false
+AlignConsecutiveAssignments: false
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: false
+AllowShortLambdasOnASingleLine: All
+AllowShortCaseLabelsOnASingleLine: true
+BreakBeforeBraces: Attach
+BreakAfterJavaFieldAnnotations: false
+SpacesBeforeTrailingComments: 1
+ReflowComments: false
+BreakStringLiterals: false
+SortIncludes: Never

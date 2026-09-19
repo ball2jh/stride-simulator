@@ -1,0 +1,4 @@
+#stride-state-events	2
+#scenario	pose-echo-boundary
+tick	phase	field	raw_value
+38	PRE	SWIMMING	0000000000000000

@@ -1,0 +1,176 @@
+package com.nettarion.stride.simulator.geometry;
+
+import com.nettarion.stride.simulator.tick.Scratch;
+
+/** Resolves an axis-ordered movement vector against an already collected shape set. */
+public final class ShapeCollision {
+
+	private ShapeCollision() {
+	}
+
+	public static void collideWithShapes(
+			final double minX, final double minY, final double minZ,
+			final double maxX, final double maxY, final double maxZ,
+			final double dx, final double dy, final double dz,
+			final CollisionBuffer shapes, final Scratch scratch) {
+		if (shapes.isEmpty()) {
+			scratch.movedX = dx;
+			scratch.movedY = dy;
+			scratch.movedZ = dz;
+			return;
+		}
+
+		double resolvedY = collideY(minX, minY, minZ, maxX, maxY, maxZ, shapes, dy);
+		double resolvedX;
+		double resolvedZ;
+
+		// Y is always first. Vanilla orders X and Z by the larger requested
+		// horizontal component, which can change the first surface reached.
+		boolean xBeforeZ = !(Math.abs(dx) < Math.abs(dz));
+		if (xBeforeZ) {
+			resolvedX = collideX(
+				minX, minY + resolvedY, minZ,
+				maxX, maxY + resolvedY, maxZ, shapes, dx);
+			resolvedZ = collideZ(
+				minX + resolvedX, minY + resolvedY, minZ,
+				maxX + resolvedX, maxY + resolvedY, maxZ,
+				shapes, dz);
+		} else {
+			resolvedZ = collideZ(
+				minX, minY + resolvedY, minZ,
+				maxX, maxY + resolvedY, maxZ, shapes, dz);
+			resolvedX = collideX(
+				minX, minY + resolvedY, minZ + resolvedZ,
+				maxX, maxY + resolvedY, maxZ + resolvedZ,
+				shapes, dx);
+		}
+
+		scratch.movedX = resolvedX;
+		scratch.movedY = resolvedY;
+		scratch.movedZ = resolvedZ;
+	}
+
+	/**
+	 * {@code Entity.collectCandidateStepUpHeights}: every Y coordinate of every
+	 * collected shape, relative to the grounded box and narrowed to float,
+	 * that is not below the box, not the height ordinary collision already
+	 * reached, and not above the step height; deduplicated by float bits as
+	 * {@code FloatArraySet} does and sorted ascending.
+	 *
+	 * <p>Vanilla reads {@code VoxelShape.getCoords(Y)}, the shape's grid
+	 * coordinates. A captured shape is its {@code toAabbs()} boxes, so the
+	 * candidates here are box bounds. For an optimized vanilla shape the two
+	 * sets are equal: {@code optimize} rebuilds the grid from its combined
+	 * boxes, so every grid coordinate bounds a box. A capture that stored
+	 * geometry some other way would have to carry the grid itself.
+	 */
+	public static void collectCandidateStepUpHeights(final double boundingBoxMinY,
+			final CollisionBuffer shapes, final float maxStepHeight,
+			final float stepHeightToSkip, final Scratch scratch) {
+		scratch.clearStepCandidates();
+		final int selected = shapes.selectedGroupCount();
+		for (int k = 0; k < selected; k++) {
+			final int group = shapes.selectedGroup(k);
+			final int end = shapes.groupEnd(group);
+			for (int i = shapes.groupStart(group); i < end; i++) {
+				addStepHeight((float) (shapes.minY(i) - boundingBoxMinY),
+					maxStepHeight, stepHeightToSkip, scratch);
+				addStepHeight((float) (shapes.maxY(i) - boundingBoxMinY),
+					maxStepHeight, stepHeightToSkip, scratch);
+			}
+		}
+		scratch.sortStepCandidates();
+	}
+
+	private static void addStepHeight(final float relativeCoord,
+			final float maxStepHeight, final float stepHeightToSkip,
+			final Scratch scratch) {
+		if (!(relativeCoord < 0.0F) && relativeCoord != stepHeightToSkip
+				&& !(relativeCoord > maxStepHeight)) {
+			scratch.addStepCandidate(relativeCoord);
+		}
+	}
+
+	/*
+	 * Generated from src/main/templates/ShapeCollision.java.template; edit that file.
+	 * generateShapeCollision expands one rule into fixed X/Y/Z orientations,
+	 * corresponding to VoxelShape.collide's AxisCycle over our grouped boxes.
+	 * Specialization avoids inner-loop axis selection; runtime-shared variants
+	 * had a measured throughput cost in the source project. Overlap order, clipping, per-group
+	 * epsilon snap and direction remain the same in every generated orientation.
+	 * The groups walked are the buffer's selected groups, in ascending order: the
+	 * epsilon snap and the direction are decided on entering each one, as vanilla
+	 * decides them on entering each source shape.
+	 */
+
+@BEGIN_AXIS_LOOP@	private static double collide@AXIS@(
+			final double movingMinX, final double movingMinY, final double movingMinZ,
+			final double movingMaxX, final double movingMaxY, final double movingMaxZ,
+			final CollisionBuffer shapes, double distance) {
+		final int selected = shapes.selectedGroupCount();
+		final int count = shapes.size();
+		// VoxelShape.collideX's index bounds, in its own arithmetic. A box lies in
+		// the b/c window when its cells reach findIndex(min + 1.0E-7) and
+		// findIndex(max - 1.0E-7): max@FIRST@ > windowMin@FIRST@ and
+		// min@FIRST@ <= windowMax@FIRST@. It is ahead of the moving box when its
+		// first cell is past findIndex(max - 1.0E-7): min@AXIS@ > aheadFace; and
+		// behind it when its last cell is before findIndex(min + 1.0E-7):
+		// max@AXIS@ <= behindFace. The epsilon is applied to the moving box's
+		// face before the comparison, as findIndex receives it, never to the
+		// shape's coordinate.
+		final double windowMin@FIRST@ = movingMin@FIRST@ + 1.0E-7;
+		final double windowMax@FIRST@ = movingMax@FIRST@ - 1.0E-7;
+		final double windowMin@SECOND@ = movingMin@SECOND@ + 1.0E-7;
+		final double windowMax@SECOND@ = movingMax@SECOND@ - 1.0E-7;
+		final double aheadFace = movingMax@AXIS@ - 1.0E-7;
+		final double behindFace = movingMin@AXIS@ + 1.0E-7;
+		for (int k = 0; k < selected; k++) {
+			if (Math.abs(distance) < 1.0E-7) {
+				return 0.0;
+			}
+			final boolean positive = distance > 0.0;
+			// The first full slab vanilla's scan meets is the nearest face among
+			// the group's boxes in the window: the lowest ahead, the highest behind.
+			// Only that face is tested against the dead zone, and the group is
+			// left once it has been, whether or not the test admitted it.
+			double nearest = positive ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY;
+			// A group's boxes run from its start to the next group's first box.
+			// Ending on that flag rather than on a counted bound is deliberate:
+			// see CollisionBuffer.startsGroup.
+			int shape = shapes.selectedGroupStart(k);
+			do {
+				if (shapes.max@FIRST@(shape) > windowMin@FIRST@
+						&& shapes.min@FIRST@(shape) <= windowMax@FIRST@
+						&& shapes.max@SECOND@(shape) > windowMin@SECOND@
+						&& shapes.min@SECOND@(shape) <= windowMax@SECOND@) {
+					if (positive) {
+						double shapeMin = shapes.min@AXIS@(shape);
+						if (shapeMin > aheadFace && shapeMin < nearest) {
+							nearest = shapeMin;
+						}
+					} else {
+						double shapeMax = shapes.max@AXIS@(shape);
+						if (shapeMax <= behindFace && shapeMax > nearest) {
+							nearest = shapeMax;
+						}
+					}
+				}
+				shape++;
+			} while (shape < count && !shapes.startsGroup(shape));
+			if (positive) {
+				if (nearest != Double.POSITIVE_INFINITY) {
+					double newDistance = nearest - movingMax@AXIS@;
+					if (newDistance >= -1.0E-7) {
+						distance = Math.min(distance, newDistance);
+					}
+				}
+			} else if (nearest != Double.NEGATIVE_INFINITY) {
+				double newDistance = nearest - movingMin@AXIS@;
+				if (newDistance <= 1.0E-7) {
+					distance = Math.max(distance, newDistance);
+				}
+			}
+		}
+		return distance;
+	}
+@END_AXIS_LOOP@}

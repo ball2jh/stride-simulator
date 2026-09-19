@@ -1,0 +1,5 @@
+#stride-entity-data-echo	2
+tick_at_arrival	pose	flags	sprinting	swimming
+7	-	8	true	false
+19	-	128	false	false
+20	FALL_FLYING	-	-	-
