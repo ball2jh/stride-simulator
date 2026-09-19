@@ -1,9 +1,9 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.server.Survival;
@@ -12,18 +12,23 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * The freezing tail of {@code LivingEntity.aiStep}, which only the server
- * runs, the phase after {@link com.nettarion.stride.simulator.block.BlockEffects}: thaw by two outside powder
- * snow, rebuild the frost modifier, and hurt every fortieth entity tick
- * while fully frozen.
+ * The freezing tail of {@code LivingEntity.aiStep}, which only the server runs: the phase after
+ * {@code BlockEffects}. Thaws by two ticks outside powder snow, rebuilds the frost speed modifier,
+ * and hurts every fortieth entity tick while fully frozen.
  *
- * <p>Reads the powder-snow latch the block effects set, the freeze flag,
- * the frozen count, and the entity tick count. Writes the fields in
- * {@link #WRITES}. Nothing on the client's copy, whose frozen count the
- * composed step installs from the server's at the next input.
+ * <p>Reads the powder-snow latch the block effects set, the freeze flag, the frozen count, and the
+ * entity tick count. Writes the fields in {@link #WRITES}. Nothing on the client's copy, whose
+ * frozen count the composed step installs from the server's at the next input.
+ *
+ * <p>Refuses when the fully frozen player's hit depends on an entity tick count the state does not
+ * carry ({@code PENDING_SERVER_RANDOM}), or when the frost modifier needs the identity of a block
+ * underfoot the world does not declare ({@code UNDECLARED_BLOCK_STATE}).
  */
 public final class Freezing {
-	/** Every {@link ServerPlayerState} field this phase may write. */
+	/**
+	 * Every {@link ServerPlayerState} field this phase may write. Public because the root-package
+	 * {@code PhaseWriteSetTest} reads it directly.
+	 */
 	public static final Set<String> WRITES;
 
 	static {
@@ -32,16 +37,16 @@ public final class Freezing {
 		WRITES = Set.copyOf(writes);
 	}
 
+	/** {@code LivingEntity.aiStep}: a fully frozen player is hurt when {@code tickCount % 40 == 0}. */
 	private static final int FREEZE_DAMAGE_INTERVAL = 40;
 
 	private Freezing() {}
 
 	/**
-	 * The {@code freezing} section of {@code LivingEntity.aiStep} on a server
-	 * level.
+	 * The {@code freezing} section of {@code LivingEntity.aiStep} on a server level.
 	 *
-	 * @throws PendingServerWriteException when the fully frozen player's hit
-	 *         depends on an entity tick count the state does not carry
+	 * @throws PendingServerWriteException when the fully frozen player's hit depends on an entity
+	 *         tick count the state does not carry
 	 */
 	public static void run(final PlayerState state, final WorldView world, final Scratch scratch) {
 		if (!scratch.authority.isServer()) {
@@ -67,15 +72,17 @@ public final class Freezing {
 		}
 	}
 
-	/** LivingEntity.removeFrost removes the modifier regardless of the block below. */
+	/** {@code LivingEntity.removeFrost} removes the modifier regardless of the block below. */
 	private static void removeFrost(final PlayerState state) {
 		state.frostSpeedTicks = 0;
 	}
 
-	/** LivingEntity.tryAddFrost requires a non-air getBlockStateOnLegacy. */
+	/** {@code LivingEntity.tryAddFrost} requires a non-air {@code getBlockStateOnLegacy}. */
 	private static void tryAddFrost(final PlayerState state, final WorldView world, final Scratch scratch) {
 		SupportingBlock.getOnPosLegacy(state, world, scratch);
-		int x = scratch.support.x, y = scratch.support.y, z = scratch.support.z;
+		int x = scratch.support.x;
+		int y = scratch.support.y;
+		int z = scratch.support.z;
 		WorldView.Air air = world.airIn(x, y, z, x, y, z);
 		if (air == WorldView.Air.UNKNOWN && state.ticksFrozen > 0) {
 			throw new UnimplementedMechanicException(

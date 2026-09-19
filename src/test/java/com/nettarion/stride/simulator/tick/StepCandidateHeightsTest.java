@@ -1,10 +1,11 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.geometry.ShapeCollision;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.geometry.ShapeCollision;
 
 import org.junit.jupiter.api.Test;
 
@@ -16,11 +17,9 @@ import org.junit.jupiter.api.Test;
  * one double subtraction narrowed once; the height equal to the ordinary
  * resolved Y is skipped by exact float equality; negative heights and heights
  * above {@code maxUpStep} are dropped, with the bound itself kept; survivors are
- * raw-bit deduplicated and sorted ascending. The vanilla half of this pairing is
- * {@code StepCandidateHeightsVanillaTest} in the vanilla-oracle module, which
- * runs the same probes through the pinned method by reflection.
+ * raw-bit deduplicated and sorted ascending.
  */
-class StepCandidateHeightsTest {
+final class StepCandidateHeightsTest {
 	private static final float MAX_UP_STEP = 0.6F;
 	private static final float NO_SKIP = -1.0F;
 
@@ -33,7 +32,7 @@ class StepCandidateHeightsTest {
 		float once = (float) (colliderY - groundMinY);
 		float twice = (float) colliderY - (float) groundMinY;
 		assertNotEquals(Float.floatToRawIntBits(once), Float.floatToRawIntBits(twice),
-		    "the fixture must separate the two narrowing orders or it proves nothing");
+		    "the fixture must separate the two narrowing orders or it checks nothing");
 
 		float[] candidates = collect(groundMinY, NO_SKIP, box(colliderY, colliderY + 0.5));
 

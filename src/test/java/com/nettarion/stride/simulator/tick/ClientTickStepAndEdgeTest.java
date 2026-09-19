@@ -1,23 +1,24 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.SupportCell;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.Test;
-import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.geometry.Mth;
 import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.SupportCell;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
 
-class ClientTickStepAndEdgeTest {
+import org.junit.jupiter.api.Test;
+
+final class ClientTickStepAndEdgeTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 	private static final PlayerInput SNEAK =
 	    new PlayerInput(false, false, false, false, false, true, false, 0.0F, 0.0F);
@@ -104,8 +105,7 @@ class ClientTickStepAndEdgeTest {
 		BlockEntry air = BlockEntry.builder(0, "test:air").build();
 		BlockEntry stone = BlockEntry.builder(1, "test:stone").fullCube().build();
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -4, -4, 9, 10, 12)
-		        .palette(air, stone);
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -4, -4, 9, 10, 12).palette(air, stone);
 		for (int z = -4; z <= 7; z++) {
 			if (z == 1) {
 				continue;
@@ -162,11 +162,6 @@ class ClientTickStepAndEdgeTest {
 
 	private abstract static class BoxWorld implements CompleteWorldView {
 		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
-
-		@Override
 		public final void collectCollisionBoxes(final double minX, final double minY, final double minZ,
 		    final double maxX, final double maxY, final double maxZ, final CollisionBuffer target) {
 			target.clear();
@@ -184,31 +179,6 @@ class ClientTickStepAndEdgeTest {
 			    && shapeMinZ < maxZ) {
 				target.add(shapeMinX, shapeMinY, shapeMinZ, shapeMaxX, shapeMaxY, shapeMaxZ);
 			}
-		}
-
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean suffocatesAt(final int x, final int z, final double minY, final double maxY) {
-			return false;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 

@@ -1,16 +1,17 @@
 package com.nettarion.stride.simulator.tick;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.StateDigest;
 import com.nettarion.stride.simulator.world.FlatFloorView;
 import com.nettarion.stride.simulator.world.WorldView;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
 /** Deterministic edge-biased stress around cell and section coordinates. */
-class ClientTickBoundaryStressTest {
+final class ClientTickBoundaryStressTest {
 	private static final double[] BOUNDARIES = {Math.nextDown(-16.0), -16.0, Math.nextUp(-16.0), Math.nextDown(-1.0),
 	    -1.0, Math.nextUp(-1.0), Math.nextDown(0.0), 0.0, Math.nextUp(0.0), Math.nextDown(1.0), 1.0, Math.nextUp(1.0),
 	    Math.nextDown(16.0), 16.0, Math.nextUp(16.0)};
@@ -23,17 +24,17 @@ class ClientTickBoundaryStressTest {
 			double x = BOUNDARIES[i];
 			double z = BOUNDARIES[BOUNDARIES.length - 1 - i];
 			PlayerState direct = grounded(x, z);
-			ClientTick directKernel = new ClientTick();
+			ClientTick directTick = new ClientTick();
 			Scratch directScratch = new Scratch();
 			for (int tick = 0; tick < actions.length / 2; tick++) {
-				directKernel.tick(direct, actions[tick], world, directScratch);
+				directTick.tick(direct, actions[tick], world, directScratch);
 			}
 			PlayerState resumed = direct.copy();
-			ClientTick resumedKernel = new ClientTick();
+			ClientTick resumedTick = new ClientTick();
 			Scratch resumedScratch = new Scratch();
 			for (int tick = actions.length / 2; tick < actions.length; tick++) {
-				directKernel.tick(direct, actions[tick], world, directScratch);
-				resumedKernel.tick(resumed, actions[tick], world, resumedScratch);
+				directTick.tick(direct, actions[tick], world, directScratch);
+				resumedTick.tick(resumed, actions[tick], world, resumedScratch);
 				assertEquals(StateDigest.state(direct), StateDigest.state(resumed),
 				    "copy/resume diverged for boundary bin " + i + " at tick " + tick);
 			}

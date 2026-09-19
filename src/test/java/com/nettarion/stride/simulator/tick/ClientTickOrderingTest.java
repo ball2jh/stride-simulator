@@ -1,26 +1,26 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.Test;
-import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.geometry.Mth;
 import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
+
+import org.junit.jupiter.api.Test;
 
 /**
- * Tick-ordering witnesses: three places where vanilla reads a latch from the
- * start of the tick even though the same tick rewrites it.
+ * Tick ordering: three places where vanilla reads a latch from the start of the tick even though
+ * the same tick rewrites it.
  *
- * <p>Each expectation is derived from the pinned source rather than from the
- * kernel, and the headless twin {@code TickOrderingVanillaTest} in the
- * vanilla-oracle module runs the same fixtures through a real client.
+ * <p>Each expectation is derived from vanilla's source rather than from the simulator.
  *
  * <ul>
  * <li>{@code LivingEntity.aiStep} jumps before {@code travel}; travel then reads
@@ -37,7 +37,7 @@ import com.nettarion.stride.simulator.world.BlockEntry;
  * latch was false.</li>
  * </ul>
  */
-class ClientTickOrderingTest {
+final class ClientTickOrderingTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 	private static final PlayerInput SPRINT_JUMP =
 	    new PlayerInput(true, false, false, false, true, false, true, 0.0F, 0.0F);
@@ -153,15 +153,6 @@ class ClientTickOrderingTest {
 		return state;
 	}
 
-	private static void assertRaw(final double expected, final double actual) {
-		assertRaw(expected, actual, "");
-	}
-
-	private static void assertRaw(final double expected, final double actual, final String message) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual),
-		    () -> message + ": expected " + expected + " but was " + actual);
-	}
-
 	private static WorldSnapshot.Builder region() {
 		return WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -4, -4, 9, 10, 12);
 	}
@@ -169,8 +160,7 @@ class ClientTickOrderingTest {
 	/** Ice with its top at y=0 everywhere in the region. */
 	static WorldSnapshot iceFloor() {
 		BlockEntry air = BlockEntry.builder(0, "test:air").build();
-		BlockEntry ice =
-		    BlockEntry.builder(1, "test:ice").friction(0.98F).fullCube().build();
+		BlockEntry ice = BlockEntry.builder(1, "test:ice").friction(0.98F).fullCube().build();
 		WorldSnapshot.Builder world = region().palette(air, ice);
 		for (int z = -4; z <= 7; z++) {
 			for (int x = -4; x <= 4; x++) {

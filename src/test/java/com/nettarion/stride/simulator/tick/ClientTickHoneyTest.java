@@ -1,29 +1,30 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.ShapeBox;
-import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * {@code HoneyBlock.entityInside} on the client: the wall slide of a player
  * falling pressed against a honey block's side, paired against the same
- * column with the body removed so every gate and every write is witnessed
+ * column with the body removed so every gate and every write is checked
  * on its own.
  */
-class ClientTickHoneyTest {
+final class ClientTickHoneyTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 
 	/** The slide's resting fall: {@code getNewDeltaY(-0.05)}. */
@@ -134,24 +135,20 @@ class ClientTickHoneyTest {
 	}
 
 	private static WorldSnapshot.Builder columnGrid(final boolean honey) {
-		BlockEntry.Builder wall =
-		    BlockEntry.builder(1, honey ? "minecraft:honey_block" : "test:honey_without_inside")
-		        .boxes(new ShapeBox(0.0625, 0.0, 0.0625, 0.9375, 0.9375, 0.9375))
-		        .speedFactor(0.4F)
-		        .jumpFactor(0.5F)
-		        .suppressesBounce(true)
-		        .landing(honey ? WorldView.Landing.HONEY : WorldView.Landing.ORDINARY)
-		        .suffocation(Suffocation.NO);
+		BlockEntry.Builder wall = BlockEntry.builder(1, honey ? "minecraft:honey_block" : "test:honey_without_inside")
+		                              .boxes(new ShapeBox(0.0625, 0.0, 0.0625, 0.9375, 0.9375, 0.9375))
+		                              .speedFactor(0.4F)
+		                              .jumpFactor(0.5F)
+		                              .suppressesBounce(true)
+		                              .landing(honey ? WorldView.Landing.HONEY : WorldView.Landing.ORDINARY)
+		                              .suffocation(Suffocation.NO);
 		if (honey) {
 			wall.insideEffect(WorldView.InsideEffect.HONEY);
 		}
 		WorldSnapshot.Builder grid =
 		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -3, -3, -3, 7, 7, 7)
 		        .palette(BlockEntry.builder(0, "minecraft:air").build(), wall.build(),
-		            BlockEntry.builder(2, "minecraft:stone")
-		                .fullCube()
-		                .suffocation(Suffocation.YES)
-		                .build());
+		            BlockEntry.builder(2, "minecraft:stone").fullCube().suffocation(Suffocation.YES).build());
 		for (int y = -3; y <= 3; y++) {
 			grid.set(0, y, 0, 1);
 		}
@@ -170,9 +167,5 @@ class ClientTickHoneyTest {
 			grid.set(2, 0, z, 2);
 		}
 		return new SnapshotView(grid.build());
-	}
-
-	private static void assertRaw(final double expected, final double actual) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual));
 	}
 }

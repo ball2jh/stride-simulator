@@ -1,19 +1,21 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.block.BlockBehavior;
 import com.nettarion.stride.simulator.block.BubbleColumnBlock;
-import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.FluidSample;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
 import com.nettarion.stride.simulator.world.WorldView;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
-class ClientTickBubbleColumnTest {
+final class ClientTickBubbleColumnTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 
 	@Test
@@ -98,7 +100,7 @@ class ClientTickBubbleColumnTest {
 	void movementBeyondMovedFarThresholdRunsPreciseTraversal() {
 		// The column this world reports is far below the player's box; a
 		// bubble callback would clamp deltaMovementY, so agreement with plain gravity
-		// is also proof the traversal did not spuriously reach it.
+		// also shows the traversal did not spuriously reach it.
 		PlayerState state = stateAt(0.5, 2.0, 0.5);
 		state.deltaMovementX = 1.1;
 
@@ -134,22 +136,7 @@ class ClientTickBubbleColumnTest {
 		return state;
 	}
 
-	private static void assertRaw(final double expected, final double actual) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual));
-	}
-
-	private static void assertRaw(final double expected, final double actual, final String message) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual), message);
-	}
-
 	private static final class BubbleWorld implements CompleteWorldView {
-		/** Defined, not derived: no block in this fixture suffocates. */
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
-
 		private final BubbleColumnMode mode;
 		private final boolean waterAbove;
 		private final boolean collisionAbove;
@@ -179,10 +166,6 @@ class ClientTickBubbleColumnTest {
 			return x == 0 && y == 1 && z == 0 ? this.aboveBehavior : CollisionBehavior.ORDINARY;
 		}
 
-		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
 		@Override
 		public boolean hasFluids() {
 			return this.mode != BubbleColumnMode.NONE;
@@ -224,27 +207,6 @@ class ClientTickBubbleColumnTest {
 		public void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
 		    final double maxY, final double maxZ, final CollisionBuffer target) {
 			target.clear();
-		}
-
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 }

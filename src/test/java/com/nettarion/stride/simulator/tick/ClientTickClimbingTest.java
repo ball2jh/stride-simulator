@@ -1,17 +1,19 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
+import static com.nettarion.stride.simulator.tick.RawBits.assertRaw;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.geometry.Mth;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
 import com.nettarion.stride.simulator.world.SupportCell;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
-class ClientTickClimbingTest {
+final class ClientTickClimbingTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 
 	@Test
@@ -45,8 +47,8 @@ class ClientTickClimbingTest {
 
 		new ClientTick().tick(state, IDLE, new ClimbWorld(true, false));
 
-		assertEquals(true, state.deltaMovementX > 0.15, "no climb clamp while flying: " + state.deltaMovementX);
-		assertEquals(true, state.x > 0.5 + 0.15, "the flight kept its speed through the ladder cell");
+		assertTrue(state.deltaMovementX > 0.15, "no climb clamp while flying: " + state.deltaMovementX);
+		assertTrue(state.x > 0.5 + 0.15, "the flight kept its speed through the ladder cell");
 	}
 
 	@Test
@@ -58,9 +60,9 @@ class ClientTickClimbingTest {
 
 		assertRaw(5.0, state.y);
 		assertRaw((-0.08) * 0.98F, state.deltaMovementY);
-		assertEquals(true, state.onGround);
-		assertEquals(true, state.verticalCollision);
-		assertEquals(true, state.verticalCollisionBelow);
+		assertTrue(state.onGround);
+		assertTrue(state.verticalCollision);
+		assertTrue(state.verticalCollisionBelow);
 	}
 
 	@Test
@@ -104,18 +106,7 @@ class ClientTickClimbingTest {
 		return state;
 	}
 
-	private static void assertRaw(final double expected, final double actual) {
-		assertEquals(Double.doubleToRawLongBits(expected), Double.doubleToRawLongBits(actual));
-	}
-
 	private static final class ClimbWorld implements CompleteWorldView {
-		/** Defined, not derived: no block in this fixture suffocates. */
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
-
 		private final boolean climbable;
 		private final boolean wall;
 		private final boolean floor;
@@ -131,10 +122,6 @@ class ClientTickClimbingTest {
 		}
 
 		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
-		@Override
 		public boolean onClimbableAt(final int x, final int y, final int z, final boolean fallFlying) {
 			return this.climbable && x == 0 && y == 5 && z == 0;
 		}
@@ -142,8 +129,12 @@ class ClientTickClimbingTest {
 		public void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
 		    final double maxY, final double maxZ, final CollisionBuffer target) {
 			target.clear();
-			if (this.wall) target.add(0.0, 0.0, 0.8125, 1.0, 20.0, 1.0);
-			if (this.floor) target.add(-10.0, 4.0, -10.0, 10.0, 5.0, 10.0);
+			if (this.wall) {
+				target.add(0.0, 0.0, 0.8125, 1.0, 20.0, 1.0);
+			}
+			if (this.floor) {
+				target.add(-10.0, 4.0, -10.0, 10.0, 5.0, 10.0);
+			}
 		}
 		@Override
 		public void findSupportingBlock(final double minX, final double minY, final double minZ, final double maxX,
@@ -153,26 +144,6 @@ class ClientTickClimbingTest {
 			if (this.floor && minY < 5.0 && maxY >= 5.0) {
 				out.set(Mth.floor(atX), 4, Mth.floor(atZ));
 			}
-		}
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 }

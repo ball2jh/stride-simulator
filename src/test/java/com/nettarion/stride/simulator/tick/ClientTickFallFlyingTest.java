@@ -1,19 +1,20 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.world.WorldView;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.WorldView;
+
 import org.junit.jupiter.api.Test;
 
-class ClientTickFallFlyingTest {
+final class ClientTickFallFlyingTest {
 	private static final WorldView EMPTY = new EmptyWorld();
 
 	@Test
@@ -39,9 +40,9 @@ class ClientTickFallFlyingTest {
 		negative.gliderUsable = false;
 
 		PlayerInput launch = action(true, -20.0F);
-		ClientTick kernel = new ClientTick();
-		kernel.tick(positive, launch, EMPTY);
-		kernel.tick(negative, launch, EMPTY);
+		ClientTick simulator = new ClientTick();
+		simulator.tick(positive, launch, EMPTY);
+		simulator.tick(negative, launch, EMPTY);
 
 		assertTrue(positive.fallFlying);
 		assertFalse(negative.fallFlying);
@@ -60,9 +61,9 @@ class ClientTickFallFlyingTest {
 		dive.deltaMovementZ = 0.8;
 		PlayerState pullUp = dive.copy();
 
-		ClientTick kernel = new ClientTick();
-		kernel.tick(dive, action(false, 25.0F), EMPTY);
-		kernel.tick(pullUp, action(false, -20.0F), EMPTY);
+		ClientTick simulator = new ClientTick();
+		simulator.tick(dive, action(false, 25.0F), EMPTY);
+		simulator.tick(pullUp, action(false, -20.0F), EMPTY);
 
 		assertEquals(13, dive.fallFlyTicks);
 		assertEquals(13, pullUp.fallFlyTicks);
@@ -87,41 +88,10 @@ class ClientTickFallFlyingTest {
 	}
 
 	private static final class EmptyWorld implements CompleteWorldView {
-		/** Defined, not derived: no block in this fixture suffocates. */
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
-
-		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
 		@Override
 		public void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
 		    final double maxY, final double maxZ, final CollisionBuffer target) {
 			target.clear();
-		}
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 }

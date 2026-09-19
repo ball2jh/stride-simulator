@@ -1,16 +1,21 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.FluidSample;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.FluidSample;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.WorldIdentity;
+
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-class ClientTickHotPathOptimizationTest {
+/** Guards the query-count savings of the pose probe and dry-world fluid skip, not behavior. */
+@Tag("optimization")
+final class ClientTickHotPathOptimizationTest {
 	@Test
 	void oneStandingProbeClassifiesSameWidthCrouchingFallbackRawExactly() {
 		CountingCeilingWorld world = new CountingCeilingWorld();
@@ -55,24 +60,15 @@ class ClientTickHotPathOptimizationTest {
 	}
 
 	private static class DryCountingWorld implements CompleteWorldView {
-		/** Defined, not derived: no block in this fixture suffocates. */
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
-
 		private int fluidSamples;
 
-		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
-		private final long identity = com.nettarion.stride.simulator.world.WorldIdentity.next();
+		private final long identity = WorldIdentity.next();
+
 		@Override
 		public long identity() {
 			return this.identity;
 		}
+
 		@Override
 		public void fluidAt(final int x, final int y, final int z, final FluidSample target) {
 			this.fluidSamples++;
@@ -82,26 +78,6 @@ class ClientTickHotPathOptimizationTest {
 		public void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
 		    final double maxY, final double maxZ, final CollisionBuffer target) {
 			target.clear();
-		}
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 

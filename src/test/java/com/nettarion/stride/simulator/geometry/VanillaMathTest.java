@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import org.junit.jupiter.api.Test;
 
-class VanillaMathTest {
+final class VanillaMathTest {
 	private static final float DEG_TO_RAD = (float) (Math.PI / 180.0);
 
 	@Test

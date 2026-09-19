@@ -1,10 +1,12 @@
 package com.nettarion.stride.simulator.geometry;
 
-import com.nettarion.stride.simulator.tick.Scratch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.nettarion.stride.simulator.tick.Scratch;
 
 import java.util.Arrays;
 import java.util.TreeSet;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -13,12 +15,12 @@ import org.junit.jupiter.api.Test;
  * {@code IndirectMerger}, swept one ulp at a time across every place the
  * source applies its {@code 1.0E-7}.
  *
- * <p>The transcriptions keep the source's operand order and its placement
+ * <p>The transcriptions keep vanilla's operand order and its placement
  * of the epsilon, which is what these sweeps are sensitive to: an expression
  * that is equal in real arithmetic and differs by one rounding is exactly
  * what they find.
  */
-class VanillaCollisionReferenceTest {
+final class VanillaCollisionReferenceTest {
 	private static final double EPSILON = 1.0E-7;
 	private static final int ULPS = 64;
 

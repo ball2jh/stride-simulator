@@ -2,17 +2,26 @@ package com.nettarion.stride.simulator.geometry;
 
 import com.nettarion.stride.simulator.tick.Scratch;
 
-/** Resolves an axis-ordered movement vector against an already collected shape set. */
+/**
+ * Resolves an axis-ordered movement vector against an already collected shape set: vanilla's
+ * {@code Entity.collideWithShapes} and {@code VoxelShape.collide} over a {@link CollisionBuffer}.
+ *
+ * <p>GENERATED from {@code src/main/templates/ShapeCollision.java.template} by the Gradle task
+ * {@code generateShapeCollision}; do not edit the generated file. The one axis rule at the end of
+ * the template is expanded into {@code collideX}, {@code collideY} and {@code collideZ}. Stateless
+ * apart from the {@code Scratch} it writes its result into; all coordinates are in blocks.
+ */
 public final class ShapeCollision {
+	private ShapeCollision() {}
 
-	private ShapeCollision() {
-	}
-
-	public static void collideWithShapes(
-			final double minX, final double minY, final double minZ,
-			final double maxX, final double maxY, final double maxZ,
-			final double dx, final double dy, final double dz,
-			final CollisionBuffer shapes, final Scratch scratch) {
+	/**
+	 * {@code Entity.collideWithShapes}: the requested displacement clipped against the selected
+	 * groups, Y first and then the larger horizontal component; the result goes to
+	 * {@code scratch.movedX/Y/Z}.
+	 */
+	public static void collideWithShapes(final double minX, final double minY, final double minZ, final double maxX,
+	    final double maxY, final double maxZ, final double dx, final double dy, final double dz,
+	    final CollisionBuffer shapes, final Scratch scratch) {
 		if (shapes.isEmpty()) {
 			scratch.movedX = dx;
 			scratch.movedY = dy;
@@ -28,21 +37,13 @@ public final class ShapeCollision {
 		// horizontal component, which can change the first surface reached.
 		boolean xBeforeZ = !(Math.abs(dx) < Math.abs(dz));
 		if (xBeforeZ) {
-			resolvedX = collideX(
-				minX, minY + resolvedY, minZ,
-				maxX, maxY + resolvedY, maxZ, shapes, dx);
+			resolvedX = collideX(minX, minY + resolvedY, minZ, maxX, maxY + resolvedY, maxZ, shapes, dx);
 			resolvedZ = collideZ(
-				minX + resolvedX, minY + resolvedY, minZ,
-				maxX + resolvedX, maxY + resolvedY, maxZ,
-				shapes, dz);
+			    minX + resolvedX, minY + resolvedY, minZ, maxX + resolvedX, maxY + resolvedY, maxZ, shapes, dz);
 		} else {
-			resolvedZ = collideZ(
-				minX, minY + resolvedY, minZ,
-				maxX, maxY + resolvedY, maxZ, shapes, dz);
+			resolvedZ = collideZ(minX, minY + resolvedY, minZ, maxX, maxY + resolvedY, maxZ, shapes, dz);
 			resolvedX = collideX(
-				minX, minY + resolvedY, minZ + resolvedZ,
-				maxX, maxY + resolvedY, maxZ + resolvedZ,
-				shapes, dx);
+			    minX, minY + resolvedY, minZ + resolvedZ, maxX, maxY + resolvedY, maxZ + resolvedZ, shapes, dx);
 		}
 
 		scratch.movedX = resolvedX;
@@ -64,29 +65,24 @@ public final class ShapeCollision {
 	 * boxes, so every grid coordinate bounds a box. A capture that stored
 	 * geometry some other way would have to carry the grid itself.
 	 */
-	public static void collectCandidateStepUpHeights(final double boundingBoxMinY,
-			final CollisionBuffer shapes, final float maxStepHeight,
-			final float stepHeightToSkip, final Scratch scratch) {
+	public static void collectCandidateStepUpHeights(final double boundingBoxMinY, final CollisionBuffer shapes,
+	    final float maxStepHeight, final float stepHeightToSkip, final Scratch scratch) {
 		scratch.clearStepCandidates();
 		final int selected = shapes.selectedGroupCount();
 		for (int k = 0; k < selected; k++) {
 			final int group = shapes.selectedGroup(k);
 			final int end = shapes.groupEnd(group);
 			for (int i = shapes.groupStart(group); i < end; i++) {
-				addStepHeight((float) (shapes.minY(i) - boundingBoxMinY),
-					maxStepHeight, stepHeightToSkip, scratch);
-				addStepHeight((float) (shapes.maxY(i) - boundingBoxMinY),
-					maxStepHeight, stepHeightToSkip, scratch);
+				addStepHeight((float) (shapes.minY(i) - boundingBoxMinY), maxStepHeight, stepHeightToSkip, scratch);
+				addStepHeight((float) (shapes.maxY(i) - boundingBoxMinY), maxStepHeight, stepHeightToSkip, scratch);
 			}
 		}
 		scratch.sortStepCandidates();
 	}
 
-	private static void addStepHeight(final float relativeCoord,
-			final float maxStepHeight, final float stepHeightToSkip,
-			final Scratch scratch) {
-		if (!(relativeCoord < 0.0F) && relativeCoord != stepHeightToSkip
-				&& !(relativeCoord > maxStepHeight)) {
+	private static void addStepHeight(
+	    final float relativeCoord, final float maxStepHeight, final float stepHeightToSkip, final Scratch scratch) {
+		if (!(relativeCoord < 0.0F) && relativeCoord != stepHeightToSkip && !(relativeCoord > maxStepHeight)) {
 			scratch.addStepCandidate(relativeCoord);
 		}
 	}
@@ -94,22 +90,23 @@ public final class ShapeCollision {
 	/*
 	 * Generated from src/main/templates/ShapeCollision.java.template; edit that file.
 	 * generateShapeCollision expands one rule into fixed X/Y/Z orientations,
-	 * corresponding to VoxelShape.collide's AxisCycle over our grouped boxes.
-	 * Specialization avoids inner-loop axis selection; runtime-shared variants
-	 * had a measured throughput cost in the source project. Overlap order, clipping, per-group
-	 * epsilon snap and direction remain the same in every generated orientation.
-	 * The groups walked are the buffer's selected groups, in ascending order: the
-	 * epsilon snap and the direction are decided on entering each one, as vanilla
-	 * decides them on entering each source shape.
+	 * corresponding to VoxelShape.collideX under the AxisCycle that orients it
+	 * along each axis, over the grouped boxes.
+	 * Specialization avoids inner-loop axis selection; a runtime-shared loop
+	 * measured slower. Overlap order, clipping, per-group epsilon snap and
+	 * direction remain the same in every generated orientation. The groups walked
+	 * are the buffer's selected groups, in ascending order: the epsilon snap and
+	 * the direction are decided on entering each one, as vanilla decides them on
+	 * entering each source shape.
 	 */
 
-@BEGIN_AXIS_LOOP@	private static double collide@AXIS@(
-			final double movingMinX, final double movingMinY, final double movingMinZ,
-			final double movingMaxX, final double movingMaxY, final double movingMaxZ,
-			final CollisionBuffer shapes, double distance) {
+@BEGIN_AXIS_LOOP@	private static double collide@AXIS@(final double movingMinX, final double movingMinY,
+	    final double movingMinZ, final double movingMaxX, final double movingMaxY, final double movingMaxZ,
+	    final CollisionBuffer shapes, double distance) {
 		final int selected = shapes.selectedGroupCount();
 		final int count = shapes.size();
-		// VoxelShape.collideX's index bounds, in its own arithmetic. A box lies in
+		// VoxelShape.collideX's index bounds, oriented along @AXIS@ by AxisCycle, in
+		// its own arithmetic. A box lies in
 		// the b/c window when its cells reach findIndex(min + 1.0E-7) and
 		// findIndex(max - 1.0E-7): max@FIRST@ > windowMin@FIRST@ and
 		// min@FIRST@ <= windowMax@FIRST@. It is ahead of the moving box when its
@@ -139,10 +136,9 @@ public final class ShapeCollision {
 			// see CollisionBuffer.startsGroup.
 			int shape = shapes.selectedGroupStart(k);
 			do {
-				if (shapes.max@FIRST@(shape) > windowMin@FIRST@
-						&& shapes.min@FIRST@(shape) <= windowMax@FIRST@
-						&& shapes.max@SECOND@(shape) > windowMin@SECOND@
-						&& shapes.min@SECOND@(shape) <= windowMax@SECOND@) {
+				if (shapes.max@FIRST@(shape) > windowMin@FIRST@ && shapes.min@FIRST@(shape) <= windowMax@FIRST@
+				    && shapes.max@SECOND@(shape) > windowMin@SECOND@
+				    && shapes.min@SECOND@(shape) <= windowMax@SECOND@) {
 					if (positive) {
 						double shapeMin = shapes.min@AXIS@(shape);
 						if (shapeMin > aheadFace && shapeMin < nearest) {

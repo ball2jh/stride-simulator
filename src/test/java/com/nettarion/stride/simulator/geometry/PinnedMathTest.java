@@ -7,24 +7,21 @@ import org.junit.jupiter.api.Test;
 /**
  * The platform math the transcription calls is pinned bit for bit.
  *
- * <p>Vanilla itself reaches {@code Math.sin} for its sine table, {@code Math.sqrt}
- * for vector lengths, and {@code Math.cos} for the glide lift, so the simulator
- * calls the same functions rather than their strict variants: switching would
- * break parity on the very JVM the game runs on. What that leaves open is the
- * platform. {@code Math.sin} and {@code Math.cos} are permitted one ulp of error
- * and may be intrinsified differently across JIT tiers, architectures and JDK
- * releases; {@code Math.sqrt} is correctly rounded everywhere. A divergence the
- * differential gate reports at one of those sites is first a platform question,
- * and this test answers it before any physics is suspected: the bits below were
- * recorded on the pinned development platform, and a change here with no source
- * change means the platform moved, not the transcription. Recorded on JDK 26
- * on amd64; a port records its own bits beside these under its own name.
+ * <p>Vanilla itself reaches {@code Math.sin} for its sine table, {@code Math.sqrt} for vector
+ * lengths, and {@code Math.cos} for the glide lift, so the simulator calls the same functions
+ * rather than their strict variants: switching would break parity on the very JVM the game runs
+ * on. What that leaves open is the platform. {@code Math.sin} and {@code Math.cos} are permitted
+ * one ulp of error and may be intrinsified differently across JIT tiers, architectures and JDK
+ * releases; {@code Math.sqrt} is correctly rounded everywhere. A divergence from vanilla at one of
+ * those sites is first a platform question, and this test answers it before any physics is
+ * suspected: a change here with no source change means the platform moved, not the transcription.
+ * Recorded on JDK 26 on amd64; a port records its own bits beside these under its own name.
  *
- * <p>The sine table's generating expression is the pinned source's,
- * {@code (float) Math.sin(i / 10430.378350470453)}; the entries checked span the
- * table's quadrants and its densest region near zero.
+ * <p>The sine table's generating expression is vanilla's,
+ * {@code (float) Math.sin(i / 10430.378350470453)}; the entries checked span the table's quadrants
+ * and its densest region near zero.
  */
-class PinnedMathTest {
+final class PinnedMathTest {
 	@Test
 	void sineTableEntriesMatchTheRecordedBits() {
 		assertTableEntry(0, 0x00000000);

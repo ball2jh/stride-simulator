@@ -1,13 +1,14 @@
 package com.nettarion.stride.simulator.geometry;
 
-import com.nettarion.stride.simulator.tick.Scratch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.nettarion.stride.simulator.tick.Scratch;
 
 import org.junit.jupiter.api.Test;
 
 /** Raw-bit boundaries inherited from Minecraft's Shapes/VoxelShape collision loop. */
-class ShapeCollisionBoundaryTest {
+final class ShapeCollisionBoundaryTest {
 	private static final double EPSILON = 1.0E-7;
 
 	@Test
@@ -26,7 +27,7 @@ class ShapeCollisionBoundaryTest {
 
 		ShapeCollision.collideWithShapes(0.0, 0.0, 0.0, 1.0, 1.0, 1.0, EPSILON, 0.0, 0.0, irrelevant, scratch);
 		assertEquals(Double.doubleToRawLongBits(EPSILON), Double.doubleToRawLongBits(scratch.movedX),
-		    "the source cutoff is strict");
+		    "vanilla's cutoff is strict");
 	}
 
 	@Test

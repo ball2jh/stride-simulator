@@ -1,20 +1,29 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.StateDigest;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.StateDigest;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.WorldIdentity;
+
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-class PoseFitCacheTest {
+/**
+ * The pose-fit cache on {@link PlayerState}: when it answers, when it is cleared, and what it is
+ * keyed on. The query-count tests guard the caching, not behavior; they are tagged
+ * {@code optimization}.
+ */
+final class PoseFitCacheTest {
+	@Tag("optimization")
 	@Test
-	void freshProofAtTheSamePositionRenewsTheWorldVersion() {
+	void aFreshFitAtTheSamePositionRenewsTheWorldVersion() {
 		MutableWorld world = new MutableWorld(false);
 		PlayerState state = stateAtOrigin();
 		Scratch scratch = new Scratch();
@@ -24,11 +33,11 @@ class PoseFitCacheTest {
 		Clearance.fitPoses(state, world, PlayerState.Pose.STANDING, scratch);
 		assertEquals(2, world.collisionQueries);
 		Clearance.fitPoses(state, world, PlayerState.Pose.STANDING, scratch);
-		assertEquals(2, world.collisionQueries, "the renewed proof must avoid another collision query");
+		assertEquals(2, world.collisionQueries, "the renewed fit must avoid another collision query");
 	}
 
 	@Test
-	void renewedShorterProofCannotReviveAnOldStandingProof() {
+	void aRenewedShorterFitCannotReviveAnOldStandingFit() {
 		MutableWorld world = new MutableWorld(false);
 		PlayerState state = stateAtOrigin();
 		Scratch scratch = new Scratch();
@@ -41,6 +50,7 @@ class PoseFitCacheTest {
 		assertEquals(0, Clearance.fitPoses(state, world, PlayerState.Pose.STANDING, scratch) & Clearance.FIT_STANDING);
 	}
 
+	@Tag("optimization")
 	@Test
 	void aPositionMismatchAvoidsReadingTheWorldVersionEvenWhenCopied() {
 		MutableWorld world = new MutableWorld(false);
@@ -55,7 +65,7 @@ class PoseFitCacheTest {
 	}
 
 	@Test
-	void certificateRequiresIdenticalWorldObjectAndCollisionVersion() {
+	void theCacheRequiresTheSameWorldIdentityAndCollisionVersion() {
 		MutableWorld first = new MutableWorld(false);
 		MutableWorld sameGeometryDifferentIdentity = new MutableWorld(false);
 		PlayerState state = stateAtOrigin();
@@ -66,8 +76,8 @@ class PoseFitCacheTest {
 		assertEquals(
 		    semanticDigest, StateDigest.state(state), "optimization metadata must not enter the semantic digest");
 		assertTrue(state.hasCachedPoseFit(first, PlayerState.Pose.STANDING));
-		assertTrue(state.hasCachedPoseFit(first, PlayerState.Pose.CROUCHING),
-		    "a taller proof covers a same-width shorter pose");
+		assertTrue(
+		    state.hasCachedPoseFit(first, PlayerState.Pose.CROUCHING), "a taller fit covers a same-width shorter pose");
 		assertFalse(state.hasCachedPoseFit(sameGeometryDifferentIdentity, PlayerState.Pose.STANDING));
 
 		first.version++;
@@ -75,7 +85,7 @@ class PoseFitCacheTest {
 	}
 
 	@Test
-	void forksCarryTheCertificateAndRevalidateItOnUse() {
+	void copiesCarryTheCacheAndRevalidateItOnUse() {
 		MutableWorld world = new MutableWorld(false);
 		PlayerState source = stateAtOrigin();
 		source.cachePoseFit(world, PlayerState.Pose.STANDING);
@@ -90,7 +100,7 @@ class PoseFitCacheTest {
 	}
 
 	@Test
-	void aViewWithoutAnIdentityIsNeverCertified() {
+	void aViewWithoutAnIdentityIsNeverCached() {
 		CompleteWorldView anonymous = new MutableWorld(false) {
 			@Override
 			public long identity() {
@@ -103,7 +113,10 @@ class PoseFitCacheTest {
 	}
 
 	@Test
-	void aCertificateSurvivesTheWorldItNamesBeingCollected() {
+	void aCacheNamesItsWorldByNumberSoASuccessorWorldNeverMatches() {
+		// The cache holds the world's identity number, not the object, so a world
+		// that is no longer referenced anywhere is neither kept alive nor confused
+		// with the next one created.
 		PlayerState state = stateAtOrigin();
 		long identity;
 		{
@@ -111,7 +124,6 @@ class PoseFitCacheTest {
 			identity = world.identity();
 			state.cachePoseFit(world, PlayerState.Pose.STANDING);
 		}
-		System.gc();
 		MutableWorld successor = new MutableWorld(false);
 		assertTrue(identity != successor.identity(), "identities never repeat");
 		assertFalse(state.hasCachedPoseFit(successor, PlayerState.Pose.STANDING));
@@ -120,7 +132,7 @@ class PoseFitCacheTest {
 	}
 
 	@Test
-	void setBoxAndPositionMismatchInvalidateProof() {
+	void setBoxAndAPositionMismatchClearTheCache() {
 		MutableWorld world = new MutableWorld(false);
 		PlayerState state = stateAtOrigin();
 		state.cachePoseFit(world, PlayerState.Pose.STANDING);
@@ -134,7 +146,7 @@ class PoseFitCacheTest {
 	}
 
 	@Test
-	void overlappingRawRestoreCannotAcquireProofFromMovement() {
+	void anOverlappingStartCannotAcquireAFitFromMovement() {
 		MutableWorld overlapping = new MutableWorld(true);
 		PlayerState state = stateAtOrigin();
 
@@ -155,18 +167,8 @@ class PoseFitCacheTest {
 	}
 
 	private static class MutableWorld implements CompleteWorldView {
-		/** Defined, not derived: no block in this fixture suffocates. */
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
+		private final long identity = WorldIdentity.next();
 
-		private final long identity = com.nettarion.stride.simulator.world.WorldIdentity.next();
-		@Override
-		public long identity() {
-			return this.identity;
-		}
 		private final boolean overlapping;
 		private long version;
 		private int versionReads;
@@ -175,6 +177,11 @@ class PoseFitCacheTest {
 
 		private MutableWorld(final boolean overlapping) {
 			this.overlapping = overlapping;
+		}
+
+		@Override
+		public long identity() {
+			return this.identity;
 		}
 
 		@Override
@@ -194,27 +201,6 @@ class PoseFitCacheTest {
 			if (this.overlapping && maxX > 0.0 && minX < 1.0 && maxY > 0.0 && minY < 1.0 && maxZ > 0.0 && minZ < 1.0) {
 				target.add(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
 			}
-		}
-
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 }

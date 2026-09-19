@@ -1,28 +1,29 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.geometry.CollisionBuffer;
-import com.nettarion.stride.simulator.world.CompleteWorldView;
-import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.Test;
-import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.FluidSample;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.CompleteWorldView;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * {@code InsideBlockEffectType.CLEAR_FREEZE} on the client's copy: fire and
  * lava collect it and {@code applyAndClear} runs on both sides, so the
  * client's own frozen count clears in the same tick as the server's.
  */
-class ClientTickClearFreezeTest {
+final class ClientTickClearFreezeTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 
 	@Test
@@ -60,19 +61,12 @@ class ClientTickClearFreezeTest {
 
 	/** A stone floor under y=0 with fire in the cell above the origin. */
 	private static SnapshotView fireWorld() {
-		BlockEntry air =
-		    BlockEntry.builder(0, "minecraft:air").suffocation(Suffocation.NO).build();
-		BlockEntry stone = BlockEntry.builder(1, "minecraft:stone")
-		                                     .suffocation(Suffocation.YES)
-		                                     .fullCube()
-		                                     .build();
-		BlockEntry fire = BlockEntry.builder(2, "minecraft:fire")
-		                                    .contact(WorldView.Contact.FIRE)
-		                                    .suffocation(Suffocation.NO)
-		                                    .build();
+		BlockEntry air = BlockEntry.builder(0, "minecraft:air").suffocation(Suffocation.NO).build();
+		BlockEntry stone = BlockEntry.builder(1, "minecraft:stone").suffocation(Suffocation.YES).fullCube().build();
+		BlockEntry fire =
+		    BlockEntry.builder(2, "minecraft:fire").contact(WorldView.Contact.FIRE).suffocation(Suffocation.NO).build();
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
-		        .palette(air, stone, fire);
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9).palette(air, stone, fire);
 		for (int z = -4; z <= 4; z++) {
 			for (int x = -4; x <= 4; x++) {
 				world.set(x, -1, z, 1);
@@ -84,15 +78,6 @@ class ClientTickClearFreezeTest {
 
 	/** Still source lava in every cell of the y=0 layer, over nothing. */
 	private static final class LavaWorld implements CompleteWorldView {
-		@Override
-		public boolean suffocatesAt(
-		    final int cellX, final int cellZ, final double boundingBoxMinY, final double boundingBoxMaxY) {
-			return false;
-		}
-		@Override
-		public long collisionVersion() {
-			return 0L;
-		}
 		@Override
 		public boolean hasFluids() {
 			return true;
@@ -111,27 +96,6 @@ class ClientTickClearFreezeTest {
 		public void collectCollisionBoxes(final double minX, final double minY, final double minZ, final double maxX,
 		    final double maxY, final double maxZ, final CollisionBuffer target) {
 			target.clear();
-		}
-
-		@Override
-		public float friction(final int x, final int y, final int z) {
-			return 0.6F;
-		}
-		@Override
-		public float speedFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public float jumpFactor(final int x, final int y, final int z) {
-			return 1.0F;
-		}
-		@Override
-		public boolean hasChunkAt(final int x, final int z) {
-			return true;
-		}
-		@Override
-		public int minY() {
-			return -64;
 		}
 	}
 }

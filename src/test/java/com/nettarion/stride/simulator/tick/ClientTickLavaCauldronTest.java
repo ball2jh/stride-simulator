@@ -1,21 +1,23 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.PlayerInput;
-import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.AABB;
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
-import com.nettarion.stride.simulator.world.WorldView;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.List;
-import org.junit.jupiter.api.Test;
-import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.AABB;
+import com.nettarion.stride.simulator.PlayerInput;
+import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.WorldView;
 
-class ClientTickLavaCauldronTest {
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+final class ClientTickLavaCauldronTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
 
 	@Test
@@ -77,22 +79,22 @@ class ClientTickLavaCauldronTest {
 
 	private static SnapshotView worldWithCells(final boolean powderBesideCauldron) {
 		BlockEntry air = new BlockEntry(0, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
-		BlockEntry lavaCauldron = new BlockEntry(1, "minecraft:lava_cauldron", 0.6F, 1.0F,
-		    1.0F, false, false, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		    Suffocation.NO, WorldView.InsideEffect.LAVA_CAULDRON, 0.0F, false, WorldView.StepOn.NONE,
-		    false, WorldView.Climbability.NONE, List.of());
-		BlockEntry powder = new BlockEntry(2, "minecraft:powder_snow", 0.6F, 1.0F, 1.0F,
-		    false, false, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS,
-		    Suffocation.NO, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
+		BlockEntry lavaCauldron = new BlockEntry(1, "minecraft:lava_cauldron", 0.6F, 1.0F, 1.0F, false, false,
+		    WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY, Suffocation.NO,
+		    WorldView.InsideEffect.LAVA_CAULDRON, 0.0F, false, WorldView.StepOn.NONE, false,
 		    WorldView.Climbability.NONE, List.of());
+		BlockEntry powder =
+		    new BlockEntry(2, "minecraft:powder_snow", 0.6F, 1.0F, 1.0F, false, false, WorldView.BubbleColumnMode.NONE,
+		        false, WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS, Suffocation.NO, WorldView.InsideEffect.NONE,
+		        0.0F, false, WorldView.StepOn.NONE, false, WorldView.Climbability.NONE, List.of());
 		int size = 5;
 		int[] cells = new int[size * size * size];
 		cells[index(2, 2, 2, size)] = 1;
 		if (powderBesideCauldron) {
 			cells[index(1, 2, 2, size)] = 2;
 		}
-		return new SnapshotView(new WorldSnapshot(-2, -2, -2, size, size, size,
-		    OutsidePolicy.REFUSING, List.of(air, lavaCauldron, powder), cells));
+		return new SnapshotView(new WorldSnapshot(
+		    -2, -2, -2, size, size, size, OutsidePolicy.REFUSING, List.of(air, lavaCauldron, powder), cells));
 	}
 
 	private static int index(final int x, final int y, final int z, final int size) {
