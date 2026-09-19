@@ -22,12 +22,19 @@ import java.util.function.Consumer;
  * produces no successor and leaves the input boundary untouched.
  */
 public final class Simulator {
-	private final Transition transition = new Transition();
+	private final Transition transition;
 
-	private final ServerTick serverTick = this.transition.serverTick();
+	private final ServerTick serverTick;
 
 	/** A simulator under the composed schedule; see {@link #forObservedConnection()} for the alternative. */
-	public Simulator() {}
+	public Simulator() {
+		this(new Transition());
+	}
+
+	private Simulator(final Transition transition) {
+		this.transition = transition;
+		this.serverTick = transition.serverTick();
+	}
 
 	/**
 	 * A simulator for a consumer on a live connection that observes the server's writes itself. The
@@ -37,10 +44,7 @@ public final class Simulator {
 	 * is what a live server was observed to send. Health writes are delivered as scheduled.
 	 */
 	public static Simulator forObservedConnection() {
-		Simulator simulator = new Simulator();
-		simulator.serverTick.deliverEchoes(false);
-		simulator.serverTick.hurtMotionAfterNextPacket(true);
-		return simulator;
+		return new Simulator(new Transition(ServerTick.observed()));
 	}
 
 	/**
@@ -59,22 +63,6 @@ public final class Simulator {
 			state.client.carryPoseFitCache(leaving);
 			state.server.carryPoseFitCache(leaving);
 		}
-	}
-
-	/**
-	 * Equivalent to {@code new SimulationState(client, ServerPlayerState.atBoundary(server), 0)}, kept only
-	 * until callers outside this package move to that constructor.
-	 */
-	public SimulationState start(final PlayerState client, final PlayerState server) {
-		return new SimulationState(client, ServerPlayerState.atBoundary(server), 0);
-	}
-
-	/**
-	 * Equivalent to {@code new SimulationState(client, server, 0)}, kept only until callers outside this
-	 * package move to that constructor.
-	 */
-	public SimulationState start(final PlayerState client, final ServerPlayerState server) {
-		return new SimulationState(client, server, 0);
 	}
 
 	/**

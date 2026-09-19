@@ -70,16 +70,6 @@ public final class SupportingBlock {
 	}
 
 	/**
-	 * The former name of {@link #checkSupportingBlockWithGround}, kept only until
-	 * {@code ServerMovementListener} calls the new one; not annotated deprecated because the build
-	 * treats lint as an error.
-	 */
-	public static void checkSupportingBlock(final PlayerState state, final boolean onGround, final double movedX,
-	    final double movedZ, final boolean descending, final WorldView world, final Scratch scratch) {
-		checkSupportingBlockWithGround(state, onGround, movedX, movedZ, descending, world, scratch);
-	}
-
-	/**
 	 * {@code Entity.getOnPosLegacy}, which is {@code getOnPos(0.2F)}.
 	 *
 	 * <p>X and Z come from the supporting block and Y from the player, except for fences, walls and

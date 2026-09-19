@@ -82,11 +82,6 @@ public record EntityDataWrite(int actionIndex, long beforeDigest, int dirty, int
 		}
 	}
 
-	/** Former name of {@link #applyUnchecked}, retained for a caller in the root package. */
-	public void applyToDigestedState(final PlayerState state) {
-		applyUnchecked(state);
-	}
-
 	@Override
 	public EntityDataWrite withActionIndex(final int index) {
 		return new EntityDataWrite(index, this.beforeDigest, this.dirty, this.sharedFlags, this.pose, this.ticksFrozen,

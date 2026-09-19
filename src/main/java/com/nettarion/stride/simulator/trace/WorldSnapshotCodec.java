@@ -274,7 +274,7 @@ public final class WorldSnapshotCodec {
 			        .toString());
 		}
 
-		int[] cells = snapshot.cells();
+		int[] cells = snapshot.toDenseCells();
 		for (int localY = 0; localY < snapshot.sizeY(); localY++) {
 			for (int localZ = 0; localZ < snapshot.sizeZ(); localZ++) {
 				StringBuilder row = new StringBuilder("c\t").append(localY).append('\t').append(localZ);
@@ -288,7 +288,7 @@ public final class WorldSnapshotCodec {
 
 		writer.write("#fluid-cells\t" + (snapshot.hasFluids() ? '1' : '0') + "\n");
 		if (snapshot.hasFluids()) {
-			int[] fluidCells = snapshot.fluidCells();
+			int[] fluidCells = snapshot.toDenseFluidCells();
 			for (int localY = 0; localY < snapshot.sizeY(); localY++) {
 				for (int localZ = 0; localZ < snapshot.sizeZ(); localZ++) {
 					StringBuilder row = new StringBuilder("fc\t").append(localY).append('\t').append(localZ);

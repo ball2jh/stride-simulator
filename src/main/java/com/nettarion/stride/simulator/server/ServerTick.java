@@ -627,30 +627,10 @@ public final class ServerTick {
 		// Retained for a caller in the root package; the merge replaces them
 		// with correction().teleport().x() and its siblings.
 
-		/** {@code correction().teleport().x()}. */
-		public double correctionX() {
-			return this.correction.teleport().x();
-		}
 
-		/** {@code correction().teleport().y()}. */
-		public double correctionY() {
-			return this.correction.teleport().y();
-		}
 
-		/** {@code correction().teleport().z()}. */
-		public double correctionZ() {
-			return this.correction.teleport().z();
-		}
 
-		/** {@code correction().teleport().yRot()}. */
-		public float correctionYRot() {
-			return this.correction.teleport().yRot();
-		}
 
-		/** {@code correction().teleport().xRot()}. */
-		public float correctionXRot() {
-			return this.correction.teleport().xRot();
-		}
 	}
 
 	/**
@@ -672,38 +652,5 @@ public final class ServerTick {
 		public AwaitingTeleport withEffects(final Effects effects) {
 			return new AwaitingTeleport(this.packet, effects);
 		}
-	}
-
-	// ---- retained for callers in the root package until they move to the forms above; the merge deletes them
-
-	/** Former form of {@link #transact}; the last parameter was never read. */
-	public Transaction transact(final PlayerState clientAfter, final MovementPacket kind,
-	    final ServerPlayerState server, final PlayerInput action, final SnapshotView world, final boolean ignored) {
-		return transact(clientAfter, kind, server, action, world);
-	}
-
-	/** Former form of {@link #enableWorldChanges}: {@code null} is undeclared, true allowed, false denied. */
-	public void enableWorldChanges(final SnapshotView ownedWorld, final Boolean mayInteract, final IntSupplier action,
-	    final Consumer<ServerWrite> output) {
-		enableWorldChanges(ownedWorld,
-		    mayInteract == null ? Interaction.UNDECLARED
-		        : mayInteract   ? Interaction.ALLOWED
-		                        : Interaction.DENIED,
-		    action, output);
-	}
-
-	/** Former configuration of {@link #observed()}. */
-	public void deliverEchoes(final boolean deliver) {
-		this.deliverEchoes = deliver;
-	}
-
-	/** Former configuration of {@link #observed()}. */
-	public void hurtMotionAfterNextPacket(final boolean after) {
-		this.hurtMotionAfterNextPacket = after;
-	}
-
-	/** Former access for {@link #carry}. */
-	public Scratch scratch() {
-		return this.serverScratch;
 	}
 }

@@ -129,15 +129,6 @@ public final class Move {
 		resolveUnchecked(state, requestedX, requestedY, requestedZ, shiftDown, world, scratch);
 	}
 
-	/**
-	 * The former name of {@link #resolveAdmitted}, kept only until {@code ServerMovementListener}
-	 * calls the new one; not annotated deprecated because the build treats lint as an error.
-	 */
-	public static void resolveOwned(final PlayerState state, final double requestedX, final double requestedY,
-	    final double requestedZ, final boolean shiftDown, final WorldView world, final Scratch scratch) {
-		resolveAdmitted(state, requestedX, requestedY, requestedZ, shiftDown, world, scratch);
-	}
-
 	private static void resolveUnchecked(final PlayerState state, final double requestedX, final double requestedY,
 	    final double requestedZ, final boolean shiftDown, final WorldView world, final Scratch scratch) {
 		double deltaMovementX = requestedX;

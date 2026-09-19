@@ -62,8 +62,8 @@ final class WorldSnapshotCodecRejectionTest {
 			Collections.swap(lines, first, second);
 		}
 		WorldSnapshot reordered = read(String.join("\n", lines));
-		assertArrayEquals(read(original).cells(), reordered.cells());
-		assertArrayEquals(read(original).fluidCells(), reordered.fluidCells());
+		assertArrayEquals(read(original).toDenseCells(), reordered.toDenseCells());
+		assertArrayEquals(read(original).toDenseFluidCells(), reordered.toDenseFluidCells());
 	}
 
 	@Test

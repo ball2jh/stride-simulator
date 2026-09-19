@@ -192,7 +192,7 @@ public final class ServerMovementListener {
 		double oldMaxX = server.boundingBoxMaxX;
 		double oldMaxY = server.boundingBoxMaxY;
 		double oldMaxZ = server.boundingBoxMaxZ;
-		Move.resolveOwned(server, xDist, yDist, zDist, server.shiftKeyDown, world, scratch);
+		Move.resolveAdmitted(server, xDist, yDist, zDist, server.shiftKeyDown, world, scratch);
 		double resolvedX = server.x;
 		double resolvedY = server.y;
 		double resolvedZ = server.z;
@@ -274,7 +274,7 @@ public final class ServerMovementListener {
 		awaitTeleport(server);
 		// doCheckFallDamage on the snapped (zero) movement passes the packet's
 		// ground bit to the support search without installing it.
-		SupportingBlock.checkSupportingBlock(
+		SupportingBlock.checkSupportingBlockWithGround(
 		    server, clientAfter.onGround, 0.0, 0.0, server.shiftKeyDown, world, scratch);
 		checkFallDamage(server, 0.0, clientAfter.onGround, world, scratch);
 		return corrected(kind, reason, target, resolved, teleport, survival);

@@ -453,16 +453,6 @@ public final class WorldSnapshot {
 		return out;
 	}
 
-	/** Superseded by {@link #toDenseCells()}; retained until callers have moved. */
-	public int[] cells() {
-		return toDenseCells();
-	}
-
-	/** Superseded by {@link #toDenseFluidCells()}; retained until callers have moved. */
-	public int[] fluidCells() {
-		return toDenseFluidCells();
-	}
-
 	/** Whether the region contains any non-empty fluid cell. */
 	public boolean hasFluids() {
 		return this.anyFluid;

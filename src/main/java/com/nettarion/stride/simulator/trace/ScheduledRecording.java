@@ -133,15 +133,7 @@ public final class ScheduledRecording {
 			}
 			view = SnapshotView.compile(this.world);
 		}
-		return new ScheduledSimulation(this.initial, view, mayInteract(this.interaction));
-	}
-
-	private static Boolean mayInteract(final Interaction interaction) {
-		return switch (interaction) {
-			case ALLOWED -> Boolean.TRUE;
-			case DENIED -> Boolean.FALSE;
-			case UNDECLARED -> null;
-		};
+		return new ScheduledSimulation(this.initial, view, this.interaction);
 	}
 
 	/** Replays the recorded prefix so that {@link #append} and {@link #forkCurrent} are available again. */

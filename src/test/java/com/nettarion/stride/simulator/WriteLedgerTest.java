@@ -81,7 +81,7 @@ final class WriteLedgerTest {
 		WriteLedger ledger = new WriteLedger();
 		ledger.expect(new Simulator.VelocityConfirmation(0, 0.25, -0.0784, 0.0));
 
-		assertEquals(WriteLedger.Match.UNATTRIBUTED, ledger.confirmVelocityCausally(0.04346, -0.078374, 0.000061));
+		assertEquals(WriteLedger.Match.UNATTRIBUTED, ledger.observeVelocity(0.04346, -0.078374, 0.000061));
 		assertEquals(WriteLedger.Match.UNATTRIBUTED, ledger.observeVelocity(0.04346, -0.078374, 0.000061));
 	}
 

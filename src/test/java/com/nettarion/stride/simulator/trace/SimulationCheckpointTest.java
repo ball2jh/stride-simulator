@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.nettarion.stride.simulator.HurtCause;
+import com.nettarion.stride.simulator.Interaction;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.ScheduledSimulation;
@@ -28,7 +29,7 @@ final class SimulationCheckpointTest {
 		player.placeAt(0.5, 0, 0.5);
 		player.onGround = true;
 		SimulationState boundary = new SimulationState(player, ServerPlayerState.atBoundary(player), 0);
-		return new ScheduledSimulation(boundary, SnapshotView.compile(TraceFixtures.flatFloorWorld()), Boolean.TRUE);
+		return new ScheduledSimulation(boundary, SnapshotView.compile(TraceFixtures.flatFloorWorld()), Interaction.ALLOWED);
 	}
 
 	@Test
@@ -153,7 +154,7 @@ final class SimulationCheckpointTest {
 		player.placeAt(0.5, 0, 0.5);
 		SimulationState boundary = new SimulationState(player, ServerPlayerState.atBoundary(player), 3, HurtCause.FALL);
 		ScheduledSimulation simulation =
-		    new ScheduledSimulation(boundary, SnapshotView.compile(TraceFixtures.flatFloorWorld()), Boolean.FALSE);
+		    new ScheduledSimulation(boundary, SnapshotView.compile(TraceFixtures.flatFloorWorld()), Interaction.DENIED);
 
 		SimulationCheckpoint.Checkpoint checkpoint = SimulationCheckpoint.capture(simulation);
 

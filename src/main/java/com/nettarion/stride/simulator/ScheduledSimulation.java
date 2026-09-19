@@ -75,15 +75,6 @@ public final class ScheduledSimulation {
 		bindWorldChanges();
 	}
 
-	/**
-	 * {@link #ScheduledSimulation(SimulationState, SnapshotView, Interaction)} from the boxed tri-state:
-	 * {@code null} is {@link Interaction#UNDECLARED}. Kept only until the trace package carries an
-	 * {@code Interaction}; prefer the enum constructor.
-	 */
-	public ScheduledSimulation(final SimulationState state, final SnapshotView world, final Boolean mayInteract) {
-		this(state, world, Interaction.of(mayInteract));
-	}
-
 	private ScheduledSimulation(final ScheduledSimulation source) {
 		this.interaction = source.interaction;
 		this.client = source.client.copy();
@@ -114,7 +105,7 @@ public final class ScheduledSimulation {
 	}
 
 	private void bindWorldChanges() {
-		this.serverTick.enableWorldChanges(this.serverWorld, this.interaction.toBoolean(), this::boundary, write -> {
+		this.serverTick.enableWorldChanges(this.serverWorld, this.interaction, this::boundary, write -> {
 			if (write instanceof BlockUpdateWrite block) {
 				this.clientbound.add(new BlockUpdate(block));
 			} else {
@@ -156,7 +147,7 @@ public final class ScheduledSimulation {
 	/** The queued payloads and pending-hurt bookkeeping of this branch, as immutable copies. */
 	public Transport transportState() {
 		return new Transport(List.copyOf(this.serverbound), List.copyOf(this.clientbound), this.pendingHurt,
-		    this.hurtAction, this.interaction.toBoolean(), this.receivedMovementThisTick);
+		    this.hurtAction, this.interaction, this.receivedMovementThisTick);
 	}
 
 	/** The number of client ticks this branch has completed. */
@@ -255,8 +246,9 @@ public final class ScheduledSimulation {
 				recordEffects(result.hurt().orElse(null), result.damage());
 				if (result instanceof ServerTick.Corrected corrected) {
 					this.clientbound.add(
-					    new Position(this.server.awaitingTeleport, corrected.correctionX(), corrected.correctionY(),
-					        corrected.correctionZ(), corrected.correctionYRot(), corrected.correctionXRot()));
+					    new Position(this.server.awaitingTeleport, corrected.correction().teleport().x(),
+					        corrected.correction().teleport().y(), corrected.correction().teleport().z(),
+					        corrected.correction().teleport().yRot(), corrected.correction().teleport().xRot()));
 				}
 			}
 		}
@@ -328,20 +320,16 @@ public final class ScheduledSimulation {
 	 * @param clientbound the queued server-to-client payloads, oldest first
 	 * @param pendingHurt the hit whose velocity the next tracker sample publishes, or {@code null}
 	 * @param hurtAction the action that caused {@code pendingHurt}
-	 * @param mayInteract the branch's {@link Interaction} as the boxed tri-state; see {@link #interaction()}
+	 * @param interaction the branch's declared world-change permission
 	 * @param receivedMovementThisTick whether a movement packet was accepted since the last tick end
 	 */
 	public record Transport(List<Serverbound> serverbound, List<Clientbound> clientbound, HurtCause pendingHurt,
-	    int hurtAction, Boolean mayInteract, boolean receivedMovementThisTick) {
+	    int hurtAction, Interaction interaction, boolean receivedMovementThisTick) {
 		/** Copies both payload lists. */
 		public Transport {
 			serverbound = List.copyOf(serverbound);
 			clientbound = List.copyOf(clientbound);
-		}
-
-		/** The branch's declared world-change permission. */
-		public Interaction interaction() {
-			return Interaction.of(this.mayInteract);
+			Objects.requireNonNull(interaction, "interaction");
 		}
 	}
 

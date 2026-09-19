@@ -54,8 +54,4 @@ public final class SupportCell {
 		return this.y - cellY;
 	}
 
-	/** Superseded by {@link #compareCell}; retained until callers have moved. */
-	public int compareTo(final int cellX, final int cellY, final int cellZ) {
-		return compareCell(cellX, cellY, cellZ);
-	}
 }

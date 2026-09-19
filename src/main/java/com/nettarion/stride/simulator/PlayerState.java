@@ -430,7 +430,7 @@ public class PlayerState {
 	/**
 	 * Applies an observed entity-data packet as the client applies one: the sprint, swimming and gliding
 	 * bits of the shared flags when present, the pose with its box when present and modeled, and the
-	 * frozen ticks when present. This is the same application {@link EntityDataWrite#applyToDigestedState}
+	 * frozen ticks when present. This is the same application {@link EntityDataWrite#applyUnchecked}
 	 * makes for a predicted write. The sprint attribute is untouched: the client changes it only through
 	 * {@code LivingEntity.setSprinting} or the server's attribute packet. An unmodeled pose leaves the
 	 * copy as it was.

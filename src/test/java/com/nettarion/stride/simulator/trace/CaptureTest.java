@@ -39,7 +39,7 @@ final class CaptureTest {
 		assertEquals(world.originX(), decodedWorld.originX());
 		assertEquals(world.outside(), decodedWorld.outside());
 		assertEquals(world.palette(), decodedWorld.palette());
-		assertArrayEquals(world.cells(), decodedWorld.cells());
+		assertArrayEquals(world.toDenseCells(), decodedWorld.toDenseCells());
 		assertEquals(worldEvents, decoded.worldEvents());
 		assertEquals(stateEvents, decoded.stateEvents().orElseThrow());
 	}

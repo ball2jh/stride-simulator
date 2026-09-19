@@ -26,7 +26,17 @@ final class Transition {
 
 	private final Scratch clientScratch = new Scratch();
 
-	private final ServerTick serverTick = new ServerTick();
+	private final ServerTick serverTick;
+
+	/** A transition under the fixed publication schedule. */
+	Transition() {
+		this(new ServerTick());
+	}
+
+	/** A transition whose server tick delivers as {@code serverTick} is configured to. */
+	Transition(final ServerTick serverTick) {
+		this.serverTick = Objects.requireNonNull(serverTick, "serverTick");
+	}
 
 	/** The server tick and its scratch, for the runner's world binding and the packet listeners. */
 	ServerTick serverTick() {
@@ -40,7 +50,7 @@ final class Transition {
 	 */
 	public void carry(final SnapshotView world) {
 		this.clientScratch.carry(world);
-		this.serverTick.scratch().carry(world);
+		this.serverTick.carry(world);
 	}
 
 	/** Whether the last {@link #tickClient} started a glide, which the client tells the server. */

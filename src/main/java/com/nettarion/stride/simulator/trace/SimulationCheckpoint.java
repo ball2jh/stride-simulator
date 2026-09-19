@@ -7,6 +7,7 @@ import com.nettarion.stride.simulator.EntityDataWrite;
 import com.nettarion.stride.simulator.ExternalActor;
 import com.nettarion.stride.simulator.HealthWrite;
 import com.nettarion.stride.simulator.HurtCause;
+import com.nettarion.stride.simulator.Interaction;
 import com.nettarion.stride.simulator.HurtMotion;
 import com.nettarion.stride.simulator.HurtMotionWrite;
 import com.nettarion.stride.simulator.ImpulseWrite;
@@ -445,12 +446,21 @@ public final class SimulationCheckpoint {
 			case ScheduledSimulation.Sprint v -> record (out, Tag.SPRINT, v.sprinting());
 			case ScheduledSimulation.Transport v ->
 				record
-				(out, Tag.TRANSPORT, v.serverbound(), v.clientbound(), v.pendingHurt(), v.hurtAction(), v.mayInteract(),
-				    v.receivedMovementThisTick());
+				(out, Tag.TRANSPORT, v.serverbound(), v.clientbound(), v.pendingHurt(), v.hurtAction(),
+				    mayInteract(v.interaction()), v.receivedMovementThisTick());
 			default ->
 				throw new IllegalArgumentException(
 				    "type is outside the declared checkpoint schema: " + value.getClass());
 		}
+	}
+
+	/** The wire form of the branch's permission: a boolean, or null for {@link Interaction#UNDECLARED}. */
+	private static Boolean mayInteract(final Interaction interaction) {
+		return switch (interaction) {
+			case ALLOWED -> Boolean.TRUE;
+			case DENIED -> Boolean.FALSE;
+			case UNDECLARED -> null;
+		};
 	}
 
 	/** Every value of an encoded checkpoint as {@code path=value} lines, in stream order. */

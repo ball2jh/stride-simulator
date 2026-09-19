@@ -14,22 +14,5 @@ public enum Interaction {
 	/** The server applies no world change; contact leaves the world as it is. */
 	DENIED,
 	/** The caller did not say; the first world change refuses. */
-	UNDECLARED;
-
-	/** The tri-state boxed form some callers still carry: {@code null} for {@link #UNDECLARED}. */
-	static Interaction of(final Boolean mayInteract) {
-		if (mayInteract == null) {
-			return UNDECLARED;
-		}
-		return mayInteract ? ALLOWED : DENIED;
-	}
-
-	/** This value as the boxed tri-state, the inverse of {@link #of(Boolean)}. */
-	Boolean toBoolean() {
-		return switch (this) {
-			case ALLOWED -> Boolean.TRUE;
-			case DENIED -> Boolean.FALSE;
-			case UNDECLARED -> null;
-		};
-	}
+	UNDECLARED
 }

@@ -123,11 +123,9 @@ final class ScheduledSimulationTest {
 		SimulationState start = new SimulationState(state(), ServerPlayerState.atBoundary(state()), 0);
 		ScheduledSimulation undeclared = new ScheduledSimulation(start, world());
 		assertEquals(Interaction.UNDECLARED, undeclared.transportState().interaction());
-		assertNull(undeclared.transportState().mayInteract());
 		ScheduledSimulation allowed = new ScheduledSimulation(start, world(), Interaction.ALLOWED);
 		assertEquals(Interaction.ALLOWED, allowed.fork().transportState().interaction());
-		assertEquals(Boolean.TRUE, allowed.transportState().mayInteract());
-		ScheduledSimulation denied = new ScheduledSimulation(start, world(), Boolean.FALSE);
+		ScheduledSimulation denied = new ScheduledSimulation(start, world(), Interaction.DENIED);
 		assertEquals(Interaction.DENIED, denied.transportState().interaction());
 		assertFalse(ScheduledSimulation.sameState(allowed, denied), "the declaration is part of the branch");
 	}

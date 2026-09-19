@@ -305,7 +305,7 @@ public final class CollisionCollector {
 			double dy = y + 0.5 - atY;
 			double dz = z + 0.5 - atZ;
 			double distance = dx * dx + dy * dy + dz * dz;
-			if (distance < best || distance == best && (!out.present || out.compareTo(x, y, z) < 0)) {
+			if (distance < best || distance == best && (!out.present || out.compareCell(x, y, z) < 0)) {
 				best = distance;
 				out.set(x, y, z);
 			}

@@ -79,7 +79,7 @@ final class ObservedStateImportTest {
 		new EntityDataWrite(0, StateDigest.state(predicted),
 		    EntityDataWrite.FLAGS | EntityDataWrite.POSE | EntityDataWrite.FROZEN, flags, PlayerState.Pose.SWIMMING, 40,
 		    0, false)
-		    .applyToDigestedState(predicted);
+		    .applyUnchecked(predicted);
 		assertTrue(PlayerState.rawEquals(observed, predicted));
 	}
 

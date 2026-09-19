@@ -100,11 +100,6 @@ public final class WriteLedger {
 		return this.velocity.observe(new VelocityValue(x, y, z));
 	}
 
-	/** Former name of {@link #observeVelocity}, retained for a caller in the root package. */
-	public Match confirmVelocityCausally(final double x, final double y, final double z) {
-		return observeVelocity(x, y, z);
-	}
-
 	/** How one observed value relates to the predictions. */
 	public enum Match {
 		/** The observation carried no value for this field. */

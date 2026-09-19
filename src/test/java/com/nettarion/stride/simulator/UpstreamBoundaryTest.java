@@ -41,10 +41,10 @@ final class UpstreamBoundaryTest {
 		ServerPlayerState server = state();
 		server.tickCount = Integer.MAX_VALUE;
 		ServerTick tick = new ServerTick();
-		tick.transact(server.copy(), MovementPacket.NONE, server, IDLE, world(true), false);
+		tick.transact(server.copy(), MovementPacket.NONE, server, IDLE, world(true));
 		assertEquals(Integer.MIN_VALUE, server.tickCount);
 		server.tickCount = -1;
-		tick.transact(server.copy(), MovementPacket.NONE, server, IDLE, world(true), false);
+		tick.transact(server.copy(), MovementPacket.NONE, server, IDLE, world(true));
 		assertEquals(0, server.tickCount);
 	}
 
@@ -53,8 +53,8 @@ final class UpstreamBoundaryTest {
 		ServerPlayerState normal = state();
 		normal.deltaMovementX = 0.1;
 		ServerPlayerState pending = normal.copy();
-		new ServerTick().transact(normal.copy(), MovementPacket.NONE, normal, IDLE, world(true), false);
-		new ServerTick().transact(pending.copy(), MovementPacket.NONE, pending, IDLE, world(true), true);
+		new ServerTick().transact(normal.copy(), MovementPacket.NONE, normal, IDLE, world(true));
+		new ServerTick().transact(pending.copy(), MovementPacket.NONE, pending, IDLE, world(true));
 		assertTrue(ServerPlayerState.rawEquals(normal, pending));
 		assertNotEquals(0.1, pending.deltaMovementX);
 	}
@@ -78,7 +78,7 @@ final class UpstreamBoundaryTest {
 			PlayerState report = server.copy();
 			report.placeAt(12.5, 0, 0.5);
 			ServerTick.Transaction result =
-			    new ServerTick().transact(report, MovementPacket.POS, server, IDLE, world(true), false);
+			    new ServerTick().transact(report, MovementPacket.POS, server, IDLE, world(true));
 			if (owner) {
 				assertInstanceOf(ServerTick.Accepted.class, result);
 			} else {
