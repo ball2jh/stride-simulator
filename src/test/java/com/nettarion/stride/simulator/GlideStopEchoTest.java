@@ -1,24 +1,20 @@
 package com.nettarion.stride.simulator;
 
-import com.nettarion.stride.simulator.world.SnapshotView;
-import com.nettarion.stride.simulator.world.WorldSnapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.SnapshotView;
+import com.nettarion.stride.simulator.world.WorldSnapshot;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import com.nettarion.stride.simulator.world.OutsidePolicy;
-import com.nettarion.stride.simulator.world.ShapeBox;
-import com.nettarion.stride.simulator.world.BlockEntry;
 
 /**
- * The composed step places the server's glide stop at the phase the live
- * captures measure: the server tick that drained the landing packet runs its
- * connection tick at the head of the next step, after that step's tracker
- * sample, so the following step's sample publishes the cleared flag and the
- * client glides on the ground for two more ticks before the echo clears its
- * flag, before the third client tick after the landing packet's.
+ * The server's glide stop lands where the bundled captures record it: the server tick that drained the
+ * landing packet runs its connection tick at the head of the next step, after that step's tracker
+ * sample, so the client glides on the ground for two more ticks before the echo clears its flag.
  */
 final class GlideStopEchoTest {
 	private static final PlayerInput GLIDE = PlayerInput.idle(-90.0F, 0.0F);
@@ -30,8 +26,8 @@ final class GlideStopEchoTest {
 
 		// Step 0: the client lands and its packet is drained; the server tick
 		// that drains it has not run its connection tick yet.
-		Simulator.Step landing =
-		    simulator.advance(simulator.start(descendingGlider(), descendingGlider()), GLIDE, world);
+		Simulator.Step landing = simulator.advance(
+		    new SimulationState(descendingGlider(), ServerPlayerState.atBoundary(descendingGlider()), 0), GLIDE, world);
 		PlayerState landedClient = landing.state().clientState();
 		assertTrue(landedClient.onGround, "the client landed in its tick");
 		assertTrue(landedClient.fallFlying, "the client's flag is not cleared by its own tick");
@@ -42,7 +38,7 @@ final class GlideStopEchoTest {
 
 		// Step 1: that server tick finishes: its sample sees a still-gliding
 		// copy, then its connection tick clears the flag after the sample. The
-		// client glides on the ground, as the pinned client does.
+		// client glides on the ground, as vanilla's client does.
 		Simulator.Step stop = simulator.advance(landing.state(), GLIDE, world);
 		assertFalse(stop.state().serverState().fallFlying, "the server's copy stopped gliding in its connection tick");
 		assertTrue(stop.writes().stream().noneMatch(
@@ -55,20 +51,20 @@ final class GlideStopEchoTest {
 		Simulator.Step echo = simulator.advance(stop.state(), GLIDE, world);
 		EntityDataWrite cleared = echo.writes()
 		                              .stream()
-		                              .filter(EntityDataWrite.class ::isInstance)
-		                              .map(EntityDataWrite.class ::cast)
+		                              .filter(write -> write instanceof EntityDataWrite)
+		                              .map(write -> (EntityDataWrite) write)
 		                              .filter(data -> (data.dirty() & EntityDataWrite.FLAGS) != 0)
 		                              .findFirst()
 		                              .orElseThrow();
 		assertEquals(2, cleared.actionIndex());
-		assertEquals(0, cleared.sharedFlags() & 128, "the echo carries the cleared glide flag");
+		assertEquals(0, cleared.sharedFlags() & SharedFlag.FALL_FLYING_MASK, "the echo carries the cleared glide flag");
 		assertFalse(echo.state().clientState().fallFlying, "the echo cleared the client's flag");
 		assertEquals(0, echo.state().serverState().fallFlyTicks);
 
 		// The fixed run agrees with the stepped one and completes without a
 		// pending write.
-		Simulator.Run run =
-		    new Simulator().run(descendingGlider(), descendingGlider(), List.of(GLIDE, GLIDE, GLIDE, GLIDE), world);
+		Simulator.Run run = new Simulator().run(descendingGlider(), ServerPlayerState.atBoundary(descendingGlider()),
+		    List.of(GLIDE, GLIDE, GLIDE, GLIDE), world);
 		Simulator.Step air = simulator.advance(echo.state(), GLIDE, world);
 		assertEquals(StateDigest.state(air.state().clientState()), StateDigest.state(run.clientState()));
 		assertFalse(air.state().clientState().fallFlying);
@@ -91,12 +87,9 @@ final class GlideStopEchoTest {
 
 	/** Stone with its top at y=0 everywhere in the region. */
 	private static SnapshotView floorWorld() {
-		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -6, -3, -6, 12, 12, 12)
-		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
-		            BlockEntry.builder(1, "minecraft:stone")
-		                .boxes(ShapeBox.FULL_CUBE)
-		                .build());
+		WorldSnapshot.Builder builder = WorldSnapshot.builder(OutsidePolicy.REFUSING, -6, -3, -6, 12, 12, 12)
+		                                    .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		                                        BlockEntry.builder(1, "minecraft:stone").fullCube().build());
 		for (int z = -6; z < 6; z++) {
 			for (int x = -6; x < 6; x++) {
 				builder.set(x, -1, z, 1);

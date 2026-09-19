@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 
 /** A derived server copy re-anchors only the published facts, and saturation only from a health packet. */
-class ServerPlayerStateReanchorTest {
+final class ServerPlayerStateReanchorTest {
 	@Test
 	void takesPublishedFactsAndKeepsWhatAClientCannotSee() {
 		PlayerState client = new PlayerState();

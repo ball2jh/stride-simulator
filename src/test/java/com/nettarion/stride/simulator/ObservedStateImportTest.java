@@ -10,10 +10,8 @@ import java.util.OptionalInt;
 import org.junit.jupiter.api.Test;
 
 /**
- * A consumer observing the live game into a state goes through admission:
- * a server copy derived from what a client can read is validated once, and
- * an observed entity-data publication applies exactly as the simulator's
- * own predicted publication does.
+ * A server copy derived from what a client can read is validated once, and an observed entity-data
+ * packet applies exactly as the simulator's own predicted write does.
  */
 final class ObservedStateImportTest {
 	private static PlayerState grounded() {
@@ -59,7 +57,7 @@ final class ObservedStateImportTest {
 	}
 
 	@Test
-	void aDerivedServerCopyOutsideTheAdmittedSliceRefusesAtAdmission() {
+	void aDerivedServerCopyOutsideTheAdmittedDomainIsRejected() {
 		PlayerState movement = grounded();
 		Publisher publisher = publisherAt(movement);
 		assertThrows(IllegalStateException.class,
@@ -75,11 +73,12 @@ final class ObservedStateImportTest {
 	@Test
 	void anObservedPublicationAppliesAsThePredictedOneDoes() {
 		PlayerState observed = grounded();
-		observed.applyObservedEntityData(OptionalInt.of(8 | 16), Optional.of("SWIMMING"), OptionalInt.of(40));
+		int flags = SharedFlag.SPRINTING_MASK | SharedFlag.SWIMMING_MASK;
+		observed.applyObservedEntityData(OptionalInt.of(flags), Optional.of("SWIMMING"), OptionalInt.of(40));
 		PlayerState predicted = grounded();
 		new EntityDataWrite(0, StateDigest.state(predicted),
-		    EntityDataWrite.FLAGS | EntityDataWrite.POSE | EntityDataWrite.FROZEN, 8 | 16, PlayerState.Pose.SWIMMING,
-		    40, 0, false)
+		    EntityDataWrite.FLAGS | EntityDataWrite.POSE | EntityDataWrite.FROZEN, flags, PlayerState.Pose.SWIMMING, 40,
+		    0, false)
 		    .applyToDigestedState(predicted);
 		assertTrue(PlayerState.rawEquals(observed, predicted));
 	}

@@ -1,34 +1,35 @@
 package com.nettarion.stride.simulator;
 
-/** Caller-owned result of one resolved world-fluid cell lookup. */
+/**
+ * Caller-owned result of one fluid cell lookup, which a world query fills in place instead of
+ * allocating.
+ *
+ * <p>The fields are public because the tick reads them on its hot path; the accessors exist for
+ * callers outside this package's mechanism. One thread owns an instance.
+ */
 public final class FluidSample {
-	/** An empty sample; the tick fills it. */
-	public FluidSample() {}
-
-	/** The supported fluid categories returned by a world query. */
-	public enum Kind {
-		/** No fluid is present in the queried cell. */
-		EMPTY,
-		/** Water with the captured height and flow. */
-		WATER,
-		/** Lava with the captured height and flow. */
-		LAVA
-	}
-
-	/** Fluid category; an empty sample has zero height and zero flow. */
+	/** The fluid category of the cell; an empty sample has zero height and zero flow. */
 	public Kind kind = Kind.EMPTY;
-	/** Fluid surface height within this cell, in blocks. */
+
+	/** The fluid surface height within the cell, in blocks above the cell floor. */
 	public double height;
-	/** Resolved X component of the fluid flow vector. */
+
+	/** The X component of the resolved flow vector, in blocks per tick. */
 	public double flowX;
-	/** Resolved vertical component of the fluid flow vector. */
+
+	/** The vertical component of the resolved flow vector, in blocks per tick. */
 	public double flowY;
-	/** Resolved Z component of the fluid flow vector. */
+
+	/** The Z component of the resolved flow vector, in blocks per tick. */
 	public double flowZ;
-	/** Whether the cell contains a source fluid state. */
+
+	/** Whether the cell holds a source fluid state rather than flowing fluid. */
 	public boolean source;
 
-	/** Supplies a resolved sample to the kernel's caller-owned output object. */
+	/** An empty sample; a world query fills it. */
+	public FluidSample() {}
+
+	/** Sets every field of this sample. */
 	public void set(final Kind kind, final double height, final double flowX, final double flowY, final double flowZ,
 	    final boolean source) {
 		this.kind = kind;
@@ -39,33 +40,48 @@ public final class FluidSample {
 		this.source = source;
 	}
 
-	/** Supplies the canonical empty-fluid sample. */
+	/** Resets this sample to the canonical empty fluid. */
 	public void clear() {
 		set(Kind.EMPTY, 0.0, 0.0, 0.0, 0.0, false);
 	}
 
-	/** Returns the resolved fluid category. */
+	/** The fluid category; see {@link #kind}. */
 	public Kind kind() {
 		return this.kind;
 	}
-	/** Returns the fluid surface height within the cell, in blocks. */
+
+	/** The fluid surface height within the cell, in blocks; see {@link #height}. */
 	public double height() {
 		return this.height;
 	}
-	/** Returns the X component of the resolved flow vector. */
+
+	/** The X component of the flow vector; see {@link #flowX}. */
 	public double flowX() {
 		return this.flowX;
 	}
-	/** Returns the vertical component of the resolved flow vector. */
+
+	/** The vertical component of the flow vector; see {@link #flowY}. */
 	public double flowY() {
 		return this.flowY;
 	}
-	/** Returns the Z component of the resolved flow vector. */
+
+	/** The Z component of the flow vector; see {@link #flowZ}. */
 	public double flowZ() {
 		return this.flowZ;
 	}
-	/** Returns whether this sample describes a source fluid state. */
+
+	/** Whether the cell holds a source fluid state; see {@link #source}. */
 	public boolean source() {
 		return this.source;
+	}
+
+	/** The fluid categories a world query can answer. */
+	public enum Kind {
+		/** No fluid is present in the queried cell. */
+		EMPTY,
+		/** Water with the captured height and flow. */
+		WATER,
+		/** Lava with the captured height and flow. */
+		LAVA
 	}
 }

@@ -7,7 +7,7 @@ package com.nettarion.stride.simulator;
 public final class StaleServerWriteException extends RefusalException {
 	private static final long serialVersionUID = 1L;
 
-	/** Refuses applying a write derived from {@code expectedDigest} to a state whose digest is {@code actualDigest}. */
+	/** Refuses applying a write derived from {@code expectedDigest} to a state digesting to {@code actualDigest}. */
 	public StaleServerWriteException(final long expectedDigest, final long actualDigest) {
 		super(RefusalCause.STALE_WRITE,
 		    "predicted server state changed: expected digest " + Long.toUnsignedString(expectedDigest) + ", found "

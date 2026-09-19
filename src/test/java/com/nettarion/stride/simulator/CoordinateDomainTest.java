@@ -1,21 +1,21 @@
 package com.nettarion.stride.simulator;
 
-import com.nettarion.stride.simulator.geometry.CollisionQuerySpan;
-import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.tick.Move;
-import com.nettarion.stride.simulator.tick.Scratch;
-import com.nettarion.stride.simulator.world.FlatFloorView;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.nettarion.stride.simulator.geometry.CollisionQuerySpan;
+import com.nettarion.stride.simulator.geometry.Mth;
+import com.nettarion.stride.simulator.tick.Move;
+import com.nettarion.stride.simulator.tick.Scratch;
+import com.nettarion.stride.simulator.world.FlatFloorView;
 import org.junit.jupiter.api.Test;
 
-/** Executable counterexamples for the finite-only coordinate precondition. */
+/** The admitted coordinate domain: its exact edges, and what each side of them does. */
 final class CoordinateDomainTest {
 	@Test
-	void rawCollapsedBoxAndNegativeFloorWitnessesAreRejectedAtAdmission() {
+	void aCollapsedBoxAndACenterBelowTheIntegerFloorAreRejected() {
 		PlayerState atTwoToThe53 = new PlayerState();
 		atTwoToThe53.placeAt(0x1.0p53, 64.0, 0.5);
 
@@ -35,7 +35,7 @@ final class CoordinateDomainTest {
 	}
 
 	@Test
-	void otherFiniteExtremeWitnessIsRejectedAtAdmission() {
+	void theLargestFiniteCenterIsRejected() {
 		PlayerState state = new PlayerState();
 		state.placeAt(Double.MAX_VALUE, 64.0, 0.5);
 
@@ -104,7 +104,7 @@ final class CoordinateDomainTest {
 	}
 
 	@Test
-	void retainedSuccessorRefusesTheFirstWholeBlockOutsideTheCenterSlice() {
+	void aSuccessorOneBlockOutsideTheCenterDomainRefuses() {
 		PlayerState state = new PlayerState();
 		state.placeAt(30_000_000.0, 64.0, 0.5);
 
@@ -112,6 +112,6 @@ final class CoordinateDomainTest {
 		    () -> Move.resolve(state, 1.0, 0.0, 0.0, false, FlatFloorView.ordinary(0, -64), new Scratch()));
 
 		assertEquals(Double.doubleToRawLongBits(30_000_000.0), Double.doubleToRawLongBits(state.x));
-		assertTrue(refusal.getMessage().startsWith("movement center lies outside the exact kernel coordinate domain"));
+		assertTrue(refusal.getMessage().startsWith("movement center lies outside the admitted coordinate domain"));
 	}
 }

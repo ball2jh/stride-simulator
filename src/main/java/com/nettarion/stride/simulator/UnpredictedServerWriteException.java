@@ -14,9 +14,10 @@ import java.util.Objects;
  */
 public final class UnpredictedServerWriteException extends RefusalException {
 	private static final long serialVersionUID = 1L;
+
 	private final MovementCorrection correction;
 
-	/** Refuses the step after input {@code action} because the server issued {@code correction}. */
+	/** A refusal of the step after action {@code action}, because the server issued {@code correction}. */
 	public UnpredictedServerWriteException(final int action, final MovementCorrection correction) {
 		super(RefusalCause.CORRECTED_MOVEMENT,
 		    "the server corrects the movement packet after input " + action + ": " + correction);
