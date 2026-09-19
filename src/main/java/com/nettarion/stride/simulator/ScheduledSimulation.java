@@ -108,7 +108,7 @@ public final class ScheduledSimulation {
 	private void bindWorldChanges() {
 		this.serverTick.enableWorldChanges(this.serverWorld, this.interaction, this::boundary, write -> {
 			if (write instanceof BlockUpdateWrite block) {
-				this.clientbound.add(new BlockUpdate(block));
+				this.clientbound.add(new BlockUpdatePacket(block));
 			} else {
 				this.writes.add(write);
 			}
@@ -179,13 +179,13 @@ public final class ScheduledSimulation {
 		}
 		MovementPacket form = this.transition.tickClient(this.client, this.publisher, input, this.clientWorld);
 		if (this.transition.startedFallFlying()) {
-			this.serverbound.add(new Glide());
+			this.serverbound.add(new GlidePacket());
 		}
 		if (this.publisher.inputChanged) {
-			this.serverbound.add(new Input(input));
+			this.serverbound.add(new InputPacket(input));
 		}
 		if (this.publisher.sprintingChanged) {
-			this.serverbound.add(new Sprint(this.client.sprinting));
+			this.serverbound.add(new SprintPacket(this.client.sprinting));
 		}
 		if (form != MovementPacket.NONE) {
 			this.serverbound.add(MovePacket.of(form, this.client));
@@ -205,7 +205,7 @@ public final class ScheduledSimulation {
 		recordEffects(effects.hurt().orElse(null), effects.damage());
 		HealthWrite health = this.transition.healthPublication(boundary(), this.client);
 		if (health != null) {
-			this.clientbound.add(new Health(health.health(), health.foodLevel(), health.saturationLevel()));
+			this.clientbound.add(new HealthPacket(health.health(), health.foodLevel(), health.saturationLevel()));
 		}
 	}
 
@@ -214,10 +214,10 @@ public final class ScheduledSimulation {
 		this.transition.publishServerEntity(this.server);
 		EntityDataWrite data = this.transition.dataPublication(boundary(), this.client);
 		if (data != null) {
-			this.clientbound.add(new Data(data));
+			this.clientbound.add(new EntityDataPacket(data));
 		}
 		if (this.pendingHurt != null) {
-			this.clientbound.add(new Motion(this.pendingHurt, this.hurtAction, this.server.deltaMovementX,
+			this.clientbound.add(new MotionPacket(this.pendingHurt, this.hurtAction, this.server.deltaMovementX,
 			    this.server.deltaMovementY, this.server.deltaMovementZ));
 			this.pendingHurt = null;
 		}
@@ -234,10 +234,10 @@ public final class ScheduledSimulation {
 				this.serverTick.handleClientTickEnd(this.server, this.receivedMovementThisTick);
 				this.receivedMovementThisTick = false;
 			}
-			case Input input -> this.transition.handleInput(this.server, input.input());
-			case Sprint sprint -> this.transition.handleSprint(this.server, sprint.sprinting());
-			case Glide ignored -> this.transition.handleGlide(this.server);
-			case AcceptTeleport ack -> this.transition.handleAcceptTeleport(this.server, ack.id());
+			case InputPacket input -> this.transition.handleInput(this.server, input.input());
+			case SprintPacket sprint -> this.transition.handleSprint(this.server, sprint.sprinting());
+			case GlidePacket ignored -> this.transition.handleGlide(this.server);
+			case AcceptTeleportPacket ack -> this.transition.handleAcceptTeleport(this.server, ack.id());
 			case MovePacket move -> {
 				ServerTick.Transaction result =
 				    this.transition.handleMove(move.payload(), move.form(), this.server, this.serverWorld);
@@ -247,7 +247,7 @@ public final class ScheduledSimulation {
 				recordEffects(result.hurt().orElse(null), result.damage());
 				if (result instanceof ServerTick.Corrected corrected) {
 					this.clientbound.add(
-					    new Position(this.server.awaitingTeleport, corrected.correction().teleport().x(),
+					    new PositionPacket(this.server.awaitingTeleport, corrected.correction().teleport().x(),
 					        corrected.correction().teleport().y(), corrected.correction().teleport().z(),
 					        corrected.correction().teleport().yRot(), corrected.correction().teleport().xRot()));
 				}
@@ -263,26 +263,26 @@ public final class ScheduledSimulation {
 			return false;
 		}
 		ServerWrite write = switch (packet) {
-			case Data data ->
+			case EntityDataPacket data ->
 				new EntityDataWrite(boundary(), StateDigest.state(this.client), data.value().dirty(),
 				    data.value().sharedFlags(), data.value().pose(), data.value().ticksFrozen(),
 				    data.value().frostSpeedTicks(), data.value().sprintingAttribute());
-			case Health health ->
+			case HealthPacket health ->
 				new HealthWrite(
 				    boundary(), StateDigest.state(this.client), health.health(), health.food(), health.saturation());
-			case Motion motion ->
+			case MotionPacket motion ->
 				new HurtMotionWrite(boundary(),
 				    HurtMotion.decoded(
 				        motion.cause(), motion.action(), boundary(), this.client, motion.x(), motion.y(), motion.z()));
-			case BlockUpdate block -> {
+			case BlockUpdatePacket block -> {
 				BlockUpdateWrite delivered = new BlockUpdateWrite(
 				    boundary(), block.write().x(), block.write().y(), block.write().z(), block.write().paletteIndex());
 				delivered.applyTo(this.clientWorld);
 				this.writes.add(delivered);
 				yield null;
 			}
-			case Position position -> {
-				this.serverbound.add(new AcceptTeleport(position.id()));
+			case PositionPacket position -> {
+				this.serverbound.add(new AcceptTeleportPacket(position.id()));
 				// 0.0 + value drops a negative zero, as vanilla's Entity.setPos and
 				// setYRot do on the client before it echoes the correction back.
 				this.serverbound.add(
@@ -335,7 +335,8 @@ public final class ScheduledSimulation {
 	}
 
 	/** A queued client-to-server payload, retained as published. */
-	public sealed interface Serverbound permits Input, Sprint, Glide, AcceptTeleport, MovePacket, ClientTickEnd {}
+	public sealed interface Serverbound permits InputPacket, SprintPacket, GlidePacket, AcceptTeleportPacket,
+	    MovePacket, ClientTickEnd {}
 
 	/**
 	 * Vanilla's marker ending one client tick, sent even by ticks that publish no movement.
@@ -347,24 +348,24 @@ public final class ScheduledSimulation {
 	 *
 	 * @param input the action whose keys the packet carries
 	 */
-	public record Input(PlayerInput input) implements Serverbound {}
+	public record InputPacket(PlayerInput input) implements Serverbound {}
 
 	/**
 	 * A sprint start or stop command.
 	 *
 	 * @param sprinting whether the client started sprinting
 	 */
-	public record Sprint(boolean sprinting) implements Serverbound {}
+	public record SprintPacket(boolean sprinting) implements Serverbound {}
 
 	/** A request to start gliding. */
-	public record Glide() implements Serverbound {}
+	public record GlidePacket() implements Serverbound {}
 
 	/**
 	 * Acknowledgement of a position correction.
 	 *
 	 * @param id the correction's teleport id
 	 */
-	public record AcceptTeleport(int id) implements Serverbound {}
+	public record AcceptTeleportPacket(int id) implements Serverbound {}
 
 	/**
 	 * A movement packet with the values the client published.
@@ -397,21 +398,22 @@ public final class ScheduledSimulation {
 	}
 
 	/** A queued server-to-client payload, retained as sampled. */
-	public sealed interface Clientbound permits Data, Health, Motion, Position, BlockUpdate {}
+	public sealed interface Clientbound permits EntityDataPacket, HealthPacket, MotionPacket, PositionPacket,
+	    BlockUpdatePacket {}
 
 	/**
 	 * A block change the server made, to be applied to the client's world overlay.
 	 *
 	 * @param write the change as the server recorded it
 	 */
-	public record BlockUpdate(BlockUpdateWrite write) implements Clientbound {}
+	public record BlockUpdatePacket(BlockUpdateWrite write) implements Clientbound {}
 
 	/**
 	 * An entity-data packet.
 	 *
 	 * @param value the sampled entity data
 	 */
-	public record Data(EntityDataWrite value) implements Clientbound {}
+	public record EntityDataPacket(EntityDataWrite value) implements Clientbound {}
 
 	/**
 	 * A health packet.
@@ -420,7 +422,7 @@ public final class ScheduledSimulation {
 	 * @param food the food level
 	 * @param saturation the saturation level
 	 */
-	public record Health(float health, int food, float saturation) implements Clientbound {}
+	public record HealthPacket(float health, int food, float saturation) implements Clientbound {}
 
 	/**
 	 * A hurt velocity packet, with the server's velocity as sampled.
@@ -431,7 +433,7 @@ public final class ScheduledSimulation {
 	 * @param y the server's Y velocity, in blocks per tick
 	 * @param z the server's Z velocity, in blocks per tick
 	 */
-	public record Motion(HurtCause cause, int action, double x, double y, double z) implements Clientbound {}
+	public record MotionPacket(HurtCause cause, int action, double x, double y, double z) implements Clientbound {}
 
 	/**
 	 * A position correction.
@@ -443,5 +445,5 @@ public final class ScheduledSimulation {
 	 * @param yRot the corrected yaw, in degrees
 	 * @param xRot the corrected pitch, in degrees
 	 */
-	public record Position(int id, double x, double y, double z, float yRot, float xRot) implements Clientbound {}
+	public record PositionPacket(int id, double x, double y, double z, float yRot, float xRot) implements Clientbound {}
 }

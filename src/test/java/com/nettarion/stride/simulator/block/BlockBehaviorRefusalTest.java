@@ -126,12 +126,17 @@ final class BlockBehaviorRefusalTest {
 	}
 
 	@Test
-	void anUnmodeledHookBesideAnUnrecordedOneRefusesAtCompileTime() {
-		// Two sentinels of different causes on one entry: refused as inconsistent
-		// facts rather than guessed, as before the sentinels carried families.
-		UnimplementedMechanicException refusal = assertThrows(
-		    UnimplementedMechanicException.class, () -> of(WorldView.Contact.UNMODELED, WorldView.Landing.UNRECORDED));
-		assertEquals(RefusalCause.INADMISSIBLE_BLOCK_FACTS, refusal.cause());
+	void anUnmodeledHookBesideAnUnrecordedOneRefusesEachWithItsOwnCause() {
+		// One sentinel carries both: the visit refuses as unmodeled and the
+		// landing as unrecorded, instead of the whole entry refusing at compile time.
+		BlockBehavior mixed = of(WorldView.Contact.UNMODELED, WorldView.Landing.UNRECORDED);
+		Scratch server = server(new ServerPlayerState());
+		UnimplementedMechanicException visit = assertThrows(UnimplementedMechanicException.class,
+		    () -> mixed.entityInside(server.authority.serverState(), 0, 0, 0, true, WORLD, server));
+		assertEquals(RefusalCause.UNMODELED_BLOCK, visit.cause());
+		UnimplementedMechanicException landing = assertThrows(
+		    UnimplementedMechanicException.class, () -> mixed.fallOn(3.0, 0, -1, 0, server.authority.damage()));
+		assertEquals(RefusalCause.UNDECLARED_BLOCK_STATE, landing.cause());
 	}
 
 	@Test

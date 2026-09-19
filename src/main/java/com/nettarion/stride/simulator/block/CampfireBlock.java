@@ -10,7 +10,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  *
  * <p>The hit is dealt at the visit through the server's {@code ServerDamage}: one point for a campfire, two for a
  * soul campfire. An unlit campfire has no hook and is captured as none; a capture that predates the lit fact
- * resolves to {@link UnrecordedStateBlock}.
+ * resolves to {@link RefusingBlock}.
  */
 final class CampfireBlock extends BlockBehavior {
 	static final CampfireBlock CAMPFIRE = new CampfireBlock("campfire", 1.0F);

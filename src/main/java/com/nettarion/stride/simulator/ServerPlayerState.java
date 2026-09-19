@@ -98,7 +98,12 @@ public final class ServerPlayerState extends PlayerState {
 	/** {@code awaitingPositionFromClient.z}: the Z the pending correction sent, in blocks. */
 	public double awaitingPositionZ;
 
-	/** Whether {@code LivingEntity.currentImpulseImpactPos} is present; it caps fall damage. */
+	/**
+	 * Whether {@code LivingEntity.currentImpulseImpactPos} is present <em>and</em>
+	 * {@code ignoreFallDamageFromCurrentImpulse} is set, the pair vanilla requires before the impact height caps
+	 * fall damage. Vanilla can hold a position with the flag clear, which is inert everywhere this library
+	 * models; an importer maps that state to {@code false}.
+	 */
 	public boolean currentImpulseImpactPosPresent;
 
 	/** {@code currentImpulseImpactPos.x}, in blocks; meaningful only when present. */
@@ -393,21 +398,24 @@ public final class ServerPlayerState extends PlayerState {
 		return n == m && (n == 0 || a.additionalMovements.equals(b.additionalMovements));
 	}
 
-	/** {@code LivingEntity.setIgnoreFallDamageFromCurrentImpulse} with a declared impact position, in blocks. */
+	/**
+	 * {@code LivingEntity.setIgnoreFallDamageFromCurrentImpulse} with the impact position the flag guards, in
+	 * blocks. Setting the flag starts the forty-tick grace period; clearing it ends the grace period and, since a
+	 * position without the flag caps nothing, drops the position too.
+	 */
 	public void setIgnoreFallDamageFromCurrentImpulse(
 	    final boolean ignore, final double x, final double y, final double z) {
 		if (ignore) {
 			if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
 				throw new IllegalArgumentException("non-finite impulse impact position");
 			}
-			this.currentImpulseContextResetGraceTime =
-			    Math.max(this.currentImpulseContextResetGraceTime, IMPULSE_CONTEXT_RESET_GRACE_TICKS);
+			this.currentImpulseContextResetGraceTime = IMPULSE_CONTEXT_RESET_GRACE_TICKS;
 			this.currentImpulseImpactPosPresent = true;
 			this.currentImpulseImpactPosX = x;
 			this.currentImpulseImpactPosY = y;
 			this.currentImpulseImpactPosZ = z;
 		} else {
-			this.currentImpulseContextResetGraceTime = 0;
+			resetCurrentImpulseContext();
 		}
 	}
 

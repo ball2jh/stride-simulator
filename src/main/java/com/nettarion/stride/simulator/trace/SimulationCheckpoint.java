@@ -118,27 +118,27 @@ public final class SimulationCheckpoint {
 		/** {@code PlayerPositionWrite}. */
 		PLAYER_POSITION_WRITE(
 		    "player-position-write", "actionIndex", "beforeDigest", "teleportId", "x", "y", "z", "yRot", "xRot"),
-		/** {@code ScheduledSimulation.AcceptTeleport}. */
+		/** {@code ScheduledSimulation.AcceptTeleportPacket}. */
 		ACCEPT_TELEPORT("accept-teleport", "id"),
-		/** {@code ScheduledSimulation.BlockUpdate}. */
+		/** {@code ScheduledSimulation.BlockUpdatePacket}. */
 		BLOCK_UPDATE("block-update", "write"),
 		/** {@code ScheduledSimulation.ClientTickEnd}. */
 		CLIENT_TICK_END("client-tick-end"),
-		/** {@code ScheduledSimulation.Data}. */
+		/** {@code ScheduledSimulation.EntityDataPacket}. */
 		DATA("data", "value"),
-		/** {@code ScheduledSimulation.Glide}. */
+		/** {@code ScheduledSimulation.GlidePacket}. */
 		GLIDE("glide"),
-		/** {@code ScheduledSimulation.Health}. */
+		/** {@code ScheduledSimulation.HealthPacket}. */
 		HEALTH("health", "health", "food", "saturation"),
-		/** {@code ScheduledSimulation.Input}. */
+		/** {@code ScheduledSimulation.InputPacket}. */
 		INPUT("input", "input"),
-		/** {@code ScheduledSimulation.Motion}. */
+		/** {@code ScheduledSimulation.MotionPacket}. */
 		MOTION("motion", "cause", "action", "x", "y", "z"),
 		/** {@code ScheduledSimulation.MovePacket}. */
 		MOVE_PACKET("move-packet", "form", "x", "y", "z", "yRot", "xRot", "onGround", "horizontalCollision"),
-		/** {@code ScheduledSimulation.Position}. */
+		/** {@code ScheduledSimulation.PositionPacket}. */
 		POSITION("position", "id", "x", "y", "z", "yRot", "xRot"),
-		/** {@code ScheduledSimulation.Sprint}. */
+		/** {@code ScheduledSimulation.SprintPacket}. */
 		SPRINT("sprint", "sprinting"),
 		/** {@code ScheduledSimulation.Transport}. */
 		TRANSPORT("transport", "serverbound", "clientbound", "pendingHurt", "hurtAction", "mayInteract",
@@ -428,22 +428,24 @@ public final class SimulationCheckpoint {
 				record
 				(out, Tag.PLAYER_POSITION_WRITE, v.actionIndex(), v.beforeDigest(), v.teleportId(), v.x(), v.y(), v.z(),
 				    v.yRot(), v.xRot());
-			case ScheduledSimulation.AcceptTeleport v -> record (out, Tag.ACCEPT_TELEPORT, v.id());
-			case ScheduledSimulation.BlockUpdate v -> record (out, Tag.BLOCK_UPDATE, v.write());
+			case ScheduledSimulation.AcceptTeleportPacket v -> record (out, Tag.ACCEPT_TELEPORT, v.id());
+			case ScheduledSimulation.BlockUpdatePacket v -> record (out, Tag.BLOCK_UPDATE, v.write());
 			case ScheduledSimulation.ClientTickEnd _ -> record (out, Tag.CLIENT_TICK_END);
-			case ScheduledSimulation.Data v -> record (out, Tag.DATA, v.value());
-			case ScheduledSimulation.Glide _ -> record (out, Tag.GLIDE);
-			case ScheduledSimulation.Health v -> record (out, Tag.HEALTH, v.health(), v.food(), v.saturation());
-			case ScheduledSimulation.Input v -> record (out, Tag.INPUT, v.input());
-			case ScheduledSimulation.Motion v -> record (out, Tag.MOTION, v.cause(), v.action(), v.x(), v.y(), v.z());
+			case ScheduledSimulation.EntityDataPacket v -> record (out, Tag.DATA, v.value());
+			case ScheduledSimulation.GlidePacket _ -> record (out, Tag.GLIDE);
+			case ScheduledSimulation.HealthPacket v -> record (out, Tag.HEALTH, v.health(), v.food(), v.saturation());
+			case ScheduledSimulation.InputPacket v -> record (out, Tag.INPUT, v.input());
+			case ScheduledSimulation.MotionPacket v ->
+				record
+				(out, Tag.MOTION, v.cause(), v.action(), v.x(), v.y(), v.z());
 			case ScheduledSimulation.MovePacket v ->
 				record
 				(out, Tag.MOVE_PACKET, v.form(), v.x(), v.y(), v.z(), v.yRot(), v.xRot(), v.onGround(),
 				    v.horizontalCollision());
-			case ScheduledSimulation.Position v ->
+			case ScheduledSimulation.PositionPacket v ->
 				record
 				(out, Tag.POSITION, v.id(), v.x(), v.y(), v.z(), v.yRot(), v.xRot());
-			case ScheduledSimulation.Sprint v -> record (out, Tag.SPRINT, v.sprinting());
+			case ScheduledSimulation.SprintPacket v -> record (out, Tag.SPRINT, v.sprinting());
 			case ScheduledSimulation.Transport v ->
 				record
 				(out, Tag.TRANSPORT, v.serverbound(), v.clientbound(), v.pendingHurt(), v.hurtAction(),

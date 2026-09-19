@@ -13,6 +13,8 @@ import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -221,5 +223,23 @@ final class ScheduledSimulationTest {
 			}
 		}
 		return SnapshotView.compile(builder.build());
+	}
+	@Test
+	void aPendingHitAtActionZeroIsPublishedAlikeByBothRunners() {
+		// A branch may start right after a hit whose velocity write the first
+		// action publishes: the cause action is -1 on both runners and the write
+		// is delivered after action zero.
+		PlayerState client = state();
+		SimulationState start = new SimulationState(client, ServerPlayerState.atBoundary(client), 0, HurtCause.FALL);
+		Simulator.Step fixed = new Simulator().advance(start, WALK, world());
+		ScheduledSimulation scheduled = new ScheduledSimulation(start, world());
+		ActionSchedule.composed().advance(scheduled, WALK);
+		List<HurtMotionWrite> fixedWrites = fixed.hurtMotion();
+		assertEquals(1, fixedWrites.size(), "the pending hit publishes one velocity write");
+		assertEquals(-1, fixedWrites.getFirst().event().causeAction());
+		assertEquals(0, fixedWrites.getFirst().actionIndex());
+		assertTrue(PlayerState.rawEquals(fixed.state().clientState(), scheduled.clientState()), "client");
+		assertTrue(ServerPlayerState.rawEquals(fixed.state().serverState(), scheduled.serverState()), "server");
+		assertEquals(fixedWrites, scheduled.writes().stream().filter(w -> w instanceof HurtMotionWrite).toList());
 	}
 }

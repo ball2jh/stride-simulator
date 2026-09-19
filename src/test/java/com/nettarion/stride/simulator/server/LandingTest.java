@@ -177,6 +177,24 @@ final class LandingTest {
 	}
 
 	@Test
+	void clearingTheImpulseFlagEndsTheFallCapAsVanillaDoes() {
+		// Player.causeFallDamage caps the fall only while both the impact position
+		// and ignoreFallDamageFromCurrentImpulse are set; clearing the flag leaves
+		// vanilla's position inert, so the state drops it.
+		PlayerState client = airborneAt(0.5, 5.0, 0.5);
+		ServerPlayerState server = ServerPlayerState.atBoundary(client);
+		server.setIgnoreFallDamageFromCurrentImpulse(true, 0.5, 7, 0.5);
+		assertEquals(ServerPlayerState.IMPULSE_CONTEXT_RESET_GRACE_TICKS, server.currentImpulseContextResetGraceTime);
+		server.setIgnoreFallDamageFromCurrentImpulse(false, 0, 0, 0);
+		assertFalse(server.currentImpulseImpactPosPresent);
+		assertEquals(0, server.currentImpulseContextResetGraceTime);
+		ServerDamage damage = new ServerDamage();
+		damage.begin(server);
+		damage.causeFallDamage(20, 1, HurtCause.FALL);
+		assertEquals(3.0F, server.health, "a twenty-block fall hurts in full once the flag is cleared");
+	}
+
+	@Test
 	void farmlandRefusesATrampleOnlyForABodyLargeEnoughToTrampleIt() {
 		// FarmlandBlock.fallOn tramples when random.nextFloat() < fallDistance - 0.5
 		// and width^2 * height exceeds 0.512. A one-block drop is a coin toss the

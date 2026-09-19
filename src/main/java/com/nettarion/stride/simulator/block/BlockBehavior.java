@@ -143,17 +143,7 @@ public abstract class BlockBehavior {
 			}
 		}
 		if (single == null) {
-			if (unmodeled != 0 && unrecorded != 0) {
-				throw new UnimplementedMechanicException(RefusalCause.INADMISSIBLE_BLOCK_FACTS,
-				    "inconsistent block behavior facts: an unmodeled hook beside an unrecorded one");
-			}
-			if (unmodeled != 0) {
-				return UnmodeledBlock.of(unmodeled);
-			}
-			if (unrecorded != 0) {
-				return UnrecordedStateBlock.of(unrecorded);
-			}
-			return INERT;
+			return unmodeled == 0 && unrecorded == 0 ? INERT : RefusingBlock.of(unmodeled, unrecorded);
 		}
 		if (unmodeled != 0 || unrecorded != 0) {
 			throw new UnimplementedMechanicException(RefusalCause.INADMISSIBLE_BLOCK_FACTS,

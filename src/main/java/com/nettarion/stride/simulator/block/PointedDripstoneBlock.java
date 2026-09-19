@@ -8,7 +8,7 @@ import com.nettarion.stride.simulator.server.ServerDamage;
  * multiplier two, as its own damage source.
  *
  * <p>A dripstone that is not an upward tip lands as an ordinary block and is captured as one; a capture that
- * predates the fact resolves to {@link UnrecordedStateBlock}.
+ * predates the fact resolves to {@link RefusingBlock}.
  */
 final class PointedDripstoneBlock extends BlockBehavior {
 	static final PointedDripstoneBlock INSTANCE = new PointedDripstoneBlock();

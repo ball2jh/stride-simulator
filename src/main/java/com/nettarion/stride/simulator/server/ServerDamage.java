@@ -168,10 +168,8 @@ public final class ServerDamage {
 		}
 		double effectiveFallDistance = fall;
 		// Vanilla gates this on currentImpulseImpactPos != null &&
-		// ignoreFallDamageFromCurrentImpulse; the state folds both into one
-		// boolean, so an impact position retained after the ignore flag was
-		// cleared still caps the fall here. See the ServerPlayerState request
-		// to split the pair.
+		// ignoreFallDamageFromCurrentImpulse; the state's one flag stands for
+		// that conjunction (see ServerPlayerState.currentImpulseImpactPosPresent).
 		if (server.currentImpulseImpactPosPresent) {
 			effectiveFallDistance = Math.min(fall, server.currentImpulseImpactPosY - server.y);
 			if (effectiveFallDistance <= 0.0) {
