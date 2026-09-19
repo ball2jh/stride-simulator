@@ -1,26 +1,23 @@
 package com.nettarion.stride.simulator.server;
 
-import com.nettarion.stride.simulator.ImpulseWrite;
-import com.nettarion.stride.simulator.WriteLedger;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import com.nettarion.stride.simulator.ExternalActor;
+import com.nettarion.stride.simulator.ImpulseWrite;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.Simulator;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import com.nettarion.stride.simulator.WriteLedger;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * The impulse event algebra the source witnesses in
- * {@code ExternalImpulseClosureSourceTest} and
- * {@code ExplosionPacketTransactionSourceTest}, kept on the write stream:
- * add and replace do not commute, equal payloads are distinct events, a
- * collision-resolved move is not a velocity, and the one ledger attributes
- * each operation in its own space.
+ * The impulse write's algebra on the stream: add and replace do not commute, equal payloads are distinct events, a
+ * collision-resolved move is not a velocity, and the one ledger attributes each operation in its own space. A
+ * root-package type tested here beside the other write kinds.
  */
 final class ImpulseWriteTest {
 	private static final ExternalActor ROCKET = ExternalActor.fireworkRocket(42);
@@ -83,18 +80,18 @@ final class ImpulseWriteTest {
 	}
 
 	@Test
-	void aWriteAppliesOnlyAtItsOwnBoundaryAndRebasesWithThePlan() {
+	void aWriteAppliesOnlyAtItsOwnActionIndexAndRebasesWithTheActionList() {
 		ImpulseWrite write = new ImpulseWrite(
 		    5, ROCKET, 1L, ImpulseWrite.Phase.ACTOR_TICK, ImpulseWrite.Operation.REPLACE, 1.0, 0.0, 0.0);
 		PlayerState state = moving();
 
 		write.applyAfterAction(4, state);
-		assertEquals(0.25, state.deltaMovementX, "another boundary leaves the state alone");
+		assertEquals(0.25, state.deltaMovementX, "another action index leaves the state alone");
 
 		assertEquals(Optional.empty(), write.afterConsuming(6));
 		assertEquals(3, write.afterConsuming(2).orElseThrow().actionIndex());
 		assertEquals(9, write.delayedBy(4).actionIndex());
-		assertEquals(write.actor(), write.delayedBy(4).actor());
+		assertEquals(write.actor(), assertInstanceOf(ImpulseWrite.class, write.delayedBy(4)).actor());
 	}
 
 	@Test
@@ -131,8 +128,8 @@ final class ImpulseWriteTest {
 		    ledger.observeImpulse(
 		        ImpulseWrite.Operation.REPLACE, 0.031274 + 2.0 / 32766.0, -0.0784000015258789, -0.031274),
 		    "a different decoded motion packet is a different replacement");
-		assertTrue(
-		    ledger.observeImpulse(ImpulseWrite.Operation.REPLACE, 1.0, 2.0, 3.0) == WriteLedger.Match.UNATTRIBUTED,
+		assertEquals(WriteLedger.Match.UNATTRIBUTED,
+		    ledger.observeImpulse(ImpulseWrite.Operation.REPLACE, 1.0, 2.0, 3.0),
 		    "an impulse nobody predicted is a correction");
 	}
 
