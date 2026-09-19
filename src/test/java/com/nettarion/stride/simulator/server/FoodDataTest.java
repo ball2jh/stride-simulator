@@ -143,6 +143,16 @@ final class FoodDataTest {
 	}
 
 	@Test
+	void peacefulDifficultyRefusesAtAdmission() {
+		// Peaceful heals and never starves, which the food model does not compute.
+		ServerPlayerState server = new ServerPlayerState();
+		server.difficulty = ServerPlayerState.Difficulty.PEACEFUL;
+		UnimplementedMechanicException refusal =
+		    assertThrows(UnimplementedMechanicException.class, () -> FoodData.requireSupported(server));
+		assertEquals(RefusalCause.INADMISSIBLE_STATE, refusal.cause());
+	}
+
+	@Test
 	void foodCrossesTheSprintThresholdAtDeliveryAndStarvationHurtsThroughTheTransaction() {
 		PlayerState client = standing();
 		client.foodLevel = 7;

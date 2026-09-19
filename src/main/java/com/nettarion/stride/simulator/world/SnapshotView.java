@@ -208,14 +208,8 @@ public final class SnapshotView implements WorldView {
 
 	private long collisionVersion;
 
-	/**
-	 * A mutable view over a snapshot.
-	 *
-	 * <p>Superseded by {@link #compile(WorldSnapshot)}, which returns a frozen
-	 * view, followed by {@link #fork()} where edits are needed; this constructor
-	 * will become private once callers have moved.
-	 */
-	public SnapshotView(final WorldSnapshot snapshot) {
+	/** A mutable view over a snapshot; {@link #compile(WorldSnapshot)} freezes one and {@link #fork()} edits one. */
+	private SnapshotView(final WorldSnapshot snapshot) {
 		this(Objects.requireNonNull(snapshot, "snapshot"), PaletteTables.compile(snapshot), false);
 	}
 

@@ -96,11 +96,9 @@ public record BlockEntry(int blockStateId, String name, float friction, float sp
 	 * both are read from the block's name where the name decides them, and are
 	 * {@code UNKNOWN} where the block state does, so a visit or landing there
 	 * refuses instead of guessing.
-	 *
-	 * <p>Superseded by {@link #builder}; this
-	 * constructor will become non-public once callers have moved.
+	 * Callers use {@link #builder}.
 	 */
-	public BlockEntry(final int blockStateId, final String name, final float friction, final float speedFactor,
+	BlockEntry(final int blockStateId, final String name, final float friction, final float speedFactor,
 	    final float jumpFactor, final boolean movingPiston, final boolean suppressesSupportingSpeedFactor,
 	    final WorldView.BubbleColumnMode bubbleColumnMode, final boolean fallDistanceResetting,
 	    final WorldView.CollisionBehavior collisionBehavior, final Suffocation suffocation,
@@ -116,11 +114,9 @@ public record BlockEntry(int blockStateId, String name, float friction, float sp
 	/**
 	 * An entry captured before shape provenance was recorded, which is
 	 * {@link ShapeProvenance#LEGACY_GEOMETRY}.
-	 *
-	 * <p>Superseded by {@link #builder}; this constructor will become
-	 * non-public once callers have moved.
+	 * Callers use {@link #builder}.
 	 */
-	public BlockEntry(final int blockStateId, final String name, final float friction, final float speedFactor,
+	BlockEntry(final int blockStateId, final String name, final float friction, final float speedFactor,
 	    final float jumpFactor, final boolean movingPiston, final boolean suppressesSupportingSpeedFactor,
 	    final WorldView.BubbleColumnMode bubbleColumnMode, final boolean fallDistanceResetting,
 	    final WorldView.CollisionBehavior collisionBehavior, final Suffocation suffocation,
@@ -135,11 +131,9 @@ public record BlockEntry(int blockStateId, String name, float friction, float sp
 	/**
 	 * An ordinary block whose suffocation fact is {@link Suffocation#UNKNOWN},
 	 * so any wall built from it refuses when the player's column touches it.
-	 *
-	 * <p>Superseded by {@link #builder}; this constructor will become
-	 * non-public once callers have moved.
+	 * Callers use {@link #builder}.
 	 */
-	public BlockEntry(final int blockStateId, final String name, final float friction, final float speedFactor,
+	BlockEntry(final int blockStateId, final String name, final float friction, final float speedFactor,
 	    final float jumpFactor, final List<ShapeBox> boxes) {
 		this(blockStateId, name, friction, speedFactor, jumpFactor, false, false, WorldView.BubbleColumnMode.NONE,
 		    false, WorldView.CollisionBehavior.ORDINARY, Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false,

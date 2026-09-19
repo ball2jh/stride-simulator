@@ -70,12 +70,9 @@ public final class WorldSnapshot {
 	private volatile SectionFactGrids factGrids;
 
 	/**
-	 * A snapshot without fluid cells over the caller's plane.
-	 *
-	 * <p>Superseded by {@link #builder} and {@link #owning}; this constructor
-	 * will become non-public once callers have moved.
+	 * A snapshot without fluid cells over the caller's plane; callers use {@link #builder} or {@link #owning}.
 	 */
-	public WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
+	WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
 	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette, final int[] cells) {
 		this(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, palette, cells, List.of(FluidEntry.EMPTY),
 		    new int[0]);
@@ -83,12 +80,9 @@ public final class WorldSnapshot {
 
 	/**
 	 * A snapshot over the caller's planes and palettes, which are copied into
-	 * sections and validated cell by cell against the palettes.
-	 *
-	 * <p>Superseded by {@link #builder} and {@link #owning}; this constructor
-	 * will become non-public once callers have moved.
+	 * sections and validated cell by cell against the palettes; callers use {@link #builder} or {@link #owning}.
 	 */
-	public WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
+	WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
 	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette, final int[] cells,
 	    final List<FluidEntry> fluidPalette, final int[] fluidCells) {
 		this(fromDense(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, List.copyOf(palette), cells,
