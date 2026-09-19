@@ -182,6 +182,13 @@ def example = tasks.register('runExample', JavaExec) {
     mainClass = 'com.nettarion.stride.examples.GettingStarted'
 }
 
+def throughputExample = tasks.register('runThroughput', JavaExec) {
+    group = 'application'
+    description = 'Measures single-thread steps per second on a flat-world walk; not part of check.'
+    classpath = sourceSets.examples.runtimeClasspath
+    mainClass = 'com.nettarion.stride.examples.Throughput'
+}
+
 def refusalsExample = tasks.register('runHandlingRefusals', JavaExec) {
     group = 'application'
     description = 'Runs the HandlingRefusals tutorial: classifying refusals by type and by cause group.'
