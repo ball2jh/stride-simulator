@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator;
 
 import com.nettarion.stride.simulator.world.SnapshotView;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;

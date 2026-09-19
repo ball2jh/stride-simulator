@@ -15,7 +15,9 @@ import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.tick.ClientTick;
 import com.nettarion.stride.simulator.tick.Scratch;
+
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /**

@@ -12,8 +12,10 @@ import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.CompleteWorldView;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.ArrayList;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /** Contact acceptance, traversal limits, and reuse across complete block-effect phases. */

@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator;
 
 import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.Optional;
 import java.util.OptionalInt;
 

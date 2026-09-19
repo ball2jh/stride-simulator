@@ -199,7 +199,7 @@ def apiDocs = tasks.register('checkApiDocs', JavaExec) {
     classpath = sourceSets.tools.runtimeClasspath
     mainClass = 'CheckApiDocs'
     javaLauncher = javaToolchains.launcherFor(java.toolchain)
-    args(['--report', report.get().asFile.path] + roots)
+    args(['--strict', '--report', report.get().asFile.path] + roots)
 }
 
 def fixtures = tasks.register('verifyFixtures') {

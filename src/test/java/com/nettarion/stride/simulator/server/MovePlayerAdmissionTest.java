@@ -13,6 +13,7 @@ import static com.nettarion.stride.simulator.server.ServerTestWorlds.packet;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.region;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.view;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.wallWorld;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -36,8 +37,10 @@ import com.nettarion.stride.simulator.world.ShapeBox;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.Suffocation;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.ArrayList;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /**

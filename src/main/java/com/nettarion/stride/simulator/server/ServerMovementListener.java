@@ -7,6 +7,7 @@ import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
+import com.nettarion.stride.simulator.SharedFlag;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.geometry.CollisionCollector;
@@ -19,7 +20,6 @@ import com.nettarion.stride.simulator.tick.SupportingBlock;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.SupportCell;
 import com.nettarion.stride.simulator.world.WorldView;
-import com.nettarion.stride.simulator.SharedFlag;
 
 /**
  * The packet handlers of vanilla's {@code ServerGamePacketListenerImpl} that the admitted domain reaches: the input

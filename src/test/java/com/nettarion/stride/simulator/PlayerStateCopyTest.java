@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Field;
+
 import org.junit.jupiter.api.Test;
 
 /** {@code copyInto} carries every public field of each state class raw-bit exactly. */

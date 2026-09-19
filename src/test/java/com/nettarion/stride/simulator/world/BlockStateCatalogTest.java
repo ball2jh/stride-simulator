@@ -7,8 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
+
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 
 /**

@@ -18,6 +18,7 @@ import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.ServerWrite;
+import com.nettarion.stride.simulator.SharedFlag;
 import com.nettarion.stride.simulator.Simulator;
 import com.nettarion.stride.simulator.StateDigest;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
@@ -25,12 +26,12 @@ import com.nettarion.stride.simulator.UnpredictedServerWriteException;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.tick.Travel;
 import com.nettarion.stride.simulator.world.SnapshotView;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
-import com.nettarion.stride.simulator.SharedFlag;
 
 /**
  * One server tick on the server's copy of the player, cut into the phases the two runners call; the package
@@ -489,8 +490,8 @@ public final class ServerTick {
 		if (server.clientIsFloating || server.floatingUnknown) {
 			if (++server.aboveGroundTickCount > ServerPlayerState.MAXIMUM_FLOATING_TICKS) {
 				throw new PendingServerWriteException(RefusalCause.UNMODELED_SESSION_END,
-				    server.clientIsFloating ? "the server kicks the client for floating after " + ServerPlayerState.MAXIMUM_FLOATING_TICKS
-				            + " connection ticks"
+				    server.clientIsFloating ? "the server kicks the client for floating after "
+				            + ServerPlayerState.MAXIMUM_FLOATING_TICKS + " connection ticks"
 				                            : "the floating kick after " + ServerPlayerState.MAXIMUM_FLOATING_TICKS
 				            + " connection ticks cannot be decided: the last accepted packet's"
 				            + " air query reached space the capture does not declare");
@@ -626,11 +627,6 @@ public final class ServerTick {
 
 		// Retained for a caller in the root package; the merge replaces them
 		// with correction().teleport().x() and its siblings.
-
-
-
-
-
 	}
 
 	/**

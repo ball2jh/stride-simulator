@@ -2,6 +2,8 @@ package com.nettarion.stride.simulator.world;
 
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
+import com.nettarion.stride.simulator.block.BlockBehavior;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -10,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
-import com.nettarion.stride.simulator.block.BlockBehavior;
 
 /**
  * Block records extracted from one Minecraft version independently of any

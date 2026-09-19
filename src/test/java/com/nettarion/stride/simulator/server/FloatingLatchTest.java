@@ -5,6 +5,7 @@ import static com.nettarion.stride.simulator.server.ServerTestWorlds.airborneAt;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.emptyWorld;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.floorWorld;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.packet;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -17,6 +18,7 @@ import com.nettarion.stride.simulator.Publisher;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.world.SnapshotView;
+
 import org.junit.jupiter.api.Test;
 
 /** The floating latch an accepted packet computes and the connection tick's counter and kick. */

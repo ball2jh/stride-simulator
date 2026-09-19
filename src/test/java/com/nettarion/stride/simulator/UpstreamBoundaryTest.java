@@ -16,6 +16,7 @@ import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import org.junit.jupiter.api.Test;
 
 /** Regressions read off vanilla for retained server facts and the composed step's server phases. */

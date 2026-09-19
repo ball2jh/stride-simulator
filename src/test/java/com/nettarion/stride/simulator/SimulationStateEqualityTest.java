@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Field;
+
 import org.junit.jupiter.api.Test;
 
 /** Boundary equality reads every component and every public field of each component. */

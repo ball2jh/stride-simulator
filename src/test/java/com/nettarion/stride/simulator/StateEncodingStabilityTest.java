@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.nettarion.stride.simulator.trace.SimulationStateCodec;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -12,6 +13,7 @@ import java.lang.reflect.Modifier;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /**

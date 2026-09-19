@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
+
 import org.junit.jupiter.api.Test;
 
 /** The uniform floor admits cells as {@code BlockCollisions} does: open on every face. */

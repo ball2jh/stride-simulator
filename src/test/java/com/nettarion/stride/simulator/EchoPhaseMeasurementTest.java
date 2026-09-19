@@ -6,12 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import com.nettarion.stride.simulator.trace.Capture;
 import com.nettarion.stride.simulator.trace.Trace;
 import com.nettarion.stride.simulator.world.SnapshotView;
+
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /**

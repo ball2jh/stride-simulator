@@ -10,14 +10,15 @@ import com.nettarion.stride.simulator.trace.ScheduledRecording;
 import com.nettarion.stride.simulator.trace.SimulationCheckpoint;
 import com.nettarion.stride.simulator.trace.TraceProducer;
 import com.nettarion.stride.simulator.world.BlockEntry;
-import com.nettarion.stride.simulator.world.Suffocation;
 import com.nettarion.stride.simulator.world.BlockStateCatalog;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.Suffocation;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -118,8 +119,8 @@ final class ScheduledRecordingTest {
 	@Test
 	void aVerifiedRecordingNeedsItsCatalogSourceAndRefusesADifferentCatalog() throws IOException {
 		WorldSnapshot world = floor();
-		BlockStateCatalog.Source source = new BlockStateCatalog.Source(
-		    VERSION, snapshot -> new BlockStateCatalog(VERSION, snapshot.palette()));
+		BlockStateCatalog.Source source =
+		    new BlockStateCatalog.Source(VERSION, snapshot -> new BlockStateCatalog(VERSION, snapshot.palette()));
 		ScheduledRecording recording = new ScheduledRecording(start(), world, VERSION, Interaction.DENIED, source);
 		recording.append(SimulationEvent.Phase.LEVEL_TICK);
 		Path path = this.directory.resolve("verified.recording");
@@ -135,10 +136,7 @@ final class ScheduledRecordingTest {
 		    snapshot
 		    -> new BlockStateCatalog(VERSION,
 		        List.of(snapshot.palette().getFirst(),
-		            BlockEntry.builder(1, "minecraft:stone")
-		                .fullCube()
-		                .suffocation(Suffocation.YES)
-		                .build())));
+		            BlockEntry.builder(1, "minecraft:stone").fullCube().suffocation(Suffocation.YES).build())));
 		assertThrows(IOException.class, () -> ScheduledRecording.read(path, VERSION, other));
 	}
 

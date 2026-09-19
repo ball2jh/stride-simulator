@@ -83,7 +83,7 @@ PressurePlateBlock	NO_MOVEMENT_EFFECT	NONE	BasePressurePlateBlock.entityInside i
 RedStoneOreBlock	NO_MOVEMENT_EFFECT	NONE	stepOn lights the block on both sides, and LIT changes light only -- same shape, friction, speed and jump
 ScaffoldingBlock	MODELED	NONE	the only collision-context-sensitive block
 SculkSensorBlock	NO_MOVEMENT_EFFECT	NONE	stepOn is gated on !isClientSide and four further server-only conditions and only schedules a vibration; nothing is written on the player
-SculkShriekerBlock	NO_MOVEMENT_EFFECT	UNMODELED	stepOn is gated on ServerLevel and shrieks: Darkness on every player within forty blocks, a server effect on the player the slice does not model; the warden it may summon is a block actor
+SculkShriekerBlock	NO_MOVEMENT_EFFECT	UNMODELED	stepOn is gated on ServerLevel and shrieks: Darkness on every player within forty blocks, a server effect on the player the simulator does not model; the warden it may summon is a block actor
 SlimeBlock	MODELED	NONE	the bounce is Properties.bounceRestitution(1.0F) through restituteMovementAfterCollisions, not a hook; stepOn's horizontal damping is the only override that moves a client player, and fallOn is damage-only
 SnowLayerBlock	GEOMETRY_ONLY	NONE	shape only; layer height is a state property
 SoulFireBlock	NO_MOVEMENT_EFFECT	MODELED	Same inherited BaseFireBlock.entityInside; minecraft:soul_fire was recorded SAFE alongside fire

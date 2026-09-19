@@ -4,6 +4,7 @@ import com.nettarion.stride.simulator.server.ServerTick;
 import com.nettarion.stride.simulator.tick.ClientTick;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.SnapshotView;
+
 import java.util.Objects;
 
 /**

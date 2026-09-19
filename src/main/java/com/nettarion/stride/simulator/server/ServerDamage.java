@@ -8,6 +8,7 @@ import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.Mth;
 import com.nettarion.stride.simulator.tick.PlayerTick;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;

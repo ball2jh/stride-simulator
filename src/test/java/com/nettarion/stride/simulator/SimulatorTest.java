@@ -9,11 +9,13 @@ import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.IntFunction;
+
 import org.junit.jupiter.api.Test;
 
 /** The composed step: its run and step forms agree, its boundaries are isolated, and its writes land where measured. */

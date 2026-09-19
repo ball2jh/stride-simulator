@@ -18,7 +18,9 @@ import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.FlatFloorView;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /**

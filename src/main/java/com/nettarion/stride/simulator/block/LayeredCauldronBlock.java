@@ -7,6 +7,7 @@ import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.ShapeBox;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.List;
 
 /**

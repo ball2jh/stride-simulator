@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
+
 import org.junit.jupiter.api.Test;
 
 /**

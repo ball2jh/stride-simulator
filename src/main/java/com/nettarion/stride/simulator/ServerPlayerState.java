@@ -2,6 +2,7 @@ package com.nettarion.stride.simulator;
 
 import com.nettarion.stride.simulator.server.ServerEntity;
 import com.nettarion.stride.simulator.server.ServerMovementListener;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;

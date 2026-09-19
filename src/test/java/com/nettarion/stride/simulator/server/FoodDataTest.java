@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator.server;
 
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.IDLE;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -23,6 +24,7 @@ import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
+
 import org.junit.jupiter.api.Test;
 
 /** Vanilla's {@code FoodData.tick}: exhaustion, regeneration, starvation by difficulty, and the health packet. */

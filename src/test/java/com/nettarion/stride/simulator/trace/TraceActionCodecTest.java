@@ -7,6 +7,7 @@ import com.nettarion.stride.simulator.PlayerInput;
 
 import java.io.IOException;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /** The packed-action cells of a trace row decode every admitted input and refuse unknown bits. */

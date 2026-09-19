@@ -24,6 +24,7 @@ import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.ShapeBox;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
+
 import org.junit.jupiter.api.Test;
 
 /** The server's own player tick: what it shares with the client tick, what it skips, and what it charges. */

@@ -5,10 +5,11 @@ import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
+import com.nettarion.stride.simulator.SharedFlag;
 import com.nettarion.stride.simulator.Simulator;
 import com.nettarion.stride.simulator.StateDigest;
+
 import java.util.List;
-import com.nettarion.stride.simulator.SharedFlag;
 
 /**
  * The entity tracker's sample of the server's copy: what vanilla's {@code ServerEntity.sendChanges} sends the
@@ -128,10 +129,8 @@ public final class ServerEntity {
 	 */
 	void recordChanges(final int action, final List<Simulator.Confirmation> output) {
 		if (this.flagsDirty) {
-			output.add(
-			    new Simulator.SprintConfirmation(action, (this.flags & SharedFlag.SPRINTING_MASK) != 0));
-			output.add(
-			    new Simulator.SwimmingConfirmation(action, (this.flags & SharedFlag.SWIMMING_MASK) != 0));
+			output.add(new Simulator.SprintConfirmation(action, (this.flags & SharedFlag.SPRINTING_MASK) != 0));
+			output.add(new Simulator.SwimmingConfirmation(action, (this.flags & SharedFlag.SWIMMING_MASK) != 0));
 		}
 		if (this.poseDirty) {
 			output.add(new Simulator.PoseConfirmation(action, this.pose));

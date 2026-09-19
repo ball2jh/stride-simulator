@@ -8,6 +8,7 @@ import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.server.ServerDamage;
 import com.nettarion.stride.simulator.server.TickAuthority;
 import com.nettarion.stride.simulator.world.SnapshotView;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;

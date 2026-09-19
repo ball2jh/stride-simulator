@@ -13,6 +13,7 @@ import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.FlatFloorView;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import org.junit.jupiter.api.Test;
 
 /** How {@link BlockBehavior#of} admits, or refuses, one palette entry's facts. */

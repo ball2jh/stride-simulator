@@ -10,6 +10,7 @@ import com.nettarion.stride.simulator.geometry.Mth;
 import com.nettarion.stride.simulator.tick.Move;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.FlatFloorView;
+
 import org.junit.jupiter.api.Test;
 
 /** The admitted coordinate domain: its exact edges, and what each side of them does. */

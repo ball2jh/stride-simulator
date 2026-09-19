@@ -53,5 +53,4 @@ public final class SupportCell {
 		}
 		return this.y - cellY;
 	}
-
 }

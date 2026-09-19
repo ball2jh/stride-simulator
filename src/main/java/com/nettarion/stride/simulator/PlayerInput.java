@@ -120,8 +120,8 @@ public record PlayerInput(boolean forward, boolean backward, boolean left, boole
 
 	/** This action with a different view rotation. */
 	public PlayerInput looking(final float yRot, final float xRot) {
-		return new PlayerInput(this.forward, this.backward, this.left, this.right, this.jump, this.sneak,
-		    this.sprint, yRot, xRot);
+		return new PlayerInput(
+		    this.forward, this.backward, this.left, this.right, this.jump, this.sneak, this.sprint, yRot, xRot);
 	}
 
 	/** Encodes the seven key flags in the packet bit order. */

@@ -11,7 +11,9 @@ import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.server.TickAuthority;
+
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /** Ordering and reuse contracts for the retained inside-block effect collector. */

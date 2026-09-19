@@ -8,8 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.tick.Scratch;
+
 import java.util.List;
 import java.util.Random;
+
 import org.junit.jupiter.api.Test;
 
 /**

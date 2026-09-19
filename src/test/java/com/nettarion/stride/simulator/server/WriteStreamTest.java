@@ -4,6 +4,7 @@ import static com.nettarion.stride.simulator.server.ServerTestWorlds.EXTRA;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.STONE;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.floor;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.region;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -19,7 +20,9 @@ import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.WriteLedger;
 import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.SnapshotView;
+
 import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 
 /** The write kinds with no test of their own: the block update, the damage event's flags, and damage attribution. */

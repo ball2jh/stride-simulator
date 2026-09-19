@@ -8,12 +8,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.nettarion.stride.simulator.tick.ClientTick;
 import com.nettarion.stride.simulator.world.FlatFloorView;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
 import org.junit.jupiter.api.Test;
 
 /**

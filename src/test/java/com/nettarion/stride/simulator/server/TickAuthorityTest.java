@@ -14,6 +14,7 @@ import com.nettarion.stride.simulator.tick.PlayerTick;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.FlatFloorView;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import org.junit.jupiter.api.Test;
 
 /** Authority binding keeps movement and damage on the same server transaction. */

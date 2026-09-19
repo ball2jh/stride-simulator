@@ -12,7 +12,9 @@ import com.nettarion.stride.simulator.HurtMotion;
 import com.nettarion.stride.simulator.HurtMotionWrite;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.ServerWriteTimeline;
+
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /** A root-package type tested here because its writes come from this package's server tick. */

@@ -1,6 +1,7 @@
 package com.nettarion.stride.simulator.geometry;
 
 import com.nettarion.stride.simulator.AABB;
+
 import java.util.Arrays;
 
 /**

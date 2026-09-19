@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.nettarion.stride.simulator.SharedFlag;
 import com.nettarion.stride.simulator.EntityDataWrite;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.HurtMotion;
@@ -16,11 +15,14 @@ import com.nettarion.stride.simulator.HurtMotionWrite;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.ServerWriteTimeline;
+import com.nettarion.stride.simulator.SharedFlag;
 import com.nettarion.stride.simulator.StaleServerWriteException;
 import com.nettarion.stride.simulator.StateDigest;
 import com.nettarion.stride.simulator.trace.StateEventTrace;
 import com.nettarion.stride.simulator.trace.StateField;
+
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 /** A root-package type tested here because its samples come from this package's entity tracker. */

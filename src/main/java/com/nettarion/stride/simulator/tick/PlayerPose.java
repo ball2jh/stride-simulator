@@ -2,6 +2,7 @@ package com.nettarion.stride.simulator.tick;
 
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.Set;
 
 /**

@@ -8,13 +8,13 @@ import static com.nettarion.stride.simulator.server.ServerTestWorlds.floorWorld;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.gliding;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.packet;
 import static com.nettarion.stride.simulator.server.ServerTestWorlds.wallWorld;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.nettarion.stride.simulator.SharedFlag;
 import com.nettarion.stride.simulator.EntityDataWrite;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.MovementPacket;
@@ -22,7 +22,10 @@ import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
+import com.nettarion.stride.simulator.SharedFlag;
+
 import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 
 /** The server's side of a glide: the start command, its own glide travel, and what it refuses. */

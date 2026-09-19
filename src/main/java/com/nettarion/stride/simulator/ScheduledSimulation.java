@@ -3,6 +3,7 @@ package com.nettarion.stride.simulator;
 import com.nettarion.stride.simulator.geometry.Mth;
 import com.nettarion.stride.simulator.server.ServerTick;
 import com.nettarion.stride.simulator.world.SnapshotView;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;

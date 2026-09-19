@@ -11,7 +11,9 @@ import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.Simulator;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.WriteLedger;
+
 import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 
 /**

@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 final class StateEventTraceTest {

@@ -3,6 +3,7 @@ package com.nettarion.stride.simulator;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 
 /** A ledger matches observed packets against confirmations by exact decoded value, on independent streams. */

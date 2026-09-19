@@ -21,6 +21,7 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
+
 import org.junit.jupiter.api.Test;
 
 final class SimulationCheckpointTest {
@@ -29,7 +30,8 @@ final class SimulationCheckpointTest {
 		player.placeAt(0.5, 0, 0.5);
 		player.onGround = true;
 		SimulationState boundary = new SimulationState(player, ServerPlayerState.atBoundary(player), 0);
-		return new ScheduledSimulation(boundary, SnapshotView.compile(TraceFixtures.flatFloorWorld()), Interaction.ALLOWED);
+		return new ScheduledSimulation(
+		    boundary, SnapshotView.compile(TraceFixtures.flatFloorWorld()), Interaction.ALLOWED);
 	}
 
 	@Test

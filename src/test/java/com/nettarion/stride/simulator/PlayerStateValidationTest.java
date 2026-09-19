@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.nettarion.stride.simulator.world.FlatFloorView;
+
 import org.junit.jupiter.api.Test;
 
 /** {@code requireValidForTransition} admits exactly the finite, consistent states inside the coordinate domain. */

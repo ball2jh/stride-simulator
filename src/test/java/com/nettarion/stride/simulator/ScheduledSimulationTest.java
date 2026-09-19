@@ -12,6 +12,7 @@ import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
+
 import org.junit.jupiter.api.Test;
 
 /**

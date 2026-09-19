@@ -2,6 +2,7 @@ package com.nettarion.stride.simulator;
 
 import com.nettarion.stride.simulator.server.ServerTick;
 import com.nettarion.stride.simulator.world.SnapshotView;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;

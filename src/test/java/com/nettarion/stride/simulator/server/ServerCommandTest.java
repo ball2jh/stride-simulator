@@ -17,6 +17,7 @@ import com.nettarion.stride.simulator.world.BlockEntry;
 import com.nettarion.stride.simulator.world.OutsidePolicy;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
+
 import org.junit.jupiter.api.Test;
 
 /** The listener's non-movement packets: the end-of-tick marker, input, sprint command and teleport acknowledgement. */

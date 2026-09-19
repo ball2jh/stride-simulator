@@ -29,11 +29,13 @@ import com.nettarion.stride.simulator.world.ShapeBox;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import com.nettarion.stride.simulator.world.WorldView;
+
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+
 import org.junit.jupiter.api.Test;
 
 /**
@@ -253,8 +255,7 @@ final class ServerDamageTest {
 		effects.collectFireContact(1.0F);
 		effects.applyAndClear(burned);
 		assertEquals(160, burned.remainingFireTicks);
-		assertEquals(
-		    List.of(HurtCause.IN_FIRE), authority.damage().dealt().stream().map(DamageEvent::cause).toList());
+		assertEquals(List.of(HurtCause.IN_FIRE), authority.damage().dealt().stream().map(DamageEvent::cause).toList());
 		assertEquals(19.0F, burned.health);
 	}
 
