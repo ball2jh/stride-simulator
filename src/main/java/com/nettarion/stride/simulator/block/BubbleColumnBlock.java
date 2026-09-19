@@ -18,7 +18,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  * cell above is asked for a collision shape and a fluid, as vanilla asks for
  * the above state's context-free collision shape and fluid state.
  */
-public final class BubbleColumnBlock extends BlockBehaviour {
+public final class BubbleColumnBlock extends BlockBehavior {
 	/** {@code drag = true}: the column pulls the player down. */
 	public static final BubbleColumnBlock DRAG_DOWN = new BubbleColumnBlock(true);
 	/** {@code drag = false}: the column pushes the player up. */

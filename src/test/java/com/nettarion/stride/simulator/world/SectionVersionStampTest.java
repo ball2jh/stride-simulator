@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
  * An edit invalidates the section proofs it can reach, and no others .
  *
  * <p>Every test here carries the same negative control — the *global*
- * {@code collisionVersion} is asserted to have changed. That is the behaviour
+ * {@code collisionVersion} is asserted to have changed. That is the behavior
  * being replaced, so a passing locality assertion cannot be explained by the
  * edit having quietly done nothing.
  */
@@ -67,14 +67,14 @@ class SectionVersionStampTest {
 	void aDistantEditDoesNotDiscardAPoseFitProof() {
 		SnapshotView world = world();
 		PlayerState state = standingAt(1.5, 1.0, 1.5);
-		state.certifyPoseFit(world, PlayerState.Pose.STANDING);
-		assertTrue(state.hasPoseFitCertificate(world, PlayerState.Pose.STANDING));
+		state.cachePoseFit(world, PlayerState.Pose.STANDING);
+		assertTrue(state.hasCachedPoseFit(world, PlayerState.Pose.STANDING));
 
 		world.replaceCell(FAR, FAR, FAR, STONE);
 
 		assertNotEquals(
 		    0L, world.collisionVersion(), "control: a global-version certificate would have been discarded here");
-		assertTrue(state.hasPoseFitCertificate(world, PlayerState.Pose.STANDING),
+		assertTrue(state.hasCachedPoseFit(world, PlayerState.Pose.STANDING),
 		    "validation: a chunk arriving far away must not discard the player's local proof");
 	}
 
@@ -82,13 +82,13 @@ class SectionVersionStampTest {
 	void aNearEditStillDiscardsThePoseFitProof() {
 		SnapshotView world = world();
 		PlayerState state = standingAt(1.5, 1.0, 1.5);
-		state.certifyPoseFit(world, PlayerState.Pose.STANDING);
-		assertTrue(state.hasPoseFitCertificate(world, PlayerState.Pose.STANDING));
+		state.cachePoseFit(world, PlayerState.Pose.STANDING);
+		assertTrue(state.hasCachedPoseFit(world, PlayerState.Pose.STANDING));
 
 		// Inside the certified box's own span, so the proof is genuinely at risk.
 		world.replaceCell(1, 2, 1, STONE);
 
-		assertFalse(state.hasPoseFitCertificate(world, PlayerState.Pose.STANDING));
+		assertFalse(state.hasCachedPoseFit(world, PlayerState.Pose.STANDING));
 	}
 
 	@Test
@@ -128,10 +128,10 @@ class SectionVersionStampTest {
 	}
 
 	private static SnapshotView world() {
-		return new SnapshotView(new WorldSnapshot(0, 0, 0, SIZE, SIZE, SIZE, WorldSnapshot.OutsideRegion.SEALED,
-		    List.of(new WorldSnapshot.BlockEntry(AIR, "air", 0.6F, 1.0F, 1.0F, List.of()),
-		        new WorldSnapshot.BlockEntry(
-		            STONE, "stone", 0.6F, 1.0F, 1.0F, List.of(new WorldSnapshot.ShapeBox(0, 0, 0, 1, 1, 1)))),
+		return new SnapshotView(new WorldSnapshot(0, 0, 0, SIZE, SIZE, SIZE, OutsidePolicy.SEALED,
+		    List.of(new BlockEntry(AIR, "air", 0.6F, 1.0F, 1.0F, List.of()),
+		        new BlockEntry(
+		            STONE, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0, 0, 0, 1, 1, 1)))),
 		    new int[SIZE * SIZE * SIZE]));
 	}
 }

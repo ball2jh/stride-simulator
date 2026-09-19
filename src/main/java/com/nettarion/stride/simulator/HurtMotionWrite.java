@@ -22,14 +22,14 @@ public record HurtMotionWrite(int actionIndex, HurtMotion event) implements Serv
 	/** Schedule an event against the plan from which it was predicted. */
 	public static HurtMotionWrite original(final HurtMotion event) {
 		Objects.requireNonNull(event, "event");
-		return new HurtMotionWrite(event.writeAfterTick(), event);
+		return new HurtMotionWrite(event.writeAfterAction(), event);
 	}
 
 	/** Apply the write when this completed action is its delivery boundary. */
 	@Override
 	public void applyAfterAction(final int completedAction, final PlayerState state) {
 		if (completedAction == this.actionIndex) {
-			this.event.applyAfterTick(this.event.writeAfterTick(), state);
+			this.event.applyAfterTick(this.event.writeAfterAction(), state);
 		}
 	}
 

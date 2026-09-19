@@ -19,37 +19,37 @@ import org.junit.jupiter.api.Test;
  * losing the facts its cells carry.
  */
 final class SectionSharingTest {
-	private static final WorldSnapshot.BlockEntry AIR = WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build();
-	private static final WorldSnapshot.BlockEntry STONE =
-	    WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build();
-	private static final WorldSnapshot.BlockEntry FENCE =
-	    WorldSnapshot.BlockEntry.builder(3, "minecraft:oak_fence")
-	        .boxes(List.of(new WorldSnapshot.ShapeBox(0.375, 0.0, 0.375, 0.625, 1.5, 0.625)))
+	private static final BlockEntry AIR = BlockEntry.builder(0, "minecraft:air").build();
+	private static final BlockEntry STONE =
+	    BlockEntry.builder(1, "minecraft:stone").fullCube().build();
+	private static final BlockEntry FENCE =
+	    BlockEntry.builder(3, "minecraft:oak_fence")
+	        .boxes(List.of(new ShapeBox(0.375, 0.0, 0.375, 0.625, 1.5, 0.625)))
 	        .build();
-	private static final WorldSnapshot.FluidEntry WATER = new WorldSnapshot.FluidEntry(
-	    1, "minecraft:water", WorldSnapshot.FluidKind.WATER, 8.0 / 9.0, 0.0, 0.0, 0.0, true);
+	private static final FluidEntry WATER = new FluidEntry(
+	    1, "minecraft:water", FluidKind.WATER, 8.0 / 9.0, 0.0, 0.0, 0.0, true);
 
 	@Test
 	void changingOutsidePolicySharesSectionsAndPalettesAndKeepsMissingAndFluidFacts() {
-		WorldSnapshot part = WorldSnapshot.builder(WorldSnapshot.OutsideRegion.SEALED, -16, 0, 0, 16, 16, 16)
+		WorldSnapshot part = WorldSnapshot.builder(OutsidePolicy.SEALED, -16, 0, 0, 16, 16, 16)
 		                         .palette(AIR, STONE)
-		                         .fluidPalette(WorldSnapshot.FluidEntry.EMPTY, WATER)
+		                         .fluidPalette(FluidEntry.EMPTY, WATER)
 		                         .set(-16, 1, 2, 1)
 		                         .setFluid(-15, 1, 2, 1)
 		                         .build();
 		WorldSnapshot source =
-		    WorldSnapshot.compose(-16, 0, 0, 32, 16, 16, WorldSnapshot.OutsideRegion.SEALED, List.of(part));
-		WorldSnapshot changed = source.withOutside(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING);
+		    WorldSnapshot.compose(-16, 0, 0, 32, 16, 16, OutsidePolicy.SEALED, List.of(part));
+		WorldSnapshot changed = source.withOutside(OutsidePolicy.REFUSING);
 		assertNotSame(source, changed);
 		assertSame(source.sections(), changed.sections());
 		assertSame(source.grid(), changed.grid());
 		assertSame(source.palette(), changed.palette());
 		assertSame(source.fluidPalette(), changed.fluidPalette());
-		assertSame(source, source.withOutside(WorldSnapshot.OutsideRegion.SEALED));
-		assertSame(changed, changed.withOutside(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING));
+		assertSame(source, source.withOutside(OutsidePolicy.SEALED));
+		assertSame(changed, changed.withOutside(OutsidePolicy.REFUSING));
 		assertThrows(NullPointerException.class, () -> source.withOutside(null));
-		assertEquals(WorldSnapshot.OutsideRegion.SEALED, source.outside());
-		assertEquals(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, changed.outside());
+		assertEquals(OutsidePolicy.SEALED, source.outside());
+		assertEquals(OutsidePolicy.REFUSING, changed.outside());
 		assertTrue(changed.hasFluids());
 		assertTrue(changed.hasMissingSections());
 		assertTrue(changed.isMissingAt(0, 1, 2));
@@ -62,7 +62,7 @@ final class SectionSharingTest {
 		assertEquals(source.sizeY(), changed.sizeY());
 		assertEquals(source.sizeZ(), changed.sizeZ());
 		WorldSnapshot cropped =
-		    source.crop(-16, 0, 0, 16, 16, 16).withOutside(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING);
+		    source.crop(-16, 0, 0, 16, 16, 16).withOutside(OutsidePolicy.REFUSING);
 		assertSame(part.sections()[0], cropped.sections()[0]);
 		assertFalse(cropped.hasMissingSections());
 		assertTrue(cropped.hasFluids());
@@ -80,9 +80,9 @@ final class SectionSharingTest {
 			sections[i] = section(palette, i * 16, random, air, stone);
 		}
 		WorldSnapshot first = WorldSnapshot.compose(0, 0, 0, 48, 16, 16,
-		    WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(sections[0], sections[1], sections[2]));
+		    OutsidePolicy.REFUSING, List.of(sections[0], sections[1], sections[2]));
 		WorldSnapshot next = WorldSnapshot.compose(16, 0, 0, 48, 16, 16,
-		    WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(sections[1], sections[2], sections[3]));
+		    OutsidePolicy.REFUSING, List.of(sections[1], sections[2], sections[3]));
 		// The two sections both corridors hold are the same objects in both.
 		assertSame(first.sections()[1], next.sections()[0]);
 		assertSame(first.sections()[2], next.sections()[1]);
@@ -99,7 +99,7 @@ final class SectionSharingTest {
 	@Test
 	void aUniformSectionHoldsNoPlaneAndIsFoundByEveryReadAsIfItDid() {
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, 0, 0, 0, 32, 16, 16)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, 0, 0, 0, 32, 16, 16)
 		        .palette(AIR, STONE);
 		for (int x = 0; x < 16; x++)
 			for (int y = 0; y < 16; y++)
@@ -133,9 +133,9 @@ final class SectionSharingTest {
 	void aPartOnAnotherPaletteIsReindexedAndKeepsItsFacts() {
 		Random random = new Random(9L);
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, 0, 0, 0, 16, 16, 16)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, 0, 0, 0, 16, 16, 16)
 		        .palette(STONE, AIR, FENCE)
-		        .fluidPalette(WorldSnapshot.FluidEntry.EMPTY, WATER);
+		        .fluidPalette(FluidEntry.EMPTY, WATER);
 		for (int x = 0; x < 16; x++)
 			for (int z = 0; z < 16; z++) {
 				int ground = 4 + random.nextInt(4);
@@ -148,11 +148,11 @@ final class SectionSharingTest {
 			}
 		WorldSnapshot own = builder.build();
 		WorldSnapshot shared =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, 16, 0, 0, 16, 16, 16)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, 16, 0, 0, 16, 16, 16)
 		        .palette(AIR, STONE, FENCE)
 		        .build();
 		WorldSnapshot composed = WorldSnapshot.compose(
-		    0, 0, 0, 32, 16, 16, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(shared, own));
+		    0, 0, 0, 32, 16, 16, OutsidePolicy.REFUSING, List.of(shared, own));
 		Section reindexed = composed.sections()[0];
 		assertNotSame(own.sections()[0], reindexed);
 		assertSame(own.sections()[0].fineProperties, reindexed.fineProperties);
@@ -171,7 +171,7 @@ final class SectionSharingTest {
 	void anUnalignedRegionPadsItsEdgeSectionsAndReadsExactlyInsideItsBounds() {
 		Random random = new Random(2L);
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -5, 3, 7, 21, 9, 13)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -5, 3, 7, 21, 9, 13)
 		        .palette(AIR, STONE);
 		int[] expected = new int[21 * 9 * 13];
 		for (int x = -5; x < 16; x++)
@@ -211,7 +211,7 @@ final class SectionSharingTest {
 				}
 				if (random.nextInt(5) == 0) fluids[Section.index(x, ground, z)] = 1;
 			}
-		return WorldSnapshot.owning(originX, 0, 0, 16, 16, 16, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING,
+		return WorldSnapshot.owning(originX, 0, 0, 16, 16, 16, OutsidePolicy.REFUSING,
 		    palette.blocks(), cells, palette.fluids(), fluids);
 	}
 }

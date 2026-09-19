@@ -13,18 +13,18 @@
 #	what body does this block's entityInside or stepOn run for a player on the
 #	server beyond the movement path — a hit, an effect, a teleport, a freeze.
 #	The capture writes it into the block's contact fact and the simulator's
-#	server tick runs a MODELLED body or refuses an UNMODELLED one, so the
+#	server tick runs a MODELED body or refuses an UNMODELED one, so the
 #	column must mean this hook family and nothing wider. A fallOn body is the
 #	landing fact's. A fluid's body (WaterFluid, LavaFluid) is the fluid entry's,
 #	resolved beside the block; LiquidBlock itself runs nothing on a player. A
 #	world change the hook schedules (a tilting leaf, a breaking egg, a lit ore)
 #	is not a body on the player. Reading lava's danger into LiquidBlock's row
-#	once made every captured water cell refuse as an unmodelled block contact
+#	once made every captured water cell refuse as an unmodeled block contact
 #	in the source project; that is the mistake this contract exists to prevent.
 #
 #	 NONE no such body, or one that writes nothing on a player
-#	 MODELLED the simulator's server tick runs it; WorldCapture.contactFor names the class
-#	 UNMODELLED a body the slice does not model; a visit refuses
+#	 MODELED the simulator's server tick runs it; WorldCapture.contactFor names the class
+#	 UNMODELED a body the slice does not model; a visit refuses
 #
 #	Committed, unlike the generated catalog: this is a list of Mojang symbol
 #	names recorded as committed conformance evidence, not derived Mojang data.
@@ -33,7 +33,7 @@
 #	ancestor is that ancestor's to classify, not each subclass's.
 #
 #	classes:
-#	 MODELLED the kernel implements it and executable evidence verifies it
+#	 MODELED the kernel implements it and executable evidence verifies it
 #	 GEOMETRY_ONLY the override only computes a shape; proved shape is a
 #	 pure function of the state id, so the shape palette already
 #	 carries it and no handler is needed
@@ -53,60 +53,60 @@ BedBlock	NO_MOVEMENT_EFFECT	NONE	fallOn only halves the fall distance passed to 
 BeetrootBlock	NO_MOVEMENT_EFFECT	NONE	CropBlock.entityInside destroys the crop for a Ravager under ServerLevel and mob griefing; no audited field and nothing that touches a player
 BellBlock	GEOMETRY_ONLY	NONE	shape only
 BigDripleafBlock	UNSUPPORTED	NONE	entityInside is gated on `!level.isClientSide()`, so the client hook is inert; the server write tilts the leaf, a world change under the player represented as SERVER_MUTABLE_SUPPORT, not a body on the player
-Block	MODELLED	NONE	the baseline: default coefficients, fallOn and stepOn
-BubbleColumnBlock	MODELLED	NONE	inside/above column callbacks in the swept traversal
+Block	MODELED	NONE	the baseline: default coefficients, fallOn and stepOn
+BubbleColumnBlock	MODELED	NONE	inside/above column callbacks in the swept traversal
 ButtonBlock	NO_MOVEMENT_EFFECT	NONE	entityInside is gated on !isClientSide and on arrow-activatable buttons, which stone is not; the button-trapdoor capture presses a stone button and agrees raw-bit
-CactusBlock	NO_MOVEMENT_EFFECT	MODELLED	entityInside only calls entity.hurt; damage is server surface and not in the audited vector
+CactusBlock	NO_MOVEMENT_EFFECT	MODELED	entityInside only calls entity.hurt; damage is server surface and not in the audited vector
 CalibratedSculkSensorBlock	NO_MOVEMENT_EFFECT	NONE	SculkSensorBlock.stepOn is ServerLevel-gated and only schedules a vibration; nothing is written on the player, and a warden a shrieker summons is a block actor
-CampfireBlock	NO_MOVEMENT_EFFECT	MODELLED	entityInside only calls entity.hurt, under LIT and LivingEntity
+CampfireBlock	NO_MOVEMENT_EFFECT	MODELED	entityInside only calls entity.hurt, under LIT and LivingEntity
 CarrotBlock	NO_MOVEMENT_EFFECT	NONE	Same inherited CropBlock.entityInside as BeetrootBlock
 ComposterBlock	GEOMETRY_ONLY	NONE	shape only
 CropBlock	NO_MOVEMENT_EFFECT	NONE	entityInside is gated on ServerLevel, Ravager and mob griefing ; unblocked once farmland could be captured, which is the dependency named
 DetectorRailBlock	NO_MOVEMENT_EFFECT	NONE	entityInside is gated on !level.isClientSide()
-EndGatewayBlock	UNSUPPORTED	UNMODELLED	entityInside teleports
-EndPortalBlock	UNSUPPORTED	UNMODELLED	entityInside teleports; also overrides the entity-inside shape
+EndGatewayBlock	UNSUPPORTED	UNMODELED	entityInside teleports
+EndPortalBlock	UNSUPPORTED	UNMODELED	entityInside teleports; also overrides the entity-inside shape
 EyeblossomBlock	NO_MOVEMENT_EFFECT	NONE	entityInside is gated on !isClientSide and on the entity being a Bee
 FarmlandBlock	NO_MOVEMENT_EFFECT	NONE	fallOn's turnToDirt is inside `level instanceof ServerLevel`, so the client hook is only super.fallOn. The mutation is a server write represented by a timed world event, not a movement hook; the 15/16 shape and isSuffocating(Blocks::always) are world facts
 FenceBlock	GEOMETRY_ONLY	NONE	CrossCollisionBlock.getCollisionShape returns a per-state shape taller than the outline — the 1.5-block collision that stops a player walking off a fence. Geometry the palette already carries
 FenceGateBlock	GEOMETRY_ONLY	NONE	shape only; open/closed is baked into the state
-FireBlock	NO_MOVEMENT_EFFECT	MODELLED	BaseFireBlock.entityInside schedules FIRE_IGNITE and hurt(inFire, fireDamage); nothing in the movement path and no collision box at all, so a plan walks through it and only the server notices. Inherited, which is why the gate never saw it (2026-08-13)
+FireBlock	NO_MOVEMENT_EFFECT	MODELED	BaseFireBlock.entityInside schedules FIRE_IGNITE and hurt(inFire, fireDamage); nothing in the movement path and no collision box at all, so a plan walks through it and only the server notices. Inherited, which is why the gate never saw it (2026-08-13)
 FrogspawnBlock	NO_MOVEMENT_EFFECT	NONE	entityInside is gated on the entity being a FALLING_BLOCK
 GrindstoneBlock	GEOMETRY_ONLY	NONE	shape only
 HayBlock	NO_MOVEMENT_EFFECT	NONE	fallOn only lowers the damage modifier passed to causeFallDamage
-HoneyBlock	MODELLED	NONE	entityInside's slide clamps descent to getNewDeltaY(-0.05) and resets fall distance inside a contact band one sixteenth wide; the advancement is ServerPlayer-gated, and particles and sounds only consume level.getRandom(). Verified by honey-slide
+HoneyBlock	MODELED	NONE	entityInside's slide clamps descent to getNewDeltaY(-0.05) and resets fall distance inside a contact band one sixteenth wide; the advancement is ServerPlayer-gated, and particles and sounds only consume level.getRandom(). Verified by honey-slide
 HopperBlock	NO_MOVEMENT_EFFECT	NONE	entityInside delegates to HopperBlockEntity, gated on the entity being an ItemEntity
 IronBarsBlock	GEOMETRY_ONLY	NONE	Same inherited CrossCollisionBlock.getCollisionShape
-LavaCauldronBlock	MODELLED	MODELLED	entityInside collects CLEAR_FREEZE; the kernel reproduces FILLED_SHAPE contact and collector ordering while damage and fire remain outside the movement state
-LayeredCauldronBlock	NO_MOVEMENT_EFFECT	UNMODELLED	Legacy records refuse server contact. Source-catalog admission supplies level-specific inside shapes and successors for ScheduledSimulation; mutation requires branch-owned worlds, explicit permission and an admitted notification closure.
+LavaCauldronBlock	MODELED	MODELED	entityInside collects CLEAR_FREEZE; the kernel reproduces FILLED_SHAPE contact and collector ordering while damage and fire remain outside the movement state
+LayeredCauldronBlock	NO_MOVEMENT_EFFECT	UNMODELED	Legacy records refuse server contact. Source-catalog admission supplies level-specific inside shapes and successors for ScheduledSimulation; mutation requires branch-owned worlds, explicit permission and an admitted notification closure.
 LecternBlock	GEOMETRY_ONLY	NONE	shape only
 LilyPadBlock	NO_MOVEMENT_EFFECT	NONE	entityInside is gated on ServerLevel and the entity being an AbstractBoat
-LiquidBlock	MODELLED	NONE	water and lava as travel modes; LiquidBlock has no player-affecting entityInside, and WaterFluid.entityInside (extinguish) and LavaFluid.entityInside (clear-freeze, lava contact) are the fluid entry's, captured and simulated beside the block
-MagmaBlock	NO_MOVEMENT_EFFECT	MODELLED	stepOn only calls entity.hurt(hotFloor); the bubble-columns capture contains magma and agrees raw-bit across live, headless, and pure producers
+LiquidBlock	MODELED	NONE	water and lava as travel modes; LiquidBlock has no player-affecting entityInside, and WaterFluid.entityInside (extinguish) and LavaFluid.entityInside (clear-freeze, lava contact) are the fluid entry's, captured and simulated beside the block
+MagmaBlock	NO_MOVEMENT_EFFECT	MODELED	stepOn only calls entity.hurt(hotFloor); the bubble-columns capture contains magma and agrees raw-bit across live, headless, and pure producers
 MossyCarpetBlock	GEOMETRY_ONLY	NONE	shape only
 MovingPistonBlock	UNSUPPORTED	NONE	its shape comes from a block entity, so the state id does not determine it; the block-entity displacement runs after LocalPlayer.tick, outside the tick, and is a block actor; neither hook writes a player
 MudBlock	GEOMETRY_ONLY	NONE	shape only; its speed factor is in the coefficient palette
-NetherPortalBlock	UNSUPPORTED	UNMODELLED	entityInside starts a dimension change
+NetherPortalBlock	UNSUPPORTED	UNMODELED	entityInside starts a dimension change
 PitcherCropBlock	NO_MOVEMENT_EFFECT	NONE	entityInside is gated on ServerLevel, Ravager and mob griefing ; unblocked with CropBlock by the same dependency
 PointedDripstoneBlock	NO_MOVEMENT_EFFECT	NONE	fallOn on an upward tip calls causeFallDamage(fallDistance + 2.5, 2.0F, stalagmite) and nothing else: a landing body, the landing fact's (STALAGMITE), not a contact one; the breaking is a world change
 PotatoBlock	NO_MOVEMENT_EFFECT	NONE	Same inherited CropBlock.entityInside as BeetrootBlock
-PowderSnowBlock	MODELLED	MODELLED	bootless slice only, including the falling entity-inside shape above fallDistance 2.5; entityInside's FREEZE and the server's EXTINGUISH after it run through the powder collision fact's behaviour, with the freeze tail of aiStep in tick/Freezing, so the contact fact is NONE as for LiquidBlock; the melt under a burning player is a world write and refuses
+PowderSnowBlock	MODELED	MODELED	bootless slice only, including the falling entity-inside shape above fallDistance 2.5; entityInside's FREEZE and the server's EXTINGUISH after it run through the powder collision fact's behavior, with the freeze tail of aiStep in tick/Freezing, so the contact fact is NONE as for LiquidBlock; the melt under a burning player is a world write and refuses
 PressurePlateBlock	NO_MOVEMENT_EFFECT	NONE	BasePressurePlateBlock.entityInside is gated on !level.isClientSide and only sets the redstone signal; the plate carries no collision box, which is why a checkpoint plate is stood on rather than in
 RedStoneOreBlock	NO_MOVEMENT_EFFECT	NONE	stepOn lights the block on both sides, and LIT changes light only -- same shape, friction, speed and jump
-ScaffoldingBlock	MODELLED	NONE	the only collision-context-sensitive block
+ScaffoldingBlock	MODELED	NONE	the only collision-context-sensitive block
 SculkSensorBlock	NO_MOVEMENT_EFFECT	NONE	stepOn is gated on !isClientSide and four further server-only conditions and only schedules a vibration; nothing is written on the player
-SculkShriekerBlock	NO_MOVEMENT_EFFECT	UNMODELLED	stepOn is gated on ServerLevel and shrieks: Darkness on every player within forty blocks, a server effect on the player the slice does not model; the warden it may summon is a block actor
-SlimeBlock	MODELLED	NONE	the bounce is Properties.bounceRestitution(1.0F) through restituteMovementAfterCollisions, not a hook; stepOn's horizontal damping is the only override that moves a client player, and fallOn is damage-only
+SculkShriekerBlock	NO_MOVEMENT_EFFECT	UNMODELED	stepOn is gated on ServerLevel and shrieks: Darkness on every player within forty blocks, a server effect on the player the slice does not model; the warden it may summon is a block actor
+SlimeBlock	MODELED	NONE	the bounce is Properties.bounceRestitution(1.0F) through restituteMovementAfterCollisions, not a hook; stepOn's horizontal damping is the only override that moves a client player, and fallOn is damage-only
 SnowLayerBlock	GEOMETRY_ONLY	NONE	shape only; layer height is a state property
-SoulFireBlock	NO_MOVEMENT_EFFECT	MODELLED	Same inherited BaseFireBlock.entityInside; minecraft:soul_fire was recorded SAFE alongside fire
+SoulFireBlock	NO_MOVEMENT_EFFECT	MODELED	Same inherited BaseFireBlock.entityInside; minecraft:soul_fire was recorded SAFE alongside fire
 SoulSandBlock	GEOMETRY_ONLY	NONE	shape only; its speed factor is in the coefficient palette
 StainedGlassPaneBlock	GEOMETRY_ONLY	NONE	Same inherited CrossCollisionBlock.getCollisionShape
-SweetBerryBushBlock	MODELLED	MODELLED	entityInside is makeStuckInBlock(0.8F, 0.75, 0.8F) for a client player; the hurt beside it is ServerLevel-gated
+SweetBerryBushBlock	MODELED	MODELED	entityInside is makeStuckInBlock(0.8F, 0.75, 0.8F) for a client player; the hurt beside it is ServerLevel-gated
 TorchflowerCropBlock	NO_MOVEMENT_EFFECT	NONE	Same inherited CropBlock.entityInside as BeetrootBlock
 TripWireBlock	NO_MOVEMENT_EFFECT	NONE	entityInside is gated on !isClientSide; the entity-inside shape only decides whether an inert hook runs
 TurtleEggBlock	UNSUPPORTED	NONE	both hooks reach destroyEgg, which is gated on `level instanceof ServerLevel`, so the client hook is bare super; the breaking is a world change under the player, the reason the class is UNSUPPORTED, not a body on the player
 WallBlock	GEOMETRY_ONLY	NONE	shape only; connections are baked into the state
 WallHangingSignBlock	GEOMETRY_ONLY	NONE	shape only
 WeatheringCopperBarsBlock	GEOMETRY_ONLY	NONE	Same inherited CrossCollisionBlock.getCollisionShape
-WebBlock	MODELLED	NONE	entityInside is makeStuckInBlock(0.25, 0.05F, 0.25); the WEAVING variant needs an effect input the audited state does not carry, and stuck-blocks asserts its absence
+WebBlock	MODELED	NONE	entityInside is makeStuckInBlock(0.25, 0.05F, 0.25); the WEAVING variant needs an effect input the audited state does not carry, and stuck-blocks asserts its absence
 WeightedPressurePlateBlock	NO_MOVEMENT_EFFECT	NONE	Same inherited BasePressurePlateBlock.entityInside, ServerLevel-gated and redstone only. Parkour Spiral uses it as a checkpoint, so route planning depends on this classification
-WitherRoseBlock	NO_MOVEMENT_EFFECT	UNMODELLED	entityInside is gated on ServerLevel
+WitherRoseBlock	NO_MOVEMENT_EFFECT	UNMODELED	entityInside is gated on ServerLevel

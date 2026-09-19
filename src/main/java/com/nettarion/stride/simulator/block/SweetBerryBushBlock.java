@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.block;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.ServerPlayerState;
@@ -17,7 +17,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  * whose age the capture did not record still holds the client, since the
  * stuck vector is age-independent, and refuses on the server's visit.
  */
-final class SweetBerryBushBlock extends BlockBehaviour {
+final class SweetBerryBushBlock extends BlockBehavior {
 	static final SweetBerryBushBlock INSTANCE = new SweetBerryBushBlock(Age.GROWN);
 	static final SweetBerryBushBlock YOUNG = new SweetBerryBushBlock(Age.YOUNG);
 	static final SweetBerryBushBlock UNKNOWN_AGE = new SweetBerryBushBlock(Age.UNKNOWN);
@@ -58,7 +58,7 @@ final class SweetBerryBushBlock extends BlockBehaviour {
 	    final WorldView world, final Scratch scratch) {
 		makeStuckInBlock(state, (double) 0.8F, 0.75, (double) 0.8F, scratch);
 		if (scratch.authority.isServer() && this.age == Age.UNKNOWN) {
-			throw UnimplementedMechanicException.deferred(Refusal.UNDECLARED_BLOCK_STATE,
+			throw UnimplementedMechanicException.deferred(RefusalCause.UNDECLARED_BLOCK_STATE,
 			    ()
 			        -> "the server's copy touched a sweet berry bush at " + x + "," + y + "," + z
 			        + " whose age the capture did not record");

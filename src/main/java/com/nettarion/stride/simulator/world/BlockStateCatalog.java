@@ -1,8 +1,8 @@
 package com.nettarion.stride.simulator.world;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 import com.nettarion.stride.simulator.block.LayeredCauldronBlock;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -16,7 +16,7 @@ import java.util.Objects;
  *
  * <p>The supplying adapter owns extraction from the pinned registry and loaded tags. This
  * table verifies every portable block fact, including ordered collision boxes; it does not
- * certify fluid flow, neighbours, datapacks or a live server's permissions. Context-dependent
+ * certify fluid flow, neighbors, datapacks or a live server's permissions. Context-dependent
  * shapes need an explicitly extracted matching variant. No catalog lookup runs during movement.
  */
 public final class BlockStateCatalog {
@@ -36,38 +36,38 @@ public final class BlockStateCatalog {
 	}
 
 	private final String minecraftVersion;
-	private final Map<Integer, List<WorldSnapshot.BlockEntry>> entries;
+	private final Map<Integer, List<BlockEntry>> entries;
 	private final Map<Integer, Cauldron> cauldrons;
 	private final Map<Integer, InsideShape> insideShapes;
 	/** Source entity-inside shape, including the canonical full-cube identity shortcut. */
-	public record InsideShape(List<WorldSnapshot.ShapeBox> boxes, boolean canonicalFull) {
+	public record InsideShape(List<ShapeBox> boxes, boolean canonicalFull) {
 		public InsideShape {
 			boxes = List.copyOf(boxes);
 		}
 	}
 
 	/** Source facts for a layered cauldron's contents shape and extinguishing successor. */
-	public record Cauldron(int blockStateId, int successorStateId, List<WorldSnapshot.ShapeBox> insideBoxes) {
+	public record Cauldron(int blockStateId, int successorStateId, List<ShapeBox> insideBoxes) {
 		public Cauldron {
 			insideBoxes = List.copyOf(insideBoxes);
 		}
 	}
 
 	/** Build from source-extracted records; callers must not derive these from the input being verified. */
-	public BlockStateCatalog(final String minecraftVersion, final Collection<WorldSnapshot.BlockEntry> entries,
+	public BlockStateCatalog(final String minecraftVersion, final Collection<BlockEntry> entries,
 	    final Collection<Cauldron> cauldrons) {
 		this(minecraftVersion, entries, cauldrons, Map.of());
 	}
 
 	/** Build with source inside shapes, preserving inert visits that advance collector steps. */
-	public BlockStateCatalog(final String minecraftVersion, final Collection<WorldSnapshot.BlockEntry> entries,
+	public BlockStateCatalog(final String minecraftVersion, final Collection<BlockEntry> entries,
 	    final Collection<Cauldron> cauldrons, final Map<Integer, InsideShape> insideShapes) {
 		this.insideShapes = Map.copyOf(insideShapes);
 		if (!cauldrons.isEmpty() && this.insideShapes.isEmpty())
 			throw new IllegalArgumentException(
 			    "cauldron mutations require source inside shapes for collector ordering");
 		this.minecraftVersion = Objects.requireNonNull(minecraftVersion);
-		Map<Integer, List<WorldSnapshot.BlockEntry>> variants = new HashMap<>();
+		Map<Integer, List<BlockEntry>> variants = new HashMap<>();
 		for (var entry : entries)
 			variants.computeIfAbsent(entry.blockStateId(), ignored -> new ArrayList<>()).add(entry);
 		variants.replaceAll((id, values) -> List.copyOf(values));
@@ -84,7 +84,7 @@ public final class BlockStateCatalog {
 	}
 
 	/** Immutable extracted records for portable source evidence. */
-	public List<WorldSnapshot.BlockEntry> entries() {
+	public List<BlockEntry> entries() {
 		return this.entries.entrySet()
 		    .stream()
 		    .sorted(Map.Entry.comparingByKey())
@@ -114,7 +114,7 @@ public final class BlockStateCatalog {
 			throw new IllegalArgumentException("block catalog version mismatch");
 		for (var entry : snapshot.palette()) {
 			if (!this.entries.getOrDefault(entry.blockStateId(), List.of()).contains(entry))
-				throw UnimplementedMechanicException.deferred(Refusal.INADMISSIBLE_BLOCK_FACTS,
+				throw UnimplementedMechanicException.deferred(RefusalCause.INADMISSIBLE_BLOCK_FACTS,
 				    ()
 				        -> "block facts differ from " + this.minecraftVersion + " source catalog for state "
 				        + entry.blockStateId() + " (" + entry.name() + ")");
@@ -135,27 +135,27 @@ public final class BlockStateCatalog {
 		return snapshot.withPalette(palette);
 	}
 
-	void installBehaviours(final SnapshotView view, final WorldSnapshot snapshot, final BlockBehaviour[] behaviours) {
+	void installBehaviors(final SnapshotView view, final WorldSnapshot snapshot, final BlockBehavior[] behaviors) {
 		if (!this.insideShapes.isEmpty()) {
-			view.sourceInsideShapes = new double[behaviours.length][];
-			view.sourceInsideFull = new boolean[behaviours.length];
-			for (int i = 0; i < behaviours.length; i++) {
+			view.sourceInsideShapes = new double[behaviors.length][];
+			view.sourceInsideFull = new boolean[behaviors.length];
+			for (int i = 0; i < behaviors.length; i++) {
 				InsideShape shape = this.insideShapes.get(snapshot.palette().get(i).blockStateId());
 				if (shape == null) continue;
 				view.sourceInsideShapes[i] = LayeredCauldronBlock.compileShape(shape.boxes());
 				view.sourceInsideFull[i] = shape.canonicalFull();
 			}
 		}
-		for (int i = 0; i < behaviours.length; i++) {
+		for (int i = 0; i < behaviors.length; i++) {
 			Cauldron cauldron = this.cauldrons.get(snapshot.palette().get(i).blockStateId());
 			if (cauldron == null) continue;
 			int successor = -1;
-			for (int j = 0; j < behaviours.length; j++)
+			for (int j = 0; j < behaviors.length; j++)
 				if (snapshot.palette().get(j).blockStateId() == cauldron.successorStateId()) {
 					successor = j;
 					break;
 				}
-			behaviours[i] = new LayeredCauldronBlock(successor, cauldron.insideBoxes());
+			behaviors[i] = new LayeredCauldronBlock(successor, cauldron.insideBoxes());
 		}
 	}
 }

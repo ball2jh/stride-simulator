@@ -157,7 +157,7 @@ public final class ScheduledSimulation {
 	public void tickClient(final PlayerInput input) {
 		if (this.client.mayfly)
 			throw new UnimplementedMechanicException(
-			    Refusal.UNMODELLED_SCHEDULE, "scheduled creative ability packets are not modelled");
+			    RefusalCause.UNMODELED_SCHEDULE, "scheduled creative ability packets are not modeled");
 		MovementPacket form = this.transition.tickClient(this.client, this.publisher, input, this.clientWorld);
 		if (this.transition.startedFallFlying()) this.serverbound.add(new Glide());
 		if (this.publisher.inputChanged) this.serverbound.add(new Input(input));

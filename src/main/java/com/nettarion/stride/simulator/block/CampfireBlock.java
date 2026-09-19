@@ -11,7 +11,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  * {@link ServerTick} from the visit the server's copy logs. An unlit
  * campfire has no body and is captured as none.
  */
-final class CampfireBlock extends BlockBehaviour {
+final class CampfireBlock extends BlockBehavior {
 	static final CampfireBlock CAMPFIRE = new CampfireBlock(false);
 	static final CampfireBlock SOUL_CAMPFIRE = new CampfireBlock(true);
 

@@ -1,9 +1,9 @@
 package com.nettarion.stride.simulator.world;
 
 import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.geometry.Mth;
 
@@ -21,7 +21,7 @@ import com.nettarion.stride.simulator.geometry.Mth;
  *
  * <p>A default answer means the implementation has proved that fact absent in
  * its admitted region. It must not translate unavailable cells, unknown block
- * state, or unmodelled dynamic context into a neutral answer. Such a
+ * state, or unmodeled dynamic context into a neutral answer. Such a
  * transition is refused with {@link UnimplementedMechanicException}.
  */
 public interface WorldView {
@@ -91,7 +91,7 @@ public interface WorldView {
 	 * The client-visible bodies are {@link InsideEffect} and {@link StepOn};
 	 * this is what only the server's copy sees. A cell with a body the slice
 	 * does not model refuses on contact rather than passing as inert, which
-	 * is how an unmodelled hazard fails closed inside the tick.
+	 * is how an unmodeled hazard fails closed inside the tick.
 	 */
 	enum Contact {
 		NONE,
@@ -112,7 +112,7 @@ public interface WorldView {
 		/** {@code LavaCauldronBlock}: clear freeze, lava ignition, four points. */
 		LAVA_CAULDRON,
 		/** A body the slice does not model; a visit refuses. */
-		UNMODELLED,
+		UNMODELED,
 		/** A capture that predates this fact for a body that depends on block state; a visit refuses. */
 		UNKNOWN
 	}
@@ -139,7 +139,7 @@ public interface WorldView {
 		/** {@code PowderSnowBlock}: a sound and no hit. */
 		POWDER_SNOW,
 		/** A body the slice does not model; a landing refuses. */
-		UNMODELLED,
+		UNMODELED,
 		/** A capture that predates this fact for a body that depends on block state; a landing refuses. */
 		UNKNOWN
 	}
@@ -228,7 +228,7 @@ public interface WorldView {
 	 */
 	default void fluidAt(final int x, final int y, final int z, final FluidSample target) {
 		throw UnimplementedMechanicException.deferred(
-		    Refusal.UNDECLARED_WORLD_FACT, () -> "this world cannot resolve fluid at " + x + "," + y + "," + z);
+		    RefusalCause.UNDECLARED_WORLD_FACT, () -> "this world cannot resolve fluid at " + x + "," + y + "," + z);
 	}
 
 	/** Frozen BubbleColumnBlock direction for this block-state cell. */
@@ -349,7 +349,7 @@ public interface WorldView {
 		if (probe.size() == 0) {
 			return false;
 		}
-		throw UnimplementedMechanicException.deferred(Refusal.UNDECLARED_WORLD_FACT,
+		throw UnimplementedMechanicException.deferred(RefusalCause.UNDECLARED_WORLD_FACT,
 		    ()
 		        -> "this world cannot resolve suffocation for the collision it has at " + cellX + "," + cellZ + " over "
 		        + boundingBoxMinY + ".." + boundingBoxMaxY);
@@ -407,7 +407,7 @@ public interface WorldView {
 	    final double maxY, final double maxZ, final double atX, final double atY, final double atZ,
 	    final SupportCell out) {
 		throw new UnimplementedMechanicException(
-		    Refusal.UNDECLARED_WORLD_FACT, "this world cannot resolve the supporting block");
+		    RefusalCause.UNDECLARED_WORLD_FACT, "this world cannot resolve the supporting block");
 	}
 
 	/** Player-context form for scaffolding and powder-snow support shapes. */
@@ -443,19 +443,19 @@ public interface WorldView {
 	default boolean resetsFallDistanceAlong(final double fromX, final double fromY, final double fromZ,
 	    final double toX, final double toY, final double toZ) {
 		throw new UnimplementedMechanicException(
-		    Refusal.UNDECLARED_WORLD_FACT, "this world cannot resolve a fall-distance-resetting segment");
+		    RefusalCause.UNDECLARED_WORLD_FACT, "this world cannot resolve a fall-distance-resetting segment");
 	}
 
 	/**
 	 * What the block at this cell does to a player who reaches it: the
-	 * {@link BlockBehaviour} resolved from the cell's palette entry, asked at
+	 * {@link BlockBehavior} resolved from the cell's palette entry, asked at
 	 * every cell the inside-block traversal visits, at the block underfoot,
 	 * and at the landed block. A compiled view resolves it once per entry.
-	 * There is no default: a view answers {@link BlockBehaviour#INERT} only
+	 * There is no default: a view answers {@link BlockBehavior#INERT} only
 	 * where it has proved the cell holds no body, and a body it cannot name
 	 * must refuse rather than pass as inert.
 	 */
-	BlockBehaviour behaviourAt(int x, int y, int z);
+	BlockBehavior behaviorAt(int x, int y, int z);
 
 	/**
 	 * {@code Entity.isInWall}'s test: whether a block state that suffocates
@@ -475,7 +475,7 @@ public interface WorldView {
 						int atX = x;
 						int atY = y;
 						int atZ = z;
-						throw UnimplementedMechanicException.deferred(Refusal.UNDECLARED_WORLD_FACT,
+						throw UnimplementedMechanicException.deferred(RefusalCause.UNDECLARED_WORLD_FACT,
 						    () -> "this world cannot resolve suffocation at " + atX + "," + atY + "," + atZ);
 					}
 				}
@@ -491,7 +491,7 @@ public interface WorldView {
 	 * on fire, which is when the answer changes the server's state.
 	 */
 	default boolean rainReaches(final int x, final int y, final int z, final int topY) {
-		throw UnimplementedMechanicException.deferred(Refusal.UNDECLARED_WORLD_FACT,
+		throw UnimplementedMechanicException.deferred(RefusalCause.UNDECLARED_WORLD_FACT,
 		    () -> "this world cannot resolve whether rain reaches " + x + "," + y + "," + z);
 	}
 
@@ -505,9 +505,9 @@ public interface WorldView {
 	}
 
 	/*
-	 * Per-span behaviour facts, one bit each. Validation: every whole-view flag above
+	 * Per-span behavior facts, one bit each. Validation: every whole-view flag above
 	 * is permanently true in a region big enough to route through, so the gates
-	 * built on them stop rejecting anything at realistic scale. These ask the
+	 * built on them stop rejecting anything at realiztic scale. These ask the
 	 * same questions of the closed cell span the guarded code would actually
 	 * scan, which is a handful of cells around the player rather than a million.
 	 */
@@ -529,7 +529,7 @@ public interface WorldView {
 	int PROPERTIES_ALL = (1 << 10) - 1 | PROPERTY_CONTACT;
 
 	/**
-	 * Which of {@code wanted}'s behaviours any cell of the closed cell span may
+	 * Which of {@code wanted}'s behaviors any cell of the closed cell span may
 	 * have. Never returns a bit outside {@code wanted}.
 	 *
 	 * <p>Callers ask for the bits they will act on rather than for all of them,
@@ -545,12 +545,12 @@ public interface WorldView {
 	 * justified it is replaced, and must never clear one speculatively.
 	 *
 	 * <p>The default is the whole-view answer, so a view that does not carry
-	 * section detail keeps exactly the behaviour it had before this existed.
+	 * section detail keeps exactly the behavior it had before this existed.
 	 *
 	 * <p>{@link #PROPERTY_INSIDE_EFFECT} is the one bit the default leaves clear,
 	 * and that is not an oversight. The other bits pair with an accessor that
 	 * fails closed off the end of what the view knows, so guessing them true only
-	 * costs a lookup; {@link #behaviourAt} instead *defaults* to the block with
+	 * costs a lookup; {@link #behaviorAt} instead *defaults* to the block with
 	 * no body, so a set bit would claim an effect the view has
 	 * already said it does not have. It would also be expensive rather than
 	 * merely wasteful: {@code applyEffectsFromBlocks} refuses movement past the
@@ -585,7 +585,7 @@ public interface WorldView {
 	}
 
 	/**
-	 * Which of {@code wanted}'s behaviours any cell of the whole view may have:
+	 * Which of {@code wanted}'s behaviors any cell of the whole view may have:
 	 * {@link #propertiesIn} over every cell, asked without a span.
 	 *
 	 * <p>Every span answer must be a subset of this one, so a caller asks it

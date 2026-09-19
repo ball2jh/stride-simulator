@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.nettarion.stride.simulator.FluidSample;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.tick.ClientTick;
@@ -22,9 +22,9 @@ import org.junit.jupiter.api.Test;
  * across, as the simulator refuses rather than guesses.
  */
 final class MissingSectionTest {
-	private static final WorldSnapshot.BlockEntry AIR = WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build();
-	private static final WorldSnapshot.BlockEntry STONE =
-	    WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build();
+	private static final BlockEntry AIR = BlockEntry.builder(0, "minecraft:air").build();
+	private static final BlockEntry STONE =
+	    BlockEntry.builder(1, "minecraft:stone").fullCube().build();
 
 	/** Two columns of two sections each, the far column's upper section absent. */
 	private static WorldSnapshot holed() {
@@ -33,7 +33,7 @@ final class MissingSectionTest {
 		int stone = palette.index(STONE);
 		List<WorldSnapshot> parts =
 		    List.of(section(palette, 0, 0, stone), section(palette, 0, 16, air), section(palette, 16, 0, stone));
-		return WorldSnapshot.compose(0, 0, 0, 32, 32, 16, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, parts);
+		return WorldSnapshot.compose(0, 0, 0, 32, 32, 16, OutsidePolicy.REFUSING, parts);
 	}
 
 	private static WorldSnapshot section(final SharedPalette palette, final int x, final int y, final int fill) {
@@ -44,8 +44,8 @@ final class MissingSectionTest {
 			for (int i = Section.EDGE * Section.EDGE; i < 2 * Section.EDGE * Section.EDGE; i++)
 				cells[i] = fill;
 		}
-		return WorldSnapshot.owning(x, y, 0, 16, 16, 16, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING,
-		    palette.blocks(), cells, List.of(WorldSnapshot.FluidEntry.EMPTY), new int[Section.CELLS]);
+		return WorldSnapshot.owning(x, y, 0, 16, 16, 16, OutsidePolicy.REFUSING,
+		    palette.blocks(), cells, List.of(FluidEntry.EMPTY), new int[Section.CELLS]);
 	}
 
 	@Test
@@ -59,13 +59,13 @@ final class MissingSectionTest {
 		assertEquals(-1, snapshot.fluidPaletteIndexAt(20, 20, 5));
 		assertEquals(0, snapshot.paletteIndexAt(4, 20, 5));
 		UnimplementedMechanicException dense = assertThrows(UnimplementedMechanicException.class, snapshot::cells);
-		assertSame(Refusal.OUTSIDE_REGION, dense.cause());
+		assertSame(RefusalCause.OUTSIDE_REGION, dense.cause());
 
 		SnapshotView view = SnapshotView.compile(snapshot);
 		assertTrue(view.hasChunkAt(20, 5), "the column holds its lower section");
 		UnimplementedMechanicException fluid =
 		    assertThrows(UnimplementedMechanicException.class, () -> view.fluidAt(20, 20, 5, new FluidSample()));
-		assertSame(Refusal.OUTSIDE_REGION, fluid.cause());
+		assertSame(RefusalCause.OUTSIDE_REGION, fluid.cause());
 		assertTrue(fluid.getMessage().contains("20,20,5"), fluid.getMessage());
 		assertThrows(UnimplementedMechanicException.class,
 		    () -> view.collectCollisionBoxes(19.5, 19.5, 4.5, 20.5, 20.5, 5.5, new CollisionBuffer()));
@@ -100,7 +100,7 @@ final class MissingSectionTest {
 		state.onGround = false;
 		UnimplementedMechanicException refused = assertThrows(
 		    UnimplementedMechanicException.class, () -> tick.tick(state, PlayerInput.idle(0.0F, 0.0F), view));
-		assertSame(Refusal.OUTSIDE_REGION, refused.cause());
+		assertSame(RefusalCause.OUTSIDE_REGION, refused.cause());
 	}
 
 	@Test
@@ -109,7 +109,7 @@ final class MissingSectionTest {
 		int stone = palette.index(STONE);
 		palette.index(AIR);
 		WorldSnapshot snapshot = WorldSnapshot.compose(0, 0, 0, 32, 16, 16,
-		    WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(section(palette, 0, 0, stone)));
+		    OutsidePolicy.REFUSING, List.of(section(palette, 0, 0, stone)));
 		SnapshotView view = SnapshotView.compile(snapshot);
 		assertTrue(view.hasChunkAt(4, 4));
 		assertFalse(view.hasChunkAt(20, 4));

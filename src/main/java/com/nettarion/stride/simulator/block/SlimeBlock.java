@@ -11,11 +11,11 @@ import com.nettarion.stride.simulator.tick.Scratch;
  * walks on it, and {@code SlimeBlock.fallOn}, a landing at multiplier zero
  * that is never a hit but still settles the wind-charge impulse context,
  * skipped entirely while sneaking. Its friction and its bounce are coefficients the
- * palette carries beside the behaviour; the bounce is
+ * palette carries beside the behavior; the bounce is
  * {@code updateEntityMovementAfterFallOn}, which {@link Move}'s restitution
  * reads as the block's restitution.
  */
-final class SlimeBlock extends BlockBehaviour {
+final class SlimeBlock extends BlockBehavior {
 	static final SlimeBlock INSTANCE = new SlimeBlock();
 
 	private SlimeBlock() {}

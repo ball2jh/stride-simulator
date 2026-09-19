@@ -4,7 +4,7 @@ import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.server.Survival;
 
 /** A hay bale: {@code HayBlock.fallOn}, the fall at multiplier one fifth. */
-final class HayBlock extends BlockBehaviour {
+final class HayBlock extends BlockBehavior {
 	static final HayBlock INSTANCE = new HayBlock();
 
 	private HayBlock() {}

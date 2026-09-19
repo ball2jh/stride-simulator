@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.server;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.ServerPlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.world.SnapshotView;
@@ -26,7 +26,7 @@ public final class TickAuthority {
 	public void lowerCauldron(final SnapshotView world, final int x, final int y, final int z, final int successor) {
 		if (this.worldChanges == null)
 			throw new UnimplementedMechanicException(
-			    Refusal.UNMODELLED_WORLD_WRITE, "cauldron mutation needs world ownership and interaction permission");
+			    RefusalCause.UNMODELED_WORLD_WRITE, "cauldron mutation needs world ownership and interaction permission");
 		this.worldChanges.lowerCauldron(world, x, y, z, successor);
 	}
 

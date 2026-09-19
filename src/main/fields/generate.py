@@ -13,7 +13,7 @@ argument (the first argument names the field table):
 The generated arithmetic is a transcription of the hand-written methods it
 replaces: the digest folds each field in row order with the same byte forms,
 and the wire writes each field in alphabetical order with the same labels and
-widths. StateEncodingPinTest holds the output to the recorded bits.
+widths. StateEncodingStabilityTest holds the output to the recorded bits.
 """
 import sys
 from pathlib import Path
@@ -166,7 +166,7 @@ import java.util.Set;
  *
  * <p>Generated; edit the table. Each method is a transcription of the
  * hand-written one it replaced, field for field and byte for byte, which
- * {{@code StateEncodingPinTest}} holds to the recorded bits.
+ * {{@code StateEncodingStabilityTest}} holds to the recorded bits.
  */
 public final class StateFields {{
 	/** Client fields the next tick overwrites before reading. */

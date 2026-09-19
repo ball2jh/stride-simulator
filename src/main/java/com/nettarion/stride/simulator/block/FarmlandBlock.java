@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.block;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.server.Survival;
@@ -11,7 +11,7 @@ import com.nettarion.stride.simulator.server.Survival;
  * of more than 0.512 cubic blocks, which refuses as undetermined; the
  * swimming and gliding boxes are too small to trample and land ordinarily.
  */
-final class FarmlandBlock extends BlockBehaviour {
+final class FarmlandBlock extends BlockBehavior {
 	static final FarmlandBlock INSTANCE = new FarmlandBlock();
 
 	private FarmlandBlock() {}
@@ -24,7 +24,7 @@ final class FarmlandBlock extends BlockBehaviour {
 	@Override
 	public void fallOn(final double fallDistance, final int x, final int y, final int z, final Survival survival) {
 		if (fallDistance - 0.5 > 0.0 && survival.bodyVolume() > 0.512F) {
-			throw new PendingServerWriteException(Refusal.PENDING_SERVER_RANDOM,
+			throw new PendingServerWriteException(RefusalCause.PENDING_SERVER_RANDOM,
 			    "landing on farmland from " + fallDistance + " blocks tramples it with a server-random chance");
 		}
 		survival.causeFallDamage(fallDistance, 1.0F, HurtCause.FALL);

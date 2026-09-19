@@ -15,20 +15,20 @@ import org.junit.jupiter.api.Test;
  * a view that edits its cells must not write through the shared summary.
  */
 class SectionSummaryTest {
-	private static final WorldSnapshot.BlockEntry AIR = WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build();
-	private static final WorldSnapshot.BlockEntry STONE =
-	    WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build();
-	private static final WorldSnapshot.BlockEntry ICE =
-	    WorldSnapshot.BlockEntry.builder(2, "minecraft:ice").fullCube().friction(0.98F).build();
-	private static final WorldSnapshot.BlockEntry FENCE =
-	    WorldSnapshot.BlockEntry.builder(3, "minecraft:oak_fence")
-	        .boxes(new WorldSnapshot.ShapeBox(0.375, 0.0, 0.375, 0.625, 1.5, 0.625))
+	private static final BlockEntry AIR = BlockEntry.builder(0, "minecraft:air").build();
+	private static final BlockEntry STONE =
+	    BlockEntry.builder(1, "minecraft:stone").fullCube().build();
+	private static final BlockEntry ICE =
+	    BlockEntry.builder(2, "minecraft:ice").fullCube().friction(0.98F).build();
+	private static final BlockEntry FENCE =
+	    BlockEntry.builder(3, "minecraft:oak_fence")
+	        .boxes(new ShapeBox(0.375, 0.0, 0.375, 0.625, 1.5, 0.625))
 	        .retainsSupportPos(true)
 	        .build();
-	private static final WorldSnapshot.BlockEntry VINE =
-	    WorldSnapshot.BlockEntry.builder(4, "minecraft:vine").climbability(WorldView.Climbability.CLIMBABLE).build();
-	private static final WorldSnapshot.FluidEntry WATER = new WorldSnapshot.FluidEntry(
-	    1, "minecraft:water", WorldSnapshot.FluidKind.WATER, 8.0 / 9.0, 0.0, 0.0, 0.0, true);
+	private static final BlockEntry VINE =
+	    BlockEntry.builder(4, "minecraft:vine").climbability(WorldView.Climbability.CLIMBABLE).build();
+	private static final FluidEntry WATER = new FluidEntry(
+	    1, "minecraft:water", FluidKind.WATER, 8.0 / 9.0, 0.0, 0.0, 0.0, true);
 
 	@Test
 	void aSnapshotComposedFromAlignedPartsAnswersLikeOneScannedFromItsCells() {
@@ -40,11 +40,11 @@ class SectionSummaryTest {
 			}
 		}
 		WorldSnapshot composed =
-		    WorldSnapshot.compose(0, -16, 32, 48, 32, 32, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, parts);
+		    WorldSnapshot.compose(0, -16, 32, 48, 32, 32, OutsidePolicy.REFUSING, parts);
 		// Parts on the union's palette are placed by reference, not copied.
 		assertSame(parts.get(0).sections()[0], composed.sections()[composed.grid().index(0, 0, 0)]);
 		WorldSnapshot scanned =
-		    new WorldSnapshot(0, -16, 32, 48, 32, 32, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING,
+		    new WorldSnapshot(0, -16, 32, 48, 32, 32, OutsidePolicy.REFUSING,
 		        composed.palette(), composed.cells(), composed.fluidPalette(), composed.fluidCells());
 		assertSummariesAgree(composed.summary(), scanned.summary());
 		assertViewsAgree(new SnapshotView(composed), new SnapshotView(scanned), random, 0, -16, 32, 48, 32, 32);
@@ -58,10 +58,10 @@ class SectionSummaryTest {
 			parts.add(part(random, sectionX * 16, 0, 0, 16));
 		}
 		WorldSnapshot source =
-		    WorldSnapshot.compose(0, 0, 0, 64, 16, 16, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, parts);
+		    WorldSnapshot.compose(0, 0, 0, 64, 16, 16, OutsidePolicy.REFUSING, parts);
 		WorldSnapshot aligned = source.crop(16, 0, 0, 32, 16, 16);
 		WorldSnapshot rescanned =
-		    new WorldSnapshot(16, 0, 0, 32, 16, 16, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, aligned.palette(),
+		    new WorldSnapshot(16, 0, 0, 32, 16, 16, OutsidePolicy.REFUSING, aligned.palette(),
 		        aligned.cells(), aligned.fluidPalette(), aligned.fluidCells());
 		assertSummariesAgree(aligned.summary(), rescanned.summary());
 		// An aligned window shares its source's sections outright.
@@ -69,7 +69,7 @@ class SectionSummaryTest {
 		assertSame(parts.get(1).sections()[0], aligned.sections()[0]);
 		WorldSnapshot unaligned = source.crop(5, 0, 3, 20, 16, 9);
 		WorldSnapshot unalignedRescanned =
-		    new WorldSnapshot(5, 0, 3, 20, 16, 9, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, unaligned.palette(),
+		    new WorldSnapshot(5, 0, 3, 20, 16, 9, OutsidePolicy.REFUSING, unaligned.palette(),
 		        unaligned.cells(), unaligned.fluidPalette(), unaligned.fluidCells());
 		assertSummariesAgree(unaligned.summary(), unalignedRescanned.summary());
 		assertViewsAgree(new SnapshotView(unaligned), new SnapshotView(unalignedRescanned), random, 5, 0, 3, 20, 16, 9);
@@ -103,9 +103,9 @@ class SectionSummaryTest {
 	    final Random random, final int originX, final int originY, final int originZ, final int sizeY) {
 		WorldSnapshot.Builder builder =
 		    WorldSnapshot
-		        .builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, originX, originY, originZ, 16, sizeY, 16)
+		        .builder(OutsidePolicy.REFUSING, originX, originY, originZ, 16, sizeY, 16)
 		        .palette(AIR, STONE, ICE, FENCE, VINE)
-		        .fluidPalette(WorldSnapshot.FluidEntry.EMPTY, WATER);
+		        .fluidPalette(FluidEntry.EMPTY, WATER);
 		for (int x = 0; x < 16; x++) {
 			for (int z = 0; z < 16; z++) {
 				int ground = originY + sizeY / 2 + random.nextInt(5) - 2;

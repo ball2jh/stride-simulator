@@ -1,7 +1,7 @@
 package com.nettarion.stride.simulator.server;
 
 import com.nettarion.stride.simulator.DamageEvent;
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.ServerPlayerState;
@@ -23,19 +23,19 @@ import java.util.Set;
  *
  * <p>{@link ServerTick} binds one instance to the server's copy at the start
  * of each transaction and reads the hits off it at the end. The tick's
- * phases and the block behaviours reach it through {@link TickAuthority#survival()}
+ * phases and the block behaviors reach it through {@link TickAuthority#survival()}
  * under server authority, so a body deals its hit where vanilla deals it:
  * burning, the void, suffocation, and drowning in {@link com.nettarion.stride.simulator.tick.BaseTick}, the
  * glide's wall impact in {@link com.nettarion.stride.simulator.tick.Travel}, the contact bodies in
  * {@link com.nettarion.stride.simulator.block.BlockEffects}, the freezing hit in {@link com.nettarion.stride.simulator.tick.Freezing}, and the
- * landing in {@link ServerGamePacketListenerImpl}. A hit runs the cooldown branch (a
+ * landing in {@link ServerMovementListener}. A hit runs the cooldown branch (a
  * hit inside the cooldown the previous full hit installed is the difference
  * above it, or refused), absorption before health, and the mark: the first
  * full hit of a source outside {@code no_impact} marks the player hurt, and
  * every source is in {@code no_knockback}, so the mark republishes the
  * server's velocity without changing it.
  *
- * <p>Refuses a hit on a player who may fly, whose invulnerability is not a
+ * <p>RefusalException a hit on a player who may fly, whose invulnerability is not a
  * captured fact, unless the source bypasses invulnerability (falling out of
  * the world); a hit that kills; and fire contact whose outcome depends on
  * the server's random increment.
@@ -100,7 +100,7 @@ public final class Survival {
 		// Player.hurtServer drops the hit for abilities.invulnerable unless the
 		// type bypasses invulnerability.
 		if (server.mayfly && !cause.bypassesInvulnerability()) {
-			throw new PendingServerWriteException(Refusal.PENDING_ABILITY,
+			throw new PendingServerWriteException(RefusalCause.PENDING_ABILITY,
 			    "the server would deal " + cause + " damage to a player who may fly; whether the ability came with"
 			        + " invulnerability is not a captured fact");
 		}
@@ -147,7 +147,7 @@ public final class Survival {
 		}
 		if (server.health <= 0.0F) {
 			server.health = 0.0F;
-			throw UnimplementedMechanicException.deferred(Refusal.UNMODELLED_SESSION_END,
+			throw UnimplementedMechanicException.deferred(RefusalCause.UNMODELED_SESSION_END,
 			    () -> "the server kills the player with " + cause + " damage; death and respawn are outside the slice");
 		}
 		return afterAbsorption;
@@ -195,7 +195,7 @@ public final class Survival {
 		if (server.remainingFireTicks < 0) {
 			server.remainingFireTicks++;
 		} else if (server.remainingFireTicks >= FIRE_BLOCK_TICKS - 1) {
-			throw new PendingServerWriteException(Refusal.PENDING_SERVER_RANDOM,
+			throw new PendingServerWriteException(RefusalCause.PENDING_SERVER_RANDOM,
 			    "repeated fire contact at " + server.remainingFireTicks + " burning ticks depends on the server's"
 			        + " random one-or-two tick increment");
 		} else {

@@ -24,6 +24,9 @@ import java.util.function.Consumer;
  * the package's admission contract.
  */
 public final class Simulator {
+	/** A simulator under the fixed publication schedule; see {@link #forObservedConnection()} for the alternative. */
+	public Simulator() {}
+
 	private final Transition transition = new Transition();
 	private final ServerTick serverTick = this.transition.serverTick();
 	/** The packet form the last {@link #step} published. */
@@ -39,7 +42,7 @@ public final class Simulator {
 	 * drained, which is what a free-running server was observed to send. Health
 	 * publications are delivered as scheduled.
 	 */
-	public static Simulator observed() {
+	public static Simulator forObservedConnection() {
 		Simulator simulator = new Simulator();
 		simulator.serverTick.deliverEchoes(false);
 		simulator.serverTick.hurtMotionAfterNextPacket(true);
@@ -50,7 +53,7 @@ public final class Simulator {
 	 * Carry this simulator's retained proofs across a publication: its
 	 * workspaces' collision spans, and the pose-fit certificate of each state
 	 * in {@code kept}, are keyed on the revisions of the sections they read in
-	 * {@code leaving}, so a view that kept those sections honours them. A
+	 * {@code leaving}, so a view that kept those sections honors them. A
 	 * pilot calls this with the view it is leaving and the boundaries it
 	 * keeps; nothing is read for a proof that is absent, already carried, or
 	 * stale in its own view. A proof never carried is a miss elsewhere.
@@ -59,8 +62,8 @@ public final class Simulator {
 		Objects.requireNonNull(leaving, "leaving");
 		this.transition.carry(leaving);
 		for (SimulationState state : kept) {
-			state.client.carryPoseFitCertificate(leaving);
-			state.server.carryPoseFitCertificate(leaving);
+			state.client.carryPoseFitCache(leaving);
+			state.server.carryPoseFitCache(leaving);
 		}
 	}
 
@@ -96,7 +99,7 @@ public final class Simulator {
 		PlayerState client = before.clientState();
 		Publisher publisher = before.publisher();
 		ServerPlayerState server = before.serverState();
-		FreezeWrite freezeBeforeAction = new FreezeWrite(client.ticksFrozen, client.frostSpeedTicks);
+		FreezeSnapshot freezeBeforeAction = new FreezeSnapshot(client.ticksFrozen, client.frostSpeedTicks);
 		List<ServerWrite> writes = new ArrayList<>(1);
 		List<Confirmation> confirmations = new ArrayList<>(4);
 		HurtCause pendingAfter = recordStep(client, publisher, server, action, world, before.pendingHurt,
@@ -111,7 +114,7 @@ public final class Simulator {
 	    final PlayerInput action, final SnapshotView world, final HurtCause pendingHurt, final int completedActions,
 	    final List<ServerWrite> writes, final Consumer<ServerWrite> appendWrite,
 	    final List<Confirmation> confirmations) {
-		FreezeWrite.requireValid(server.ticksFrozen, server.frostSpeedTicks);
+		FreezeSnapshot.requireValid(server.ticksFrozen, server.frostSpeedTicks);
 		int firstWrite = writes.size();
 		HurtCause pendingAfter =
 		    step(client, publisher, server, action, world, pendingHurt, completedActions, appendWrite);
@@ -171,7 +174,7 @@ public final class Simulator {
 	 *     publishes, or {@code null}. While a write pends the server is inside
 	 *     the hit cooldown, and a second hit there does not mark again.
 	 * @throws UnimplementedMechanicException when the client tick leaves the
-	 *     modelled slice or the server reaches a body it does not model
+	 *     modeled slice or the server reaches a body it does not model
 	 * @throws UnpredictedServerWriteException when the server would correct
 	 *     the client instead of accepting the reported movement
 	 * @throws PendingServerWriteException when the server's outcome is not
@@ -265,7 +268,7 @@ public final class Simulator {
 	 * copies.
 	 */
 	public record Step(SimulationState state, List<Confirmation> confirmations, List<ServerWrite> writes,
-	    FreezeWrite freezeBeforeAction) {
+	    FreezeSnapshot freezeBeforeAction) {
 		public Step {
 			Objects.requireNonNull(state, "state");
 			confirmations = List.copyOf(confirmations);
@@ -296,8 +299,8 @@ public final class Simulator {
 	}
 
 	/** Server-owned freeze values projected before one client movement tick. */
-	public record FreezeWrite(int ticksFrozen, int frostSpeedTicks) {
-		public FreezeWrite {
+	public record FreezeSnapshot(int ticksFrozen, int frostSpeedTicks) {
+		public FreezeSnapshot {
 			requireValid(ticksFrozen, frostSpeedTicks);
 		}
 

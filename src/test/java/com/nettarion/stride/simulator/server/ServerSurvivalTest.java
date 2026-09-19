@@ -25,6 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.FluidKind;
+import com.nettarion.stride.simulator.world.FluidEntry;
 
 /**
  * The server's survival phases in the composed step, rule by rule from
@@ -131,7 +136,7 @@ final class ServerSurvivalTest {
 	}
 
 	@Test
-	void anUnmodelledContactBodyRefusesInsideTheTick() {
+	void anUnmodeledContactBodyRefusesInsideTheTick() {
 		SnapshotView world = world(builder -> builder.set(1, 0, 0, WITHER_ROSE));
 		PlayerState start = standing(0.75, 0.0, 0.5);
 		Simulator simulator = new Simulator();
@@ -142,10 +147,10 @@ final class ServerSurvivalTest {
 
 	@Test
 	void aLegacyPaletteLeavesStateDependentBodiesUnknownAndTheyRefuse() {
-		assertEquals(WorldView.Contact.UNKNOWN, WorldSnapshot.BlockEntry.legacyContact("minecraft:campfire"));
-		assertEquals(WorldView.Contact.CACTUS, WorldSnapshot.BlockEntry.legacyContact("minecraft:cactus"));
-		assertEquals(WorldView.Landing.UNKNOWN, WorldSnapshot.BlockEntry.legacyLanding("minecraft:pointed_dripstone"));
-		assertEquals(WorldView.Landing.BED, WorldSnapshot.BlockEntry.legacyLanding("minecraft:red_bed"));
+		assertEquals(WorldView.Contact.UNKNOWN, BlockEntry.legacyContact("minecraft:campfire"));
+		assertEquals(WorldView.Contact.CACTUS, BlockEntry.legacyContact("minecraft:cactus"));
+		assertEquals(WorldView.Landing.UNKNOWN, BlockEntry.legacyLanding("minecraft:pointed_dripstone"));
+		assertEquals(WorldView.Landing.BED, BlockEntry.legacyLanding("minecraft:red_bed"));
 		SnapshotView world = world(builder -> builder.set(1, 0, 0, OLD_CAMPFIRE));
 		PlayerState start = standing(0.75, 0.0, 0.5);
 		Simulator simulator = new Simulator();
@@ -414,27 +419,27 @@ final class ServerSurvivalTest {
 
 	/** A stone floor under y=0 from -8 to 8, plus the caller's cells. */
 	private static SnapshotView world(final Cells cells) {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build();
-		WorldSnapshot.BlockEntry stone = cube(1, "minecraft:stone").build();
-		WorldSnapshot.BlockEntry cactus = cube(2, "minecraft:cactus").contact(WorldView.Contact.CACTUS).build();
-		WorldSnapshot.BlockEntry magma = cube(3, "minecraft:magma_block").contact(WorldView.Contact.HOT_FLOOR).build();
-		WorldSnapshot.BlockEntry hay = cube(4, "minecraft:hay_block").landing(WorldView.Landing.HAY).build();
-		WorldSnapshot.BlockEntry stalagmite =
+		BlockEntry air = BlockEntry.builder(0, "minecraft:air").build();
+		BlockEntry stone = cube(1, "minecraft:stone").build();
+		BlockEntry cactus = cube(2, "minecraft:cactus").contact(WorldView.Contact.CACTUS).build();
+		BlockEntry magma = cube(3, "minecraft:magma_block").contact(WorldView.Contact.HOT_FLOOR).build();
+		BlockEntry hay = cube(4, "minecraft:hay_block").landing(WorldView.Landing.HAY).build();
+		BlockEntry stalagmite =
 		    cube(5, "minecraft:pointed_dripstone").landing(WorldView.Landing.STALAGMITE).build();
-		WorldSnapshot.BlockEntry witherRose =
-		    WorldSnapshot.BlockEntry.builder(6, "minecraft:wither_rose").contact(WorldView.Contact.UNMODELLED).build();
-		WorldSnapshot.BlockEntry oldCampfire = new WorldSnapshot.BlockEntry(7, "minecraft:campfire", 0.6F, 1.0F, 1.0F,
-		    List.of(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 7.0 / 16.0, 1.0)));
-		WorldSnapshot.BlockEntry powderSnow = WorldSnapshot.BlockEntry.builder(8, "minecraft:powder_snow")
+		BlockEntry witherRose =
+		    BlockEntry.builder(6, "minecraft:wither_rose").contact(WorldView.Contact.UNMODELED).build();
+		BlockEntry oldCampfire = new BlockEntry(7, "minecraft:campfire", 0.6F, 1.0F, 1.0F,
+		    List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 7.0 / 16.0, 1.0)));
+		BlockEntry powderSnow = BlockEntry.builder(8, "minecraft:powder_snow")
 		                                          .collisionBehavior(WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS)
 		                                          .landing(WorldView.Landing.POWDER_SNOW)
 		                                          .build();
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -8, -3, -8, 16, 12, 16)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -3, -8, 16, 12, 16)
 		        .palette(air, stone, cactus, magma, hay, stalagmite, witherRose, oldCampfire, powderSnow)
-		        .fluidPalette(WorldSnapshot.FluidEntry.EMPTY,
-		            new WorldSnapshot.FluidEntry(
-		                1, "minecraft:water", WorldSnapshot.FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true));
+		        .fluidPalette(FluidEntry.EMPTY,
+		            new FluidEntry(
+		                1, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true));
 		for (int x = -8; x < 8; x++) {
 			for (int z = -8; z < 8; z++) {
 				builder.set(x, -1, z, STONE);
@@ -444,7 +449,7 @@ final class ServerSurvivalTest {
 		return SnapshotView.compile(builder.build());
 	}
 
-	private static WorldSnapshot.BlockEntry.Builder cube(final int id, final String name) {
-		return WorldSnapshot.BlockEntry.builder(id, name).boxes(WorldSnapshot.ShapeBox.FULL_CUBE);
+	private static BlockEntry.Builder cube(final int id, final String name) {
+		return BlockEntry.builder(id, name).boxes(ShapeBox.FULL_CUBE);
 	}
 }

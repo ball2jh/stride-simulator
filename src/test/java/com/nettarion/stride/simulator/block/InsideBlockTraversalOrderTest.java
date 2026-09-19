@@ -11,6 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.Suffocation;
 
 /**
  * Inside-block traversal order is observable through the stuck vector, because
@@ -95,23 +99,23 @@ class InsideBlockTraversalOrderTest {
 	 * single chest at (0,1,1) whose near face at z=1.0625 clips the diagonal's Z.
 	 */
 	static WorldSnapshot cobwebOnZArmBushOnXArm() {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "test:air").build();
-		WorldSnapshot.BlockEntry stone = WorldSnapshot.BlockEntry.builder(1, "test:stone").fullCube().build();
-		WorldSnapshot.BlockEntry cobweb = WorldSnapshot.BlockEntry.builder(2, "test:cobweb")
-		                                      .suffocation(WorldSnapshot.Suffocation.NO)
+		BlockEntry air = BlockEntry.builder(0, "test:air").build();
+		BlockEntry stone = BlockEntry.builder(1, "test:stone").fullCube().build();
+		BlockEntry cobweb = BlockEntry.builder(2, "test:cobweb")
+		                                      .suffocation(Suffocation.NO)
 		                                      .insideEffect(WorldView.InsideEffect.COBWEB)
 		                                      .build();
-		WorldSnapshot.BlockEntry bush = WorldSnapshot.BlockEntry.builder(3, "test:bush")
-		                                    .suffocation(WorldSnapshot.Suffocation.NO)
+		BlockEntry bush = BlockEntry.builder(3, "test:bush")
+		                                    .suffocation(Suffocation.NO)
 		                                    .insideEffect(WorldView.InsideEffect.SWEET_BERRY_BUSH)
 		                                    .build();
-		WorldSnapshot.BlockEntry chest =
-		    WorldSnapshot.BlockEntry.builder(4, "test:chest")
-		        .suffocation(WorldSnapshot.Suffocation.NO)
-		        .boxes(new WorldSnapshot.ShapeBox(0.0625, 0.0, 0.0625, 0.9375, 0.875, 0.9375))
+		BlockEntry chest =
+		    BlockEntry.builder(4, "test:chest")
+		        .suffocation(Suffocation.NO)
+		        .boxes(new ShapeBox(0.0625, 0.0, 0.0625, 0.9375, 0.875, 0.9375))
 		        .build();
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -4, -4, 9, 10, 12)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -4, -4, 9, 10, 12)
 		        .palette(air, stone, cobweb, bush, chest);
 		for (int z = -4; z <= 7; z++) {
 			for (int x = -4; x <= 4; x++) {

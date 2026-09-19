@@ -1,8 +1,7 @@
 package com.nettarion.stride.simulator;
 
 import com.nettarion.stride.simulator.server.ServerEntity;
-import com.nettarion.stride.simulator.server.ServerGamePacketListenerImpl;
-import com.nettarion.stride.simulator.tick.Scratch;
+import com.nettarion.stride.simulator.server.ServerMovementListener;
 import java.util.ArrayList;
 
 /**
@@ -14,7 +13,7 @@ import java.util.ArrayList;
  * by the same kernel as the client's copy. The survival half is
  * {@code LivingEntity}'s health, absorption, hit cooldown, fire, air, and
  * the entity tick count; {@link com.nettarion.stride.simulator.server.Survival} deals every hit on it. The
- * listener half is {@code ServerGamePacketListenerImpl}'s floating latch
+ * listener half is vanilla {@code ServerGamePacketListenerImpl}'s floating latch
  * and counter, {@code ServerPlayer.lastKnownClientMovement}, the pending
  * correction acknowledgement, the server's flight setting, the shift key
  * the last input packet installed, and the external actors the client last
@@ -39,7 +38,10 @@ import java.util.ArrayList;
  * it in the same shape.
  */
 public class ServerPlayerState extends PlayerState {
-	/** Retained ServerGamePacketListenerImpl counters (separate from entity tickCount). */
+	/** A server player with fresh survival and listener facts; prefer {@link #atBoundary}. */
+	public ServerPlayerState() {}
+
+	/** Retained vanilla {@code ServerGamePacketListenerImpl} counters (separate from entity tickCount). */
 	public int connectionTickCount, receivedMovePacketCount, knownMovePacketCount, awaitingTeleportTime;
 	/** Listener movement-validation anchors. */
 	public double firstGoodX, firstGoodY, firstGoodZ, lastGoodX, lastGoodY, lastGoodZ;
@@ -108,20 +110,23 @@ public class ServerPlayerState extends PlayerState {
 		this.additionalMovements = movements.isEmpty() ? null : new ArrayList<>(movements);
 	}
 
-	/** Records the scratch movement segment ending at the supplied position, retaining the upstream bounded history. */
-	public void addMovementThisTick(final Scratch scratch, final double x, final double y, final double z) {
-		if (!scratch.hasMovementSegment) return;
+	/**
+	 * Records one movement segment, vanilla {@code Entity.addMovementThisTick}, retaining the bounded
+	 * history the server replays for block contact.
+	 */
+	public void addMovementThisTick(final double fromX, final double fromY, final double fromZ, final double x,
+	    final double y, final double z, final double requestedX, final double requestedZ) {
 		if (!this.movementThisTickPresent) {
 			this.movementThisTickPresent = true;
 			this.movementAxisDependent = true;
-			this.movementFromX = scratch.segmentFromX;
-			this.movementFromY = scratch.segmentFromY;
-			this.movementFromZ = scratch.segmentFromZ;
+			this.movementFromX = fromX;
+			this.movementFromY = fromY;
+			this.movementFromZ = fromZ;
 			this.movementToX = x;
 			this.movementToY = y;
 			this.movementToZ = z;
-			this.movementRequestedX = scratch.segmentRequestedX;
-			this.movementRequestedZ = scratch.segmentRequestedZ;
+			this.movementRequestedX = requestedX;
+			this.movementRequestedZ = requestedZ;
 		} else {
 			if (this.additionalMovements == null) this.additionalMovements = new ArrayList<>();
 			if (this.additionalMovements.size() >= 99) {
@@ -131,8 +136,7 @@ public class ServerPlayerState extends PlayerState {
 				this.movementToZ = second.toZ();
 				this.movementAxisDependent = false;
 			}
-			this.additionalMovements.add(new Movement(scratch.segmentFromX, scratch.segmentFromY, scratch.segmentFromZ,
-			    x, y, z, scratch.segmentRequestedX, scratch.segmentRequestedZ));
+			this.additionalMovements.add(new Movement(fromX, fromY, fromZ, x, y, z, requestedX, requestedZ));
 		}
 	}
 
@@ -306,7 +310,7 @@ public class ServerPlayerState extends PlayerState {
 	public long tickCount = UNKNOWN_TICK_COUNT;
 
 	/*
-	 * Listener: ServerGamePacketListenerImpl and ServerPlayer facts between packets.
+	 * Listener: vanilla {@code ServerGamePacketListenerImpl} and {@code ServerPlayer} facts between packets.
 	 */
 
 	/** {@code clientIsFloating}: the last accepted packet looked airborne with no blocks around. */
@@ -355,7 +359,7 @@ public class ServerPlayerState extends PlayerState {
 	public static ServerPlayerState atBoundary(final PlayerState movement) {
 		ServerPlayerState state = new ServerPlayerState();
 		movement.copyInto(state);
-		ServerGamePacketListenerImpl.resetPosition(state);
+		ServerMovementListener.resetPosition(state);
 		state.lastSentHealth = state.health;
 		state.lastSentFood = state.foodLevel;
 		state.lastFoodSaturationZero = state.saturationLevel == 0.0F;
@@ -549,7 +553,7 @@ public class ServerPlayerState extends PlayerState {
 	}
 
 	/**
-	 * Refuses out-of-range survival facts, non-finite known movement, or a
+	 * RefusalException out-of-range survival facts, non-finite known movement, or a
 	 * negative floating or rocket count. The movement half is validated by
 	 * {@link #requireValidForTransition()}.
 	 */

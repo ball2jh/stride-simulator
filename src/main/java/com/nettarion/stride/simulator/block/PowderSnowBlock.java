@@ -14,14 +14,14 @@ import com.nettarion.stride.simulator.world.WorldView;
  * fall distance passes two and a half blocks and a 0.9-high box after;
  * {@code fallOn} plays a sound and deals nothing.
  *
- * <p>The palette carries powder snow as its collision behaviour, since the
+ * <p>The palette carries powder snow as its collision behavior, since the
  * shape a bootless player collides with is what the capture classifies;
  * the boots themselves are {@link PlayerState#canWalkOnPowderSnow} and are
  * read by the collision, not here. The whole body, its server half
  * included, is owned by that fact, so the block's contact fact is
  * {@code NONE} the way a liquid's is the fluid entry's.
  */
-final class PowderSnowBlock extends BlockBehaviour {
+final class PowderSnowBlock extends BlockBehavior {
 	static final PowderSnowBlock INSTANCE = new PowderSnowBlock();
 
 	/** {@code PowderSnowBlock.FALLING_COLLISION_SHAPE}, as one box. */
@@ -60,7 +60,7 @@ final class PowderSnowBlock extends BlockBehaviour {
 	 * <p>{@code StepBasedCollector} de-duplicates per step index, so a tick that
 	 * finds powder snow in two steps freezes twice. Two FREEZE contacts separated
 	 * by a sub-movement boundary but sharing a step index are the one case where
-	 * an unmodelled cell decides whether the collector flushed between them: a
+	 * an unmodeled cell decides whether the collector flushed between them: a
 	 * cell that is neither bubble column nor powder snow is invisible to this
 	 * traversal, and one visited at an intermediate step would have split the
 	 * group. That needs the earlier step index to be at least 2, since a

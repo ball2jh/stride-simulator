@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.server;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.ServerPlayerState;
@@ -17,7 +17,7 @@ public final class FoodData {
 	/** The constructed food state must identify the non-peaceful difficulty. */
 	static void requireSupported(final ServerPlayerState state) {
 		if (state.difficulty == null)
-			throw new PendingServerWriteException(Refusal.PENDING_SURVIVAL_FACT, "unknown food difficulty");
+			throw new PendingServerWriteException(RefusalCause.PENDING_SURVIVAL_FACT, "unknown food difficulty");
 	}
 
 	/** FoodData.tick, after Player.tick and before the connection restores position. */
@@ -55,7 +55,7 @@ public final class FoodData {
 				    || state.health > 1.0F && state.difficulty == ServerPlayerState.Difficulty.NORMAL) {
 					if (survival == null)
 						throw new PendingServerWriteException(
-						    Refusal.PENDING_SURVIVAL_FACT, "starvation needs ServerTick authority");
+						    RefusalCause.PENDING_SURVIVAL_FACT, "starvation needs ServerTick authority");
 					survival.hurtServer(HurtCause.STARVE, 1.0F);
 				}
 				state.tickTimer = 0;

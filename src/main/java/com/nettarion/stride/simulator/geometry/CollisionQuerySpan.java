@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.geometry;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 
 /** Admission for one vanilla-style closed integer collision cursor. */
@@ -79,6 +79,6 @@ public final class CollisionQuerySpan {
 
 	private static UnimplementedMechanicException unsupported() {
 		return new UnimplementedMechanicException(
-		    Refusal.INADMISSIBLE_COORDINATE, "collision query exceeds the exact integer-cursor domain");
+		    RefusalCause.INADMISSIBLE_COORDINATE, "collision query exceeds the exact integer-cursor domain");
 	}
 }

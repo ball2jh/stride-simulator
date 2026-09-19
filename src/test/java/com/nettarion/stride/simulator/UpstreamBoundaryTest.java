@@ -11,6 +11,9 @@ import com.nettarion.stride.simulator.world.WorldView;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 /** Source-derived regressions for retained server facts and publication boundaries. */
 class UpstreamBoundaryTest {
@@ -77,16 +80,16 @@ class UpstreamBoundaryTest {
 				assertInstanceOf(ServerTick.Accepted.class, result);
 			else
 				assertEquals(
-				    ServerTick.Cause.MOVED_TOO_QUICKLY, assertInstanceOf(ServerTick.Corrected.class, result).cause());
+				    CorrectionReason.MOVED_TOO_QUICKLY, assertInstanceOf(ServerTick.Corrected.class, result).reason());
 		}
 	}
 
 	@Test
 	void layeredCauldronsAreNeverClassifiedAsInertServerContact() {
 		for (String name : new String[] {"minecraft:water_cauldron", "minecraft:powder_snow_cauldron"}) {
-			assertEquals(WorldView.Contact.UNMODELLED, WorldSnapshot.BlockEntry.legacyContact(name));
-			assertEquals(WorldView.Contact.UNMODELLED,
-			    WorldSnapshot.BlockEntry.builder(0, name).contact(WorldView.Contact.NONE).build().contact());
+			assertEquals(WorldView.Contact.UNMODELED, BlockEntry.legacyContact(name));
+			assertEquals(WorldView.Contact.UNMODELED,
+			    BlockEntry.builder(0, name).contact(WorldView.Contact.NONE).build().contact());
 		}
 	}
 
@@ -138,10 +141,10 @@ class UpstreamBoundaryTest {
 
 	private static SnapshotView world(final boolean floor) {
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -3, -3, -3, 20, 8, 8)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
-		                .boxes(WorldSnapshot.ShapeBox.FULL_CUBE)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -3, -3, -3, 20, 8, 8)
+		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		            BlockEntry.builder(1, "minecraft:stone")
+		                .boxes(ShapeBox.FULL_CUBE)
 		                .build());
 		if (floor)
 			for (int x = -3; x < 17; x++)

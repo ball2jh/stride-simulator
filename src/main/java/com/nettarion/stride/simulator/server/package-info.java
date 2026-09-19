@@ -4,7 +4,7 @@
  *
  * <p>{@link com.nettarion.stride.simulator.server.ServerTick} runs one level tick and one
  * connection tick with its packet handlers under a declared schedule;
- * {@link com.nettarion.stride.simulator.server.ServerGamePacketListenerImpl} is the listener's
+ * {@link com.nettarion.stride.simulator.server.ServerMovementListener} is the listener's
  * movement admission with retained baselines and packet counts;
  * {@link com.nettarion.stride.simulator.server.ServerEntity} samples dirty metadata, attributes and
  * hurt motion for publication. {@link com.nettarion.stride.simulator.server.Survival} and

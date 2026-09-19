@@ -60,7 +60,7 @@ public final class SimulationCheckpoint {
 		    : (archived[0] & 0xFF) << 24 | (archived[1] & 0xFF) << 16 | (archived[2] & 0xFF) << 8 | archived[3] & 0xFF;
 		var players = new SimulationState(simulation.clientState(), simulation.publisher(), simulation.serverState(),
 		    simulation.completedActions(), null);
-		// Only a recognised older schema is re-encoded; anything else, corrupt
+		// Only a recognized older schema is re-encoded; anything else, corrupt
 		// bytes included, compares at the current schema and fails honestly.
 		if (schema != 1 || !BoundaryCodec.representable(players, schema)) {
 			return capture(simulation);
@@ -305,7 +305,7 @@ public final class SimulationCheckpoint {
 			out.writeUTF("jump");
 			value(v.jump(), out);
 			out.writeUTF("shift");
-			value(v.shift(), out);
+			value(v.sneak(), out);
 			out.writeUTF("sprint");
 			value(v.sprint(), out);
 			out.writeUTF("yRot");
@@ -452,12 +452,12 @@ public final class SimulationCheckpoint {
 			out.writeUTF("com.nettarion.stride.simulator.HurtMotion");
 			out.writeUTF("cause");
 			value(v.cause(), out);
-			out.writeUTF("causeTick");
-			value(v.causeTick(), out);
+			out.writeUTF("causeAction");
+			value(v.causeAction(), out);
 			out.writeUTF("expectedStateDigest");
 			value(v.expectedStateDigest(), out);
-			out.writeUTF("writeAfterTick");
-			value(v.writeAfterTick(), out);
+			out.writeUTF("writeAfterAction");
+			value(v.writeAfterAction(), out);
 			out.writeUTF("writeX");
 			value(v.writeX(), out);
 			out.writeUTF("writeY");

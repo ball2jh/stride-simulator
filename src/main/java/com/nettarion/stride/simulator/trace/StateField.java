@@ -78,10 +78,10 @@ public enum StateField {
 	/** Raw trace encoding of {@link com.nettarion.stride.simulator.PlayerState#fallFlying}. */
 	FALL_FLYING(Kind.BOOLEAN), // bit 7, LivingEntity / Player
 
-	// Bit 1. Set only by ServerGamePacketListenerImpl and echoed back through
+	// Bit 1. Set only by vanilla ServerGamePacketListenerImpl and echoed back through
 	// entity-data sync, so it can never be reproduced by a implementation without a
 	// server. Inert for client movement: LocalPlayer overrides isShiftKeyDown()
-	// to read input.keyPresses.shift() directly and never consults this bit.
+	// to read input.keyPresses.sneak() directly and never consults this bit.
 	// It exists so other players' clients can render the crouch.
 	/** The server-owned shared sneak flag, preserved separately from local sneak input. */
 	SHIFT_KEY_DOWN(Kind.BOOLEAN),

@@ -1,7 +1,7 @@
 package com.nettarion.stride.simulator.server;
 
 import com.nettarion.stride.simulator.EntityDataWrite;
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.ServerPlayerState;
@@ -48,7 +48,7 @@ public final class ServerEntity {
 	void collectChanges(final ServerPlayerState server) {
 		if (!server.publicationScheduleKnown) {
 			throw new PendingServerWriteException(
-			    Refusal.UNMODELLED_SCHEDULE, "server publication and client delivery schedule is unknown");
+			    RefusalCause.UNMODELED_SCHEDULE, "server publication and client delivery schedule is unknown");
 		}
 		this.flags = sharedFlags(server);
 		this.pose = server.pose;
@@ -62,7 +62,7 @@ public final class ServerEntity {
 		    (server.entityDataDirty & EntityDataWrite.FROZEN) != 0 || this.frozen != server.lastSentTicksFrozen;
 		this.frostDirty = server.movementSpeedAttributeDirty || this.frost != server.lastSentFrostSpeedTicks;
 		if (this.frost != server.lastSentFrostSpeedTicks && !this.flagsDirty && !this.poseDirty && !this.frozenDirty) {
-			throw new PendingServerWriteException(Refusal.PENDING_SERVER_RANDOM,
+			throw new PendingServerWriteException(RefusalCause.PENDING_SERVER_RANDOM,
 			    "the movement-speed attribute changed"
 			        + " from a frost modifier of " + server.lastSentFrostSpeedTicks + " to " + this.frost
 			        + " with no dirty entity data; ServerEntity sends attributes"

@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.block;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.tick.Scratch;
@@ -8,16 +8,17 @@ import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import com.nettarion.stride.simulator.world.WorldView;
 import java.util.List;
+import com.nettarion.stride.simulator.world.ShapeBox;
 
 /** A source-verified layered cauldron, with its filled shape and lower-water-level successor. */
-public final class LayeredCauldronBlock extends BlockBehaviour {
+public final class LayeredCauldronBlock extends BlockBehavior {
 	private final int successor;
 	private final double[] insideShape;
-	public LayeredCauldronBlock(final int successor, final List<WorldSnapshot.ShapeBox> boxes) {
+	public LayeredCauldronBlock(final int successor, final List<ShapeBox> boxes) {
 		this.successor = successor;
 		this.insideShape = compileShape(boxes);
 	}
-	public static double[] compileShape(final List<WorldSnapshot.ShapeBox> boxes) {
+	public static double[] compileShape(final List<ShapeBox> boxes) {
 		double[] shape = new double[boxes.size() * 6];
 		for (int i = 0; i < boxes.size(); i++) {
 			var box = boxes.get(i);
@@ -50,7 +51,7 @@ public final class LayeredCauldronBlock extends BlockBehaviour {
 		if (scratch.authority.isServer()) {
 			if (!(world instanceof SnapshotView snapshot))
 				throw new UnimplementedMechanicException(
-				    Refusal.UNMODELLED_WORLD_WRITE, "cauldron needs a branch-owned snapshot");
+				    RefusalCause.UNMODELED_WORLD_WRITE, "cauldron needs a branch-owned snapshot");
 			scratch.insideEffects.collectCauldron(snapshot, x, y, z, this.successor);
 		}
 	}

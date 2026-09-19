@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerState;
@@ -57,7 +57,7 @@ public final class Freezing {
 		if (state.ticksFrozen >= ServerPlayerState.DEFAULT_TICKS_REQUIRED_TO_FREEZE && state.canFreeze) {
 			ServerPlayerState server = scratch.authority.serverState();
 			if (server.tickCount == ServerPlayerState.UNKNOWN_TICK_COUNT) {
-				throw new PendingServerWriteException(Refusal.PENDING_SERVER_RANDOM,
+				throw new PendingServerWriteException(RefusalCause.PENDING_SERVER_RANDOM,
 				    "the fully frozen player is hurt every"
 				        + " fortieth entity tick, and the entity tick count is not a captured fact");
 			}
@@ -79,7 +79,7 @@ public final class Freezing {
 		WorldView.Air air = world.airIn(x, y, z, x, y, z);
 		if (air == WorldView.Air.UNKNOWN && state.ticksFrozen > 0) {
 			throw new UnimplementedMechanicException(
-			    Refusal.UNDECLARED_BLOCK_STATE, "frost modifier needs the identity of the block underfoot");
+			    RefusalCause.UNDECLARED_BLOCK_STATE, "frost modifier needs the identity of the block underfoot");
 		}
 		if (air == WorldView.Air.NOT_AIR && state.ticksFrozen > 0) {
 			state.frostSpeedTicks = state.ticksFrozen;

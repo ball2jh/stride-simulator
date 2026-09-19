@@ -13,7 +13,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  *
  * <p>Layered water and powder-snow cauldrons use LayeredCauldronBlock when a source catalog supplies their shapes and successor states. Empty cauldrons have no player effect.
  */
-final class LavaCauldronBlock extends BlockBehaviour {
+final class LavaCauldronBlock extends BlockBehavior {
 	static final LavaCauldronBlock INSTANCE = new LavaCauldronBlock();
 
 	/** {@code LavaCauldronBlock.FILLED_SHAPE}, as non-overlapping boxes. */

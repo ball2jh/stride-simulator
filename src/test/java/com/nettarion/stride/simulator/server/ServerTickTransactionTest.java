@@ -3,6 +3,7 @@ package com.nettarion.stride.simulator.server;
 import com.nettarion.stride.simulator.DamageWrite;
 import com.nettarion.stride.simulator.EntityDataWrite;
 import com.nettarion.stride.simulator.ServerWrite;
+import com.nettarion.stride.simulator.CorrectionReason;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.MovementPacket;
 import com.nettarion.stride.simulator.PendingServerWriteException;
@@ -25,10 +26,16 @@ import java.util.Optional;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.FluidKind;
+import com.nettarion.stride.simulator.world.FluidEntry;
 
 /**
  * The listener's transaction on the server's copy, rule by rule from
- * {@code ServerGamePacketListenerImpl.handleMovePlayer} and the server-side
+ * {@code ServerMovementListener.handleMovePlayer} and the server-side
  * {@code Entity.move}.
  *
  * <p>Each test sends the packet form the client's publisher selects and
@@ -215,7 +222,7 @@ class ServerTickTransactionTest {
 		    new ServerTick().transact(after, packet(before, after), server, IDLE, world, false);
 
 		ServerTick.Corrected correction = assertInstanceOf(ServerTick.Corrected.class, corrected);
-		assertEquals(ServerTick.Cause.MOVED_WRONGLY, correction.cause());
+		assertEquals(CorrectionReason.MOVED_WRONGLY, correction.reason());
 		assertRaw(-HALF_WIDTH, correction.resolvedX(), "the wall clipped the resolved move at its face");
 		assertTrue(correction.residualSquared() > 0.0625);
 		assertRaw(-HALF_WIDTH, server.x, "the server sent the client back to its pre-packet position");
@@ -256,7 +263,7 @@ class ServerTickTransactionTest {
 
 		ServerTick.Transaction above = transactTo(before, Math.nextUp(exactTargetX), world);
 		ServerTick.Corrected corrected = assertInstanceOf(ServerTick.Corrected.class, above);
-		assertEquals(ServerTick.Cause.NEW_COLLISION, corrected.cause());
+		assertEquals(CorrectionReason.NEW_COLLISION, corrected.reason());
 		assertTrue(
 		    corrected.residualSquared() < 0.0625, "the residual alone would have been accepted; the new block decides");
 	}
@@ -289,7 +296,7 @@ class ServerTickTransactionTest {
 
 		ServerTick.Corrected corrected = assertInstanceOf(ServerTick.Corrected.class,
 		    new ServerTick().transact(ontoTheSlab, packet(above, ontoTheSlab), aboveServer, IDLE, world, false));
-		assertEquals(ServerTick.Cause.NEW_COLLISION, corrected.cause());
+		assertEquals(CorrectionReason.NEW_COLLISION, corrected.reason());
 	}
 
 	@Test
@@ -614,7 +621,7 @@ class ServerTickTransactionTest {
 		server.setIgnoreFallDamageFromCurrentImpulse(true, 0.5, -2.0, 0.5);
 		server.currentImpulseContextResetGraceTime = 5;
 		// The input packet of the same tick installs the server's shift flag.
-		PlayerInput action = sneaking ? PlayerInput.ofPacked((byte) PlayerInput.FLAG_SHIFT, 0.0F, 0.0F) : IDLE;
+		PlayerInput action = sneaking ? PlayerInput.ofPacked((byte) PlayerInput.FLAG_SNEAK, 0.0F, 0.0F) : IDLE;
 		PlayerState after = before.copy();
 		after.placeAt(0.5, 0.0, 0.5);
 		after.onGround = true;
@@ -792,19 +799,19 @@ class ServerTickTransactionTest {
 		    () -> message + " expected " + expected + " but was " + actual);
 	}
 
-	private static WorldSnapshot.BlockEntry air() {
-		return WorldSnapshot.BlockEntry.builder(0, "minecraft:air").suffocation(WorldSnapshot.Suffocation.NO).build();
+	private static BlockEntry air() {
+		return BlockEntry.builder(0, "minecraft:air").suffocation(Suffocation.NO).build();
 	}
 
-	private static WorldSnapshot.BlockEntry stone() {
-		return WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
-		    .suffocation(WorldSnapshot.Suffocation.YES)
+	private static BlockEntry stone() {
+		return BlockEntry.builder(1, "minecraft:stone")
+		    .suffocation(Suffocation.YES)
 		    .fullCube()
 		    .build();
 	}
 
 	private static WorldSnapshot.Builder region() {
-		return WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -6, -4, 9, 24, 9)
+		return WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
 		    .palette(air(), stone());
 	}
 
@@ -837,13 +844,13 @@ class ServerTickTransactionTest {
 
 	/** A farmland floor with its top at y=0 everywhere. */
 	private static WorldSnapshot farmlandWorld() {
-		WorldSnapshot.BlockEntry farmland = WorldSnapshot.BlockEntry.builder(2, "minecraft:farmland")
+		BlockEntry farmland = BlockEntry.builder(2, "minecraft:farmland")
 		                                        .fullCube()
 		                                        .landing(WorldView.Landing.FARMLAND)
-		                                        .suffocation(WorldSnapshot.Suffocation.NO)
+		                                        .suffocation(Suffocation.NO)
 		                                        .build();
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -6, -4, 9, 24, 9)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
 		        .palette(air(), stone(), farmland);
 		for (int z = -4; z <= 4; z++) {
 			for (int x = -4; x <= 4; x++) {
@@ -855,16 +862,16 @@ class ServerTickTransactionTest {
 
 	/** A slime floor with its top at y=0 everywhere. */
 	private static WorldSnapshot slimeWorld() {
-		WorldSnapshot.BlockEntry slime = WorldSnapshot.BlockEntry.builder(2, "minecraft:slime_block")
+		BlockEntry slime = BlockEntry.builder(2, "minecraft:slime_block")
 		                                     .fullCube()
 		                                     .friction(0.8F)
 		                                     .bounceRestitution(1.0F)
 		                                     .landing(WorldView.Landing.SLIME)
 		                                     .stepOn(WorldView.StepOn.SLIME)
-		                                     .suffocation(WorldSnapshot.Suffocation.NO)
+		                                     .suffocation(Suffocation.NO)
 		                                     .build();
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -6, -4, 9, 24, 9)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
 		        .palette(air(), stone(), slime);
 		for (int z = -4; z <= 4; z++) {
 			for (int x = -4; x <= 4; x++) {
@@ -876,13 +883,13 @@ class ServerTickTransactionTest {
 
 	/** The stone floor with a cobweb in the cell above the origin. */
 	private static WorldSnapshot cobwebWorld() {
-		WorldSnapshot.BlockEntry cobweb = WorldSnapshot.BlockEntry.builder(2, "minecraft:cobweb")
+		BlockEntry cobweb = BlockEntry.builder(2, "minecraft:cobweb")
 		                                      .insideEffect(WorldView.InsideEffect.COBWEB)
 		                                      .contact(WorldView.Contact.NONE)
-		                                      .suffocation(WorldSnapshot.Suffocation.NO)
+		                                      .suffocation(Suffocation.NO)
 		                                      .build();
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -6, -4, 9, 24, 9)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
 		        .palette(air(), stone(), cobweb);
 		for (int z = -4; z <= 4; z++) {
 			for (int x = -4; x <= 4; x++) {
@@ -895,13 +902,13 @@ class ServerTickTransactionTest {
 
 	/** The stone floor with powder snow in the cell above the origin. */
 	private static WorldSnapshot powderSnowWorld() {
-		WorldSnapshot.BlockEntry powderSnow = WorldSnapshot.BlockEntry.builder(2, "minecraft:powder_snow")
+		BlockEntry powderSnow = BlockEntry.builder(2, "minecraft:powder_snow")
 		                                          .collisionBehavior(WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS)
 		                                          .landing(WorldView.Landing.POWDER_SNOW)
-		                                          .suffocation(WorldSnapshot.Suffocation.NO)
+		                                          .suffocation(Suffocation.NO)
 		                                          .build();
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -6, -4, 9, 24, 9)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
 		        .palette(air(), stone(), powderSnow);
 		for (int z = -4; z <= 4; z++) {
 			for (int x = -4; x <= 4; x++) {
@@ -914,9 +921,9 @@ class ServerTickTransactionTest {
 
 	/** The stone floor under one block of water everywhere. */
 	private static WorldSnapshot poolWorld() {
-		WorldSnapshot.Builder world = region().fluidPalette(WorldSnapshot.FluidEntry.EMPTY,
-		    new WorldSnapshot.FluidEntry(
-		        1, "minecraft:water", WorldSnapshot.FluidKind.WATER, 8.0 / 9.0, 0, 0, 0, true));
+		WorldSnapshot.Builder world = region().fluidPalette(FluidEntry.EMPTY,
+		    new FluidEntry(
+		        1, "minecraft:water", FluidKind.WATER, 8.0 / 9.0, 0, 0, 0, true));
 		for (int z = -4; z <= 4; z++) {
 			for (int x = -4; x <= 4; x++) {
 				world.set(x, -1, z, 1);
@@ -944,13 +951,13 @@ class ServerTickTransactionTest {
 	 * slab across the cell and an upper step over its z in [0.5, 1].
 	 */
 	private static WorldSnapshot stairsWorld() {
-		WorldSnapshot.BlockEntry stairs = WorldSnapshot.BlockEntry.builder(2, "minecraft:stone_stairs")
-		                                      .suffocation(WorldSnapshot.Suffocation.NO)
-		                                      .boxes(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0),
-		                                          new WorldSnapshot.ShapeBox(0.0, 0.5, 0.5, 1.0, 1.0, 1.0))
+		BlockEntry stairs = BlockEntry.builder(2, "minecraft:stone_stairs")
+		                                      .suffocation(Suffocation.NO)
+		                                      .boxes(new ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0),
+		                                          new ShapeBox(0.0, 0.5, 0.5, 1.0, 1.0, 1.0))
 		                                      .build();
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -6, -4, 9, 24, 9)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
 		        .palette(air(), stone(), stairs);
 		for (int z = -4; z <= 4; z++) {
 			for (int x = -4; x <= 4; x++) {
@@ -963,19 +970,19 @@ class ServerTickTransactionTest {
 
 	/** One supported scaffolding at (0,0,0) over a stone floor whose top is at y=0. */
 	private static WorldSnapshot scaffoldingWorld() {
-		WorldSnapshot.BlockEntry scaffolding = WorldSnapshot.BlockEntry.builder(2, "minecraft:scaffolding")
+		BlockEntry scaffolding = BlockEntry.builder(2, "minecraft:scaffolding")
 		                                           .fallDistanceResetting(true)
 		                                           .collisionBehavior(WorldView.CollisionBehavior.SCAFFOLDING_SUPPORTED)
-		                                           .suffocation(WorldSnapshot.Suffocation.NO)
+		                                           .suffocation(Suffocation.NO)
 		                                           .climbability(WorldView.Climbability.CLIMBABLE)
-		                                           .boxes(new WorldSnapshot.ShapeBox(0, 0.875, 0, 1, 1, 1),
-		                                               new WorldSnapshot.ShapeBox(0, 0, 0, 0.125, 1, 0.125),
-		                                               new WorldSnapshot.ShapeBox(0.875, 0, 0, 1, 1, 0.125),
-		                                               new WorldSnapshot.ShapeBox(0, 0, 0.875, 0.125, 1, 1),
-		                                               new WorldSnapshot.ShapeBox(0.875, 0, 0.875, 1, 1, 1))
+		                                           .boxes(new ShapeBox(0, 0.875, 0, 1, 1, 1),
+		                                               new ShapeBox(0, 0, 0, 0.125, 1, 0.125),
+		                                               new ShapeBox(0.875, 0, 0, 1, 1, 0.125),
+		                                               new ShapeBox(0, 0, 0.875, 0.125, 1, 1),
+		                                               new ShapeBox(0.875, 0, 0.875, 1, 1, 1))
 		                                           .build();
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -6, -4, 9, 24, 9)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
 		        .palette(air(), stone(), scaffolding);
 		for (int z = -4; z <= 4; z++) {
 			for (int x = -4; x <= 4; x++) {

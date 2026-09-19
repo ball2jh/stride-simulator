@@ -12,6 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 class ClientTickPowderSnowTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
@@ -228,10 +230,10 @@ class ClientTickPowderSnowTest {
 
 	private static SnapshotView powderWorld() {
 		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -2, -2, -2, 5, 8, 5)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build(),
-		            WorldSnapshot.BlockEntry.builder(2, "minecraft:powder_snow")
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -2, -2, -2, 5, 8, 5)
+		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		            BlockEntry.builder(1, "minecraft:stone").fullCube().build(),
+		            BlockEntry.builder(2, "minecraft:powder_snow")
 		                .collisionBehavior(WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS)
 		                .build());
 		for (int z = -2; z <= 2; z++)
@@ -244,9 +246,9 @@ class ClientTickPowderSnowTest {
 
 	private static SnapshotView powderWallWorld() {
 		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -2, -2, -2, 5, 8, 5)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build());
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -2, -2, -2, 5, 8, 5)
+		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		            BlockEntry.builder(1, "minecraft:stone").fullCube().build());
 		for (int y = 1; y <= 3; y++) {
 			grid.set(0, y, 1, 1);
 		}

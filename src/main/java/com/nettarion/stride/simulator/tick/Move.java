@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
@@ -75,7 +75,7 @@ public final class Move {
 		}
 		if (!world.movementFactsComplete()) {
 			throw new UnimplementedMechanicException(
-			    Refusal.INADMISSIBLE_WORLD, "the world view has not declared complete movement facts");
+			    RefusalCause.INADMISSIBLE_WORLD, "the world view has not declared complete movement facts");
 		}
 		if (!Double.isFinite(requestedX) || !Double.isFinite(requestedY) || !Double.isFinite(requestedZ)) {
 			throw new IllegalArgumentException("reported displacement must be finite");
@@ -127,7 +127,7 @@ public final class Move {
 		}
 
 		boolean hadCurrentPoseFit =
-		    !world.hasContextSensitiveCollision() && state.hasPoseFitCertificate(world, state.pose);
+		    !world.hasContextSensitiveCollision() && state.hasCachedPoseFit(world, state.pose);
 		collide(state, deltaMovementX, deltaMovementY, deltaMovementZ, shiftDown, world, scratch);
 		double movedX = scratch.movedX;
 		double movedY = scratch.movedY;
@@ -164,7 +164,7 @@ public final class Move {
 			PlayerState.requireSupportedCenter(successorX, successorY, successorZ);
 			state.placeAt(successorX, successorY, successorZ);
 			if (hadCurrentPoseFit) {
-				state.certifyCurrentPoseAfterCollision(world);
+				state.cacheCurrentPoseAfterCollision(world);
 			}
 		}
 

@@ -61,11 +61,11 @@ public final class PlayerPose {
 		}
 
 		if (actual != state.pose) {
-			boolean hadActualPoseFit = state.hasPoseFitCertificate(world, actual);
+			boolean hadActualPoseFit = state.hasCachedPoseFit(world, actual);
 			state.setPose(actual);
 			state.placeAt(state.x, state.y, state.z);
 			if (hadActualPoseFit) {
-				state.certifyPoseFit(world, actual);
+				state.cachePoseFit(world, actual);
 			}
 		}
 	}

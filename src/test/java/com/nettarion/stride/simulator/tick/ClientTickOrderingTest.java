@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 /**
  * Tick-ordering witnesses: three places where vanilla reads a latch from the
@@ -161,14 +163,14 @@ class ClientTickOrderingTest {
 	}
 
 	private static WorldSnapshot.Builder region() {
-		return WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -4, -4, 9, 10, 12);
+		return WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -4, -4, 9, 10, 12);
 	}
 
 	/** Ice with its top at y=0 everywhere in the region. */
 	static WorldSnapshot iceFloor() {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "test:air").build();
-		WorldSnapshot.BlockEntry ice =
-		    WorldSnapshot.BlockEntry.builder(1, "test:ice").friction(0.98F).fullCube().build();
+		BlockEntry air = BlockEntry.builder(0, "test:air").build();
+		BlockEntry ice =
+		    BlockEntry.builder(1, "test:ice").friction(0.98F).fullCube().build();
 		WorldSnapshot.Builder world = region().palette(air, ice);
 		for (int z = -4; z <= 7; z++) {
 			for (int x = -4; x <= 4; x++) {
@@ -180,8 +182,8 @@ class ClientTickOrderingTest {
 
 	/** Stone floor at y=-1 and a two-high stone wall filling x=1. */
 	static WorldSnapshot eastWall() {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "test:air").build();
-		WorldSnapshot.BlockEntry stone = WorldSnapshot.BlockEntry.builder(1, "test:stone").fullCube().build();
+		BlockEntry air = BlockEntry.builder(0, "test:air").build();
+		BlockEntry stone = BlockEntry.builder(1, "test:stone").fullCube().build();
 		WorldSnapshot.Builder world = region().palette(air, stone);
 		for (int z = -4; z <= 7; z++) {
 			for (int x = -4; x <= 4; x++) {
@@ -195,8 +197,8 @@ class ClientTickOrderingTest {
 
 	/** Stone floor at y=-1 for z at or below 0, so the ledge edge is at z=1.0. */
 	static WorldSnapshot ledgeEndingAtZOne() {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "test:air").build();
-		WorldSnapshot.BlockEntry stone = WorldSnapshot.BlockEntry.builder(1, "test:stone").fullCube().build();
+		BlockEntry air = BlockEntry.builder(0, "test:air").build();
+		BlockEntry stone = BlockEntry.builder(1, "test:stone").fullCube().build();
 		WorldSnapshot.Builder world = region().palette(air, stone);
 		for (int z = -4; z <= 0; z++) {
 			for (int x = -4; x <= 4; x++) {

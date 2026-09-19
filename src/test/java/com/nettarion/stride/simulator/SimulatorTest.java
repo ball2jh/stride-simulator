@@ -12,6 +12,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 final class SimulatorTest {
 	private static final PlayerInput SPRINT =
@@ -29,7 +32,7 @@ final class SimulatorTest {
 		SimulationState boundary = simulator.start(towerStart(), towerServerWithoutRegeneration());
 		for (int tick = 0; tick < actions.size(); tick++) {
 			boundary = simulator.advance(boundary, actions.get(tick), towerWorld()).state();
-			if (boundary.hasPendingEffect()) {
+			if (boundary.hasPendingHurt()) {
 				assertRunMatchesSteps(boundary.clientState(), boundary.serverState(),
 				    boundary.pendingHurt().orElseThrow(), actions.subList(tick + 1, actions.size()), towerWorld());
 				return;
@@ -62,7 +65,7 @@ final class SimulatorTest {
 		SimulationState state = simulator.start(towerStart(), towerServerWithoutRegeneration());
 		for (int tick = 0; tick < actions.size(); tick++) {
 			state = simulator.advance(state, actions.get(tick), towerWorld()).state();
-			if (state.hasPendingEffect()) {
+			if (state.hasPendingHurt()) {
 				List<PlayerInput> prefix = actions.subList(0, tick + 1);
 				assertThrows(PendingServerWriteException.class,
 				    () -> simulator.run(towerStart(), towerServerWithoutRegeneration(), prefix, towerWorld()));
@@ -92,16 +95,16 @@ final class SimulatorTest {
 		assertEquals(StateDigest.state(state.clientState()), StateDigest.state(run.clientState()));
 		assertEquals(StateDigest.server(state.serverState()), StateDigest.server(run.serverState()));
 		assertEquals(confirmations, run.confirmations());
-		assertEquals(writes.size(), run.timeline().events().size());
+		assertEquals(writes.size(), run.timeline().writes().size());
 		for (int index = 0; index < writes.size(); index++) {
 			ServerWrite expected = writes.get(index);
-			ServerWrite actual = run.timeline().events().get(index);
+			ServerWrite actual = run.timeline().writes().get(index);
 			assertEquals(expected.actionIndex(), actual.actionIndex());
 			if (expected instanceof HurtMotionWrite hurt) {
 				HurtMotion motion = ((HurtMotionWrite) actual).event();
 				assertEquals(hurt.event().cause(), motion.cause());
-				assertEquals(hurt.event().causeTick(), motion.causeTick());
-				assertEquals(hurt.event().writeAfterTick(), motion.writeAfterTick());
+				assertEquals(hurt.event().causeAction(), motion.causeAction());
+				assertEquals(hurt.event().writeAfterAction(), motion.writeAfterAction());
 				assertEquals(
 				    Double.doubleToRawLongBits(hurt.event().writeX()), Double.doubleToRawLongBits(motion.writeX()));
 				assertEquals(
@@ -138,7 +141,7 @@ final class SimulatorTest {
 			long clientBefore = StateDigest.state(boundary.clientState());
 			long serverBefore = StateDigest.server(boundary.serverState());
 			Publisher publisherBefore = boundary.publisher();
-			sawPending |= boundary.hasPendingEffect();
+			sawPending |= boundary.hasPendingHurt();
 			Simulator.Step first = simulator.advance(boundary, action, world);
 			Simulator.Step replay = simulator.advance(boundary, action, world);
 			assertEquals(clientBefore, StateDigest.state(boundary.clientState()));
@@ -215,7 +218,7 @@ final class SimulatorTest {
 		Simulator.Run replay = new Simulator().run(groundedState(), groundedState(), actions, flatWorld());
 
 		assertFalse(replay.timeline().isEmpty());
-		assertTrue(replay.timeline().events().stream().allMatch(EntityDataWrite.class ::isInstance));
+		assertTrue(replay.timeline().writes().stream().allMatch(EntityDataWrite.class ::isInstance));
 		assertTrue(replay.confirmations().stream().anyMatch(Simulator.SprintConfirmation.class ::isInstance));
 		assertTrue(replay.confirmations().stream().anyMatch(Simulator.PoseConfirmation.class ::isInstance));
 	}
@@ -370,7 +373,7 @@ final class SimulatorTest {
 
 		Simulator.Step step = kernel.advance(kernel.start(client, server), IDLE, flatWorld());
 
-		assertEquals(new Simulator.FreezeWrite(23, 7), step.freezeBeforeAction());
+		assertEquals(new Simulator.FreezeSnapshot(23, 7), step.freezeBeforeAction());
 		assertEquals(23, step.state().clientState().ticksFrozen);
 		assertEquals(7, step.state().clientState().frostSpeedTicks);
 		Simulator.Step delivered = kernel.advance(step.state(), IDLE, flatWorld());
@@ -405,8 +408,8 @@ final class SimulatorTest {
 		// publishes the mark and the client applies it before the tick after
 		// next, the phase the live captures measure. Delivery at that boundary
 		// is pinned separately by aPendingBoundaryPublicationIsDeliveredAfterItsFirstAction.
-		assertEquals(write.event().causeTick() + 1, write.actionIndex());
-		assertEquals(write.event().causeTick() + 1, write.event().writeAfterTick());
+		assertEquals(write.event().causeAction() + 1, write.actionIndex());
+		assertEquals(write.event().causeAction() + 1, write.event().writeAfterAction());
 		assertTrue(write.event().writeY() < 0.0, "a damaging landing publishes the hidden server's downward motion");
 		assertEquals(rawBits(write.event().writeY()),
 		    rawBits(replay.timeline().hurtMotion().getFirst().event().writeY()),
@@ -442,7 +445,7 @@ final class SimulatorTest {
 		int consumed = -1;
 		for (int tick = 0; tick < actions.size(); tick++) {
 			boundary = kernel.advance(boundary, actions.get(tick), towerWorld()).state();
-			if (boundary.hasPendingEffect()) {
+			if (boundary.hasPendingHurt()) {
 				consumed = tick + 1;
 				break;
 			}
@@ -464,13 +467,13 @@ final class SimulatorTest {
 		Simulator.Run scheduled =
 		    new Simulator().run(towerStart(), towerServerWithoutRegeneration(), actions, towerWorld());
 		Simulator.Run observed =
-		    Simulator.observed().run(towerStart(), towerServerWithoutRegeneration(), actions, towerWorld());
+		    Simulator.forObservedConnection().run(towerStart(), towerServerWithoutRegeneration(), actions, towerWorld());
 
 		HurtMotionWrite constructed = scheduled.timeline().hurtMotion().getFirst();
 		HurtMotionWrite free = observed.timeline().hurtMotion().getFirst();
 		assertEquals(
 		    constructed.actionIndex(), free.actionIndex(), "both deliver at the boundary after the landing action");
-		assertEquals(constructed.event().causeTick(), free.event().causeTick());
+		assertEquals(constructed.event().causeAction(), free.event().causeAction());
 		assertTrue(free.event().writeY() < 0.0 && constructed.event().writeY() < 0.0);
 	}
 
@@ -539,7 +542,7 @@ final class SimulatorTest {
 		assertEquals(1, delivery.hurtMotion().size());
 		HurtMotionWrite write = delivery.hurtMotion().getFirst();
 		assertEquals(HurtCause.FLY_INTO_WALL, write.event().cause());
-		assertEquals(0, write.event().causeTick());
+		assertEquals(0, write.event().causeAction());
 		assertEquals(1, write.actionIndex());
 		assertTrue(delivery.confirmations().stream().anyMatch(Simulator.VelocityConfirmation.class ::isInstance),
 		    "the hurt-marked publication has a decoded wire value to confirm");
@@ -547,11 +550,11 @@ final class SimulatorTest {
 
 	/** Stone floor at y=-1 and a stone wall filling x=0 from y=3 to y=6. */
 	private static SnapshotView wallWorld() {
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot.BlockEntry stone = new WorldSnapshot.BlockEntry(
-		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
+		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry stone = new BlockEntry(
+		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -6, -3, -6, 12, 12, 12)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -6, -3, -6, 12, 12, 12)
 		        .palette(air, stone);
 		for (int z = -6; z < 6; z++) {
 			for (int x = -6; x < 6; x++) {
@@ -598,10 +601,10 @@ final class SimulatorTest {
 				}
 			}
 		}
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot.BlockEntry stone = new WorldSnapshot.BlockEntry(
-		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
+		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry stone = new BlockEntry(
+		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
 		return SnapshotView.compile(new WorldSnapshot(
-		    0, 0, 0, size, height, size, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(air, stone), cells));
+		    0, 0, 0, size, height, size, OutsidePolicy.REFUSING, List.of(air, stone), cells));
 	}
 }

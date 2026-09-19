@@ -9,7 +9,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  *
  * <p>Optimization metadata only: every use rechecks world identity, the span's
  * collision version and its bounds, so a stale retention can only become a
- * miss. It is a property of the world neighbourhood rather than of one player,
+ * miss. It is a property of the world neighborhood rather than of one player,
  * yet each workspace keeps its own: the client's and the server's copies are
  * one packet apart, and sharing a span between them measured a repeatable loss
  * on the captured terrain route, where the two positions straddle cell
@@ -27,6 +27,9 @@ import com.nettarion.stride.simulator.world.WorldView;
  * view without an identity is never covered.
  */
 public final class RetainedSpan {
+	/** An empty span that answers nothing until {@code retain} is called. */
+	public RetainedSpan() {}
+
 	final CollisionBuffer boxes = new CollisionBuffer();
 	private long world;
 	private long version;

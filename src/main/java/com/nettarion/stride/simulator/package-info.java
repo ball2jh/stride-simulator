@@ -41,7 +41,7 @@
  * world itself.
  *
  * <p>The subpackages are the mechanics. {@code tick} is the player tick as a phase pipeline,
- * shared by both copies; {@code block} is the block behaviours keyed by palette entry and the
+ * shared by both copies; {@code block} is the block behaviors keyed by palette entry and the
  * traversal that applies them; {@code server} is what only the server does and its one stream of
  * writes; {@code world} is the captured world and its compiled views; {@code geometry} is boxes,
  * pinned math and collision buffers; {@code trace} is the simulator's own serialization. They
@@ -53,15 +53,15 @@
  * measured comparison. An unimplemented mechanic refuses through a typed exception
  * ({@link com.nettarion.stride.simulator.UnimplementedMechanicException} and the server-write
  * refusals); it never guesses, so a refused transition is intentional and an admitted wrong
- * result is a bug. Every refusal is a {@link com.nettarion.stride.simulator.Refuses} naming one
- * {@link com.nettarion.stride.simulator.Refusal} boundary beside its message, records no
+ * result is a bug. Every refusal is a {@link com.nettarion.stride.simulator.RefusalException} naming one
+ * {@link com.nettarion.stride.simulator.RefusalCause} boundary beside its message, records no
  * stack trace unless {@code stride.refusal.trace} is set, and builds a message that names
  * coordinates or values only when something reads it: a refusal is a signal on the search's
  * hot path, and its cause is what a consumer counts.
  *
  * <p>The admitted slice is a bare non-peaceful survival player at normal tick rate with declared
  * food facts. Unsupported equipment, external actors without a declared
- * {@link com.nettarion.stride.simulator.ExternalActor} schedule, unmodelled world mutation, fluid
+ * {@link com.nettarion.stride.simulator.ExternalActor} schedule, unmodeled world mutation, fluid
  * evolution, paused tick rates, creative ability packets and death refuse at their first required
  * transition. Captures and headless comparisons are evidence for this slice, not a proof over every
  * Minecraft state, and no asynchronous live-equivalence claim is made.

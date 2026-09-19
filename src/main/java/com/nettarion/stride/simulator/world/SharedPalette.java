@@ -28,21 +28,21 @@ import java.util.Objects;
  * that captures sections owns it.
  */
 public final class SharedPalette {
-	private final List<WorldSnapshot.BlockEntry> blocks = new ArrayList<>();
-	private final Map<WorldSnapshot.BlockEntry, Integer> blockIndices = new HashMap<>();
-	private final List<WorldSnapshot.FluidEntry> fluids = new ArrayList<>();
-	private final Map<WorldSnapshot.FluidEntry, Integer> fluidIndices = new HashMap<>();
-	private List<WorldSnapshot.BlockEntry> blockView = List.of();
-	private List<WorldSnapshot.FluidEntry> fluidView = List.of();
+	private final List<BlockEntry> blocks = new ArrayList<>();
+	private final Map<BlockEntry, Integer> blockIndices = new HashMap<>();
+	private final List<FluidEntry> fluids = new ArrayList<>();
+	private final Map<FluidEntry, Integer> fluidIndices = new HashMap<>();
+	private List<BlockEntry> blockView = List.of();
+	private List<FluidEntry> fluidView = List.of();
 
 	/** Creates an empty palette interner for sharing consistent block and fluid identities across snapshots. */
 	public SharedPalette() {
-		this.fluidIndices.put(WorldSnapshot.FluidEntry.EMPTY, 0);
-		this.fluids.add(WorldSnapshot.FluidEntry.EMPTY);
+		this.fluidIndices.put(FluidEntry.EMPTY, 0);
+		this.fluids.add(FluidEntry.EMPTY);
 	}
 
 	/** The index of {@code entry}, interned on first sight. */
-	public int index(final WorldSnapshot.BlockEntry entry) {
+	public int index(final BlockEntry entry) {
 		Integer index = this.blockIndices.get(Objects.requireNonNull(entry, "entry"));
 		if (index == null) {
 			index = this.blocks.size();
@@ -54,7 +54,7 @@ public final class SharedPalette {
 	}
 
 	/** The index of {@code entry}, interned on first sight; the empty entry is always zero. */
-	public int fluidIndex(final WorldSnapshot.FluidEntry entry) {
+	public int fluidIndex(final FluidEntry entry) {
 		Integer index = this.fluidIndices.get(Objects.requireNonNull(entry, "entry"));
 		if (index == null) {
 			index = this.fluids.size();
@@ -71,8 +71,8 @@ public final class SharedPalette {
 	 * listed, so a section holding an earlier list still reads its own cells
 	 * correctly from a later one.
 	 */
-	public List<WorldSnapshot.BlockEntry> blocks() {
-		List<WorldSnapshot.BlockEntry> view = this.blockView;
+	public List<BlockEntry> blocks() {
+		List<BlockEntry> view = this.blockView;
 		if (view == null) {
 			view = Collections.unmodifiableList(new ArrayList<>(this.blocks));
 			this.blockView = view;
@@ -81,8 +81,8 @@ public final class SharedPalette {
 	}
 
 	/** The fluid palette as it stands; see {@link #blocks()}. */
-	public List<WorldSnapshot.FluidEntry> fluids() {
-		List<WorldSnapshot.FluidEntry> view = this.fluidView;
+	public List<FluidEntry> fluids() {
+		List<FluidEntry> view = this.fluidView;
 		if (view == null) {
 			view = Collections.unmodifiableList(new ArrayList<>(this.fluids));
 			this.fluidView = view;

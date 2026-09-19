@@ -12,7 +12,7 @@ import com.nettarion.stride.simulator.tick.Scratch;
  * that sweeps through its cell applies nothing; the palette carries it as
  * a contact fact because only the server feels it.
  */
-final class MagmaBlock extends BlockBehaviour {
+final class MagmaBlock extends BlockBehavior {
 	static final MagmaBlock INSTANCE = new MagmaBlock();
 
 	private MagmaBlock() {}

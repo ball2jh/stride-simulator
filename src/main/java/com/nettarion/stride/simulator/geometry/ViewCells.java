@@ -29,7 +29,7 @@ package com.nettarion.stride.simulator.geometry;
  * pitch is one control. The swimming pitch reads one table sine, the swim
  * cell. Fall flying reads the table sine and cosine of the lean angle, the
  * glide cell, and also the real {@code Math.cos} of that angle for lift,
- * which the table does not quantise, so the glide keys are the table cell and
+ * which the table does not quantize, so the glide keys are the table cell and
  * the lift value together. A caller merging proposals keys on the reads the
  * coming tick will make, or on a superset of them; a key coarser than the
  * reads merges distinct kinematics.
@@ -73,7 +73,7 @@ public final class ViewCells {
 		return pack(Mth.sin(radians), Mth.cos(radians));
 	}
 
-	/** The real cosine the fall-flying lift read of {@code xRot} returns, unquantised by the table. */
+	/** The real cosine the fall-flying lift read of {@code xRot} returns, unquantized by the table. */
 	public static long glideLift(final float xRot) {
 		return Double.doubleToRawLongBits(Math.cos(xRot * DEGREES_TO_RADIANS));
 	}

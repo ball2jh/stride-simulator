@@ -23,6 +23,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 final class HurtMotionTest {
 	@Test
@@ -72,17 +75,17 @@ final class HurtMotionTest {
 		List<PlayerInput> plan = Collections.nCopies(40, PlayerInput.idle(0.0F, 0.0F));
 
 		HurtMotion event = first(start, plan, snapshot).orElseThrow();
-		PlayerState boundary = replay(start, plan, snapshot, event.writeAfterTick() + 1);
+		PlayerState boundary = replay(start, plan, snapshot, event.writeAfterAction() + 1);
 
 		// The landing packet's mark is published by the next step's tracker
 		// sample and applied before the tick after next, as the live captures
 		// measure, so the write completes after tick 14.
-		assertEquals(13, event.causeTick());
-		assertEquals(14, event.writeAfterTick());
+		assertEquals(13, event.causeAction());
+		assertEquals(14, event.writeAfterAction());
 		double boundaryX = boundary.deltaMovementX;
 		double boundaryY = boundary.deltaMovementY;
 		double boundaryZ = boundary.deltaMovementZ;
-		event.applyAfterTick(event.writeAfterTick(), boundary);
+		event.applyAfterTick(event.writeAfterAction(), boundary);
 		assertEquals(boundaryX, boundary.deltaMovementX);
 		assertEquals(event.writeY(), boundary.deltaMovementY);
 		assertNotEquals(boundaryY, boundary.deltaMovementY, "decoded motion quantizes the server vector");
@@ -101,12 +104,12 @@ final class HurtMotionTest {
 
 		HurtMotion event = first(start, plan, snapshot).orElseThrow();
 
-		assertEquals(13, event.causeTick());
-		assertEquals(14, event.writeAfterTick());
-		PlayerState boundary = replay(start, plan, snapshot, event.writeAfterTick() + 1);
+		assertEquals(13, event.causeAction());
+		assertEquals(14, event.writeAfterAction());
+		PlayerState boundary = replay(start, plan, snapshot, event.writeAfterAction() + 1);
 		assertTrue(boundary.deltaMovementY > 0.0);
 		assertTrue(event.writeY() < 0.0);
-		event.applyAfterTick(event.writeAfterTick(), boundary);
+		event.applyAfterTick(event.writeAfterAction(), boundary);
 		assertEquals(event.writeX(), boundary.deltaMovementX);
 		assertEquals(event.writeY(), boundary.deltaMovementY);
 		assertEquals(event.writeZ(), boundary.deltaMovementZ);
@@ -157,10 +160,10 @@ final class HurtMotionTest {
 				cells[(localY * size + localZ) * size + localX] = 1;
 			}
 		}
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot.BlockEntry stone = new WorldSnapshot.BlockEntry(
-		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
+		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry stone = new BlockEntry(
+		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
 		return new WorldSnapshot(origin, originY, origin, size, size, size,
-		    WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(air, stone), cells);
+		    OutsidePolicy.REFUSING, List.of(air, stone), cells);
 	}
 }

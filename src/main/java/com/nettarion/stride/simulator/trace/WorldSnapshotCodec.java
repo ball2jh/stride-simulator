@@ -1,12 +1,12 @@
 package com.nettarion.stride.simulator.trace;
 
-import com.nettarion.stride.simulator.world.WorldSnapshot.BlockEntry;
-import com.nettarion.stride.simulator.world.WorldSnapshot.CollisionShapeIdentity;
-import com.nettarion.stride.simulator.world.WorldSnapshot.FluidEntry;
-import com.nettarion.stride.simulator.world.WorldSnapshot.FluidKind;
-import com.nettarion.stride.simulator.world.WorldSnapshot.OutsideRegion;
-import com.nettarion.stride.simulator.world.WorldSnapshot.ShapeBox;
-import com.nettarion.stride.simulator.world.WorldSnapshot.Suffocation;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.ShapeProvenance;
+import com.nettarion.stride.simulator.world.FluidEntry;
+import com.nettarion.stride.simulator.world.FluidKind;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.Suffocation;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import com.nettarion.stride.simulator.world.WorldView.BubbleColumnMode;
 import com.nettarion.stride.simulator.world.WorldView.CollisionBehavior;
@@ -112,7 +112,7 @@ public final class WorldSnapshotCodec {
 			                         .append('\t')
 			                         .append(entry.climbability().name())
 			                         .append('\t')
-			                         .append(entry.collisionShapeIdentity().name())
+			                         .append(entry.shapeProvenance().name())
 			                         .append('\t')
 			                         .append(entry.contact().name())
 			                         .append('\t')
@@ -243,7 +243,7 @@ public final class WorldSnapshotCodec {
 		    || (long) originZ + sizeZ > Integer.MAX_VALUE) {
 			throw new IOException("world region exceeds coordinate domain");
 		}
-		OutsideRegion outsideRegion = OutsideRegion.valueOf(outside[1]);
+		OutsidePolicy outsideRegion = outsidePolicy(outside[1]);
 		int paletteSize = Integer.parseInt(paletteHeader[1]);
 
 		if (paletteSize <= 0) throw new IOException("empty or negative block palette");
@@ -279,9 +279,9 @@ public final class WorldSnapshotCodec {
 				boxes.add(new ShapeBox(unhex64(parts[0]), unhex64(parts[1]), unhex64(parts[2]), unhex64(parts[3]),
 				    unhex64(parts[4]), unhex64(parts[5])));
 			}
-			CollisionShapeIdentity collisionShapeIdentity = version >= 14
-			    ? CollisionShapeIdentity.valueOf(cells[collisionIdentityIndex])
-			    : CollisionShapeIdentity.LEGACY_GEOMETRY;
+			ShapeProvenance shapeProvenance = version >= 14
+			    ? ShapeProvenance.valueOf(cells[collisionIdentityIndex])
+			    : ShapeProvenance.LEGACY_GEOMETRY;
 			String name = cells[3];
 			WorldView.Contact contact =
 			    version >= 15 ? WorldView.Contact.valueOf(cells[20]) : BlockEntry.legacyContact(name);
@@ -293,7 +293,7 @@ public final class WorldSnapshotCodec {
 			    Float.intBitsToFloat(Integer.parseUnsignedInt(cells[6], 16)), movingPiston,
 			    suppressesSupportingSpeedFactor, bubbleColumnMode, fallDistanceResetting, collisionBehavior,
 			    suffocation, insideEffect, bounceRestitution, suppressesBounce, stepOn, retainsSupportPos, climbability,
-			    collisionShapeIdentity, contact, landing, boxes));
+			    shapeProvenance, contact, landing, boxes));
 		}
 
 		String[] fluidHeader = header(reader, "#fluid-palette", 2);
@@ -391,5 +391,14 @@ public final class WorldSnapshotCodec {
 			case "1" -> true;
 			default -> throw new IOException("invalid " + what + " flag: " + value);
 		};
+	}
+	/** Decodes the outside policy label, accepting the pre-0.1 name {@code ROLLOUT_TERMINATING}. */
+	private static OutsidePolicy outsidePolicy(final String label) throws IOException {
+		if (label.equals("ROLLOUT_TERMINATING")) return OutsidePolicy.REFUSING;
+		try {
+			return OutsidePolicy.valueOf(label);
+		} catch (IllegalArgumentException e) {
+			throw new IOException("unknown outside policy: " + label, e);
+		}
 	}
 }

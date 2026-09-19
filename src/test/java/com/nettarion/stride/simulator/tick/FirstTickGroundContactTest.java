@@ -10,6 +10,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.ShapeProvenance;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 /**
  * What a grounded state's first tick does to its ground contact, as
@@ -28,8 +32,8 @@ class FirstTickGroundContactTest {
 
 	@Test
 	void theRetainedStandingVelocityHoldsGroundOnTheFirstTick() {
-		for (WorldSnapshot.CollisionShapeIdentity identity : WorldSnapshot.CollisionShapeIdentity.values()) {
-			if (identity == WorldSnapshot.CollisionShapeIdentity.LEGACY_GEOMETRY) {
+		for (ShapeProvenance identity : ShapeProvenance.values()) {
+			if (identity == ShapeProvenance.LEGACY_GEOMETRY) {
 				continue;
 			}
 			SnapshotView world = floor(identity);
@@ -47,7 +51,7 @@ class FirstTickGroundContactTest {
 
 	@Test
 	void zeroRetainedVelocityRequestsNoMoveAndLosesGroundForOneTick() {
-		SnapshotView world = floor(WorldSnapshot.CollisionShapeIdentity.GENERAL);
+		SnapshotView world = floor(ShapeProvenance.GENERAL);
 		PlayerState state = standing(0.5, 0.0, 0.5);
 		ClientTick kernel = new ClientTick();
 		Scratch scratch = new Scratch();
@@ -77,15 +81,15 @@ class FirstTickGroundContactTest {
 		return state;
 	}
 
-	private static SnapshotView floor(final WorldSnapshot.CollisionShapeIdentity identity) {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build();
-		WorldSnapshot.BlockEntry.Builder stone =
-		    WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").boxes(WorldSnapshot.ShapeBox.FULL_CUBE);
-		if (identity == WorldSnapshot.CollisionShapeIdentity.CANONICAL_FULL) {
+	private static SnapshotView floor(final ShapeProvenance identity) {
+		BlockEntry air = BlockEntry.builder(0, "minecraft:air").build();
+		BlockEntry.Builder stone =
+		    BlockEntry.builder(1, "minecraft:stone").boxes(ShapeBox.FULL_CUBE);
+		if (identity == ShapeProvenance.CANONICAL_FULL) {
 			stone.fullCube();
 		}
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -8, -3, -8, 16, 12, 16)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -3, -8, 16, 12, 16)
 		        .palette(air, stone.build());
 		for (int x = -8; x < 8; x++) {
 			for (int z = -8; z < 8; z++) {

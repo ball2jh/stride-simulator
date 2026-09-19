@@ -17,6 +17,8 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 class CaptureFormatTest {
 	@TempDir Path temporaryDirectory;
@@ -110,7 +112,7 @@ class CaptureFormatTest {
 	}
 
 	private static WorldSnapshot world() {
-		return new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING,
-		    List.of(new WorldSnapshot.BlockEntry(0, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of())), new int[] {0});
+		return new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.REFUSING,
+		    List.of(new BlockEntry(0, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of())), new int[] {0});
 	}
 }

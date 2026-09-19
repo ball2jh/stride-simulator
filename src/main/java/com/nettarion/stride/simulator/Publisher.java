@@ -21,6 +21,9 @@ import java.util.Objects;
  * hold one per slot without allocating.
  */
 public final class Publisher {
+	/** A publisher with no packet history; prefer {@link #atBoundary}. */
+	public Publisher() {}
+
 	/**
 	 * {@code Mth.square(2.0E-4)}: the strict squared-distance threshold above
 	 * which the publisher sends a position, computed as vanilla computes it.
@@ -154,7 +157,7 @@ public final class Publisher {
 		return MovementPacket.NONE;
 	}
 
-	/** Refuses non-finite baselines or a negative reminder. */
+	/** RefusalException non-finite baselines or a negative reminder. */
 	public void requireValid() {
 		if (!Double.isFinite(this.xLast) || !Double.isFinite(this.yLast) || !Double.isFinite(this.zLast)) {
 			throw new IllegalStateException("published position must be finite");

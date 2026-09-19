@@ -8,7 +8,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  * A cobweb: {@code WebBlock.entityInside}, which for a player is one
  * {@code Player.makeStuckInBlock} with the web's vector.
  */
-final class WebBlock extends BlockBehaviour {
+final class WebBlock extends BlockBehavior {
 	static final WebBlock INSTANCE = new WebBlock();
 
 	private WebBlock() {}

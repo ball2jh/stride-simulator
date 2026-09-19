@@ -137,7 +137,7 @@ public final class SimulationState {
 	}
 
 	/** Whether the previous input caused a hit whose write the next step publishes. */
-	public boolean hasPendingEffect() {
+	public boolean hasPendingHurt() {
 		return this.pendingHurt != null;
 	}
 

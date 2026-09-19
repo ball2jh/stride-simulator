@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 class ClientTickStepAndEdgeTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
@@ -99,10 +101,10 @@ class ClientTickStepAndEdgeTest {
 	 * A standing box centered at z=1.5 lies entirely over the gap.
 	 */
 	static WorldSnapshot oneBlockGapWorld() {
-		WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "test:air").build();
-		WorldSnapshot.BlockEntry stone = WorldSnapshot.BlockEntry.builder(1, "test:stone").fullCube().build();
+		BlockEntry air = BlockEntry.builder(0, "test:air").build();
+		BlockEntry stone = BlockEntry.builder(1, "test:stone").fullCube().build();
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -4, -4, 9, 10, 12)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -4, -4, 9, 10, 12)
 		        .palette(air, stone);
 		for (int z = -4; z <= 7; z++) {
 			if (z == 1) {

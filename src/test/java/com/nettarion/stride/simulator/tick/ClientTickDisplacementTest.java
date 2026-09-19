@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 final class ClientTickDisplacementTest {
 	@Test
@@ -37,10 +40,10 @@ final class ClientTickDisplacementTest {
 				cells[(localY * size + localZ) * size + localX] = 1;
 			}
 		}
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot.BlockEntry stone = new WorldSnapshot.BlockEntry(
-		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
+		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry stone = new BlockEntry(
+		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
 		return new WorldSnapshot(origin, originY, origin, size, size, size,
-		    WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(air, stone), cells);
+		    OutsidePolicy.REFUSING, List.of(air, stone), cells);
 	}
 }

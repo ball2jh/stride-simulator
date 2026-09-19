@@ -2,6 +2,7 @@ package com.nettarion.stride.simulator.block;
 
 import com.nettarion.stride.simulator.world.CompleteWorldView;
 import com.nettarion.stride.simulator.PlayerState;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.tick.Scratch;
@@ -81,7 +82,7 @@ class InsideBlockTraversalLifecycleTest {
 	}
 
 	/** An observable contact body with optional partial geometry and a one-shot refusal. */
-	private static final class ProbeBlock extends BlockBehaviour {
+	private static final class ProbeBlock extends BlockBehavior {
 		private final double[] shape;
 		private final List<Boolean> shapeHits = new ArrayList<>();
 		private int applications;
@@ -112,7 +113,7 @@ class InsideBlockTraversalLifecycleTest {
 			scratch.insideEffects.collectFreeze();
 			if (this.refuseOnce) {
 				this.refuseOnce = false;
-				throw new UnimplementedMechanicException("test contact refuses after collection");
+				throw new UnimplementedMechanicException(RefusalCause.UNMODELED_BLOCK, "test contact refuses after collection");
 			}
 		}
 	}
@@ -134,9 +135,9 @@ class InsideBlockTraversalLifecycleTest {
 		}
 
 		@Override
-		public BlockBehaviour behaviourAt(final int x, final int y, final int z) {
+		public BlockBehavior behaviorAt(final int x, final int y, final int z) {
 			this.queriedX.add(x);
-			return x == this.cellX && y == 0 && z == 0 ? this.block : BlockBehaviour.INERT;
+			return x == this.cellX && y == 0 && z == 0 ? this.block : BlockBehavior.INERT;
 		}
 
 		@Override

@@ -1,14 +1,16 @@
 package com.nettarion.stride.simulator.server;
 
 import com.nettarion.stride.simulator.BlockUpdateWrite;
+import com.nettarion.stride.simulator.CorrectionReason;
 import com.nettarion.stride.simulator.DamageEvent;
+import com.nettarion.stride.simulator.MovementCorrection;
 import com.nettarion.stride.simulator.DamageWrite;
 import com.nettarion.stride.simulator.EntityDataWrite;
 import com.nettarion.stride.simulator.HealthWrite;
 import com.nettarion.stride.simulator.HurtMotion;
 import com.nettarion.stride.simulator.HurtMotionWrite;
 import com.nettarion.stride.simulator.ServerWrite;
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.MovementPacket;
 import com.nettarion.stride.simulator.PendingServerWriteException;
@@ -62,17 +64,17 @@ import java.util.function.Consumer;
  * drowning are dealt in {@link com.nettarion.stride.simulator.tick.BaseTick}, the glide travel's wall impact in
  * {@link Travel}, the contact bodies the movement reached (hot floor,
  * cactus, berry bush, campfire, fire, lava, water) in {@link com.nettarion.stride.simulator.block.BlockEffects}
- * through each block's {@link com.nettarion.stride.simulator.block.BlockBehaviour}, and the freezing hit in
+ * through each block's {@link com.nettarion.stride.simulator.block.BlockBehavior}, and the freezing hit in
  * {@link com.nettarion.stride.simulator.tick.Freezing}; then {@link com.nettarion.stride.simulator.server.FoodData} advances the food timer and exhaustion,
  * publishing changed health and food, then the position anchor
  * is restored and the floating counter advances. The movement handler is
- * {@link ServerGamePacketListenerImpl}: {@code handleMovePlayer} on the
+ * {@link ServerMovementListener}: {@code handleMovePlayer} on the
  * decoded packet, landing it through the landed block's {@code fallOn}.
  * Every hit runs {@code LivingEntity.hurtServer}'s cooldown and absorption
  * algebra through the one {@link Survival} bound to the copy and is a
  * {@link DamageEvent}.
  *
- * <p>What the slice cannot decide refuses: a contact body with no behaviour,
+ * <p>What the slice cannot decide refuses: a contact body with no behavior,
  * fire's random re-ignition increment, freeze damage at an unknown tick
  * count, a farmland trample, a death, an attached rocket's writes, the
  * glider's durability write, and any hit on a player who may fly, whose
@@ -86,7 +88,7 @@ import java.util.function.Consumer;
 public final class ServerTick {
 	/** Process an explicit acknowledgement of a correction returned by transact. */
 	public void handleAcceptTeleportPacket(final ServerPlayerState server, final int teleportId) {
-		ServerGamePacketListenerImpl.handleAcceptTeleportPacket(server, teleportId);
+		ServerMovementListener.handleAcceptTeleportPacket(server, teleportId);
 	}
 
 	/** {@code getMaximumFlyingTicks} for ordinary gravity. */
@@ -157,11 +159,11 @@ public final class ServerTick {
 	 * next client tick, which is the measured transport phase.
 	 *
 	 * @param hurt the hit whose mark the sample saw, or {@code null}
-	 * @param causeTick the input that caused that hit, the previous action:
+	 * @param causeAction the input that caused that hit, the previous action:
 	 *     its packet drain or the server tick that followed it dealt the hit
 	 */
 	public void deliverPublications(final int action, final PlayerState client, final ServerPlayerState server,
-	    final HurtCause hurt, final int causeTick, final Consumer<? super ServerWrite> writes) {
+	    final HurtCause hurt, final int causeAction, final Consumer<? super ServerWrite> writes) {
 		// Each write is bound to the client state it is about to change, and
 		// delivered to that very state, so the binding digest is taken once.
 		EntityDataWrite data = this.serverEntity.publication(action, client);
@@ -171,9 +173,9 @@ public final class ServerTick {
 		}
 		if (hurt != null) {
 			HurtMotion decoded = this.hurtMotionAfterNextPacket
-			    ? HurtMotion.decoded(hurt, causeTick, action, client, server.deltaMovementX, server.deltaMovementY,
+			    ? HurtMotion.decoded(hurt, causeAction, action, client, server.deltaMovementX, server.deltaMovementY,
 			          server.deltaMovementZ)
-			    : HurtMotion.decoded(hurt, causeTick, action, client, this.serverEntity.motionX,
+			    : HurtMotion.decoded(hurt, causeAction, action, client, this.serverEntity.motionX,
 			          this.serverEntity.motionY, this.serverEntity.motionZ);
 			decoded.applyToDigestedState(client);
 			writes.accept(new HurtMotionWrite(action, decoded));
@@ -199,7 +201,7 @@ public final class ServerTick {
 			if (world != ownedWorld) throw new IllegalStateException("server world belongs to another branch");
 			if (mayInteract == null)
 				throw new UnimplementedMechanicException(
-				    Refusal.UNMODELLED_WORLD_WRITE, "cauldron interaction permission is unknown");
+				    RefusalCause.UNMODELED_WORLD_WRITE, "cauldron interaction permission is unknown");
 			if (!mayInteract) return;
 			world.requireCauldronUpdateClosure(x, y, z);
 			List<DamageEvent> damage = this.authority.survival().dealt();
@@ -222,7 +224,7 @@ public final class ServerTick {
 	    final ServerPlayerState server, final SnapshotView world) {
 		if (packet == MovementPacket.NONE) throw new IllegalArgumentException("NONE is not a packet");
 		beginEvent(server);
-		return ServerGamePacketListenerImpl.handleMovePlayer(payload, packet, server, world, this.serverScratch, true);
+		return ServerMovementListener.handleMovePlayer(payload, packet, server, world, this.serverScratch, true);
 	}
 
 	/**
@@ -230,17 +232,17 @@ public final class ServerTick {
          * packet batch.
          */
 	public void handleClientTickEnd(final ServerPlayerState server, final boolean receivedMovementThisTick) {
-		ServerGamePacketListenerImpl.handleClientTickEnd(server, receivedMovementThisTick);
+		ServerMovementListener.handleClientTickEnd(server, receivedMovementThisTick);
 	}
 
 	/** The input packet handler, independently scheduled from movement. */
 	public void handlePlayerInput(final ServerPlayerState server, final PlayerInput input) {
-		ServerGamePacketListenerImpl.handlePlayerInput(server, input);
+		ServerMovementListener.handlePlayerInput(server, input);
 	}
 
 	/** The START/STOP_SPRINTING command handler. */
 	public void handlePlayerCommand(final ServerPlayerState server, final boolean sprinting) {
-		ServerGamePacketListenerImpl.handlePlayerCommand(server, sprinting);
+		ServerMovementListener.handlePlayerCommand(server, sprinting);
 	}
 
 	/**
@@ -266,7 +268,7 @@ public final class ServerTick {
 		FoodData.requireSupported(server);
 		if (server.attachedRockets > 0)
 			throw new PendingServerWriteException(
-			    Refusal.UNMODELLED_SCHEDULE, "rocket actor scheduling is not modelled");
+			    RefusalCause.UNMODELED_SCHEDULE, "rocket actor scheduling is not modeled");
 		this.authority.begin(server);
 	}
 
@@ -345,11 +347,11 @@ public final class ServerTick {
 		// batch, including ClientTickEnd. At most one movement packet
 		// is published here; only an accepted one calls
 		// handlePlayerKnownMovement in native code.
-		ServerGamePacketListenerImpl.handleClientTickEnd(server,
+		ServerMovementListener.handleClientTickEnd(server,
 		    packet != MovementPacket.NONE && !(transaction instanceof Corrected)
 		        && !(transaction instanceof AwaitingTeleport));
 		if (transaction instanceof Corrected corrected) {
-			throw new UnpredictedServerWriteException(tick, corrected);
+			throw new UnpredictedServerWriteException(tick, corrected.correction());
 		}
 		return transaction;
 	}
@@ -415,11 +417,11 @@ public final class ServerTick {
 		// batch, including ClientTickEnd. At most one movement packet
 		// is published here; only an accepted one calls
 		// handlePlayerKnownMovement in native code.
-		ServerGamePacketListenerImpl.handleClientTickEnd(server,
+		ServerMovementListener.handleClientTickEnd(server,
 		    packet != MovementPacket.NONE && !(transaction instanceof Corrected)
 		        && !(transaction instanceof AwaitingTeleport));
 		if (transaction instanceof Corrected corrected) {
-			throw new UnpredictedServerWriteException(tick, corrected);
+			throw new UnpredictedServerWriteException(tick, corrected.correction());
 		}
 		for (DamageEvent hit : this.authority.survival().dealt()) {
 			writes.accept(new DamageWrite(tick, hit));
@@ -457,11 +459,11 @@ public final class ServerTick {
 		// batch, including ClientTickEnd. At most one movement packet
 		// is published here; only an accepted one calls
 		// handlePlayerKnownMovement in native code.
-		ServerGamePacketListenerImpl.handleClientTickEnd(server,
+		ServerMovementListener.handleClientTickEnd(server,
 		    packet != MovementPacket.NONE && !(transaction instanceof Corrected)
 		        && !(transaction instanceof AwaitingTeleport));
 		if (transaction instanceof Corrected corrected) {
-			throw new UnpredictedServerWriteException(tick, corrected);
+			throw new UnpredictedServerWriteException(tick, corrected.correction());
 		}
 		List<DamageEvent> dealt = this.authority.survival().dealt();
 		for (DamageEvent hit : dealt) {
@@ -509,7 +511,7 @@ public final class ServerTick {
 	private void beginStep(final PlayerState clientAfter, final ServerPlayerState server) {
 		FoodData.requireSupported(server);
 		if (server.attachedRockets > 0 && (server.fallFlying || clientAfter.fallFlying)) {
-			throw new PendingServerWriteException(Refusal.UNMODELLED_SCHEDULE,
+			throw new PendingServerWriteException(RefusalCause.UNMODELED_SCHEDULE,
 			    server.attachedRockets + " attached firework rocket(s) replace the gliding player's velocity on"
 			        + " every actor tick, on both sides; the rocket's server-private lifetime"
 			        + " and actor scheduling are outside the slice");
@@ -536,7 +538,7 @@ public final class ServerTick {
 		Optional<HurtCause> marked = this.authority.survival().marked();
 		List<DamageEvent> dealt = this.authority.survival().dealt();
 		if (transaction instanceof Corrected corrected) {
-			return new Corrected(corrected.packet(), corrected.cause(), corrected.targetX(), corrected.targetY(),
+			return new Corrected(corrected.packet(), corrected.reason(), corrected.targetX(), corrected.targetY(),
 			    corrected.targetZ(), corrected.resolvedX(), corrected.resolvedY(), corrected.resolvedZ(),
 			    corrected.residualSquared(), corrected.correctionX(), corrected.correctionY(), corrected.correctionZ(),
 			    corrected.correctionYRot(), corrected.correctionXRot(), marked, dealt);
@@ -563,8 +565,8 @@ public final class ServerTick {
 	private Transaction handlers(final PlayerState clientAfter, final MovementPacket packet,
 	    final ServerPlayerState server, final PlayerInput action, final SnapshotView world, final boolean sendInput,
 	    final boolean sendSprint, final boolean startFallFlying, final boolean reportSuccess) {
-		if (sendInput) ServerGamePacketListenerImpl.handlePlayerInput(server, action);
-		if (sendSprint) ServerGamePacketListenerImpl.handlePlayerCommand(server, clientAfter.sprinting);
+		if (sendInput) ServerMovementListener.handlePlayerInput(server, action);
+		if (sendSprint) ServerMovementListener.handlePlayerCommand(server, clientAfter.sprinting);
 		if (startFallFlying) handleStartFallFlying(server);
 		if (packet == MovementPacket.NONE) {
 			return reportSuccess
@@ -572,11 +574,11 @@ public final class ServerTick {
 			    : Unpublished.NONE;
 		}
 		if (server.correctionPending) {
-			throw new PendingServerWriteException(Refusal.PENDING_WRITE,
+			throw new PendingServerWriteException(RefusalCause.PENDING_WRITE,
 			    "a correction is pending the client's"
 			        + " acknowledgement; movement packets only apply rotation until then");
 		}
-		Transaction transaction = ServerGamePacketListenerImpl.handleMovePlayer(
+		Transaction transaction = ServerMovementListener.handleMovePlayer(
 		    clientAfter, packet, server, world, this.serverScratch, reportSuccess);
 		return transaction == null ? Unpublished.NONE : transaction;
 	}
@@ -602,7 +604,7 @@ public final class ServerTick {
 	 * accepted packet clears it.
 	 */
 	private void connectionTick(final ServerPlayerState server, final SnapshotView world) {
-		ServerGamePacketListenerImpl.resetPosition(server);
+		ServerMovementListener.resetPosition(server);
 		double anchorX = server.firstGoodX;
 		double anchorY = server.firstGoodY;
 		double anchorZ = server.firstGoodZ;
@@ -620,7 +622,7 @@ public final class ServerTick {
 		server.knownMovePacketCount = server.receivedMovePacketCount;
 		if (server.clientIsFloating || server.floatingUnknown) {
 			if (++server.aboveGroundTickCount > MAXIMUM_FLOATING_TICKS) {
-				throw new PendingServerWriteException(Refusal.UNMODELLED_SESSION_END,
+				throw new PendingServerWriteException(RefusalCause.UNMODELED_SESSION_END,
 				    server.clientIsFloating ? "the server kicks the client for floating after " + MAXIMUM_FLOATING_TICKS
 				            + " connection ticks"
 				                            : "the floating kick after " + MAXIMUM_FLOATING_TICKS
@@ -695,29 +697,24 @@ public final class ServerTick {
 		}
 	}
 
-	/** Why the listener corrected the movement packet. */
-	public enum Cause {
-		/** The displacement exceeded the connection interval's packet-scaled movement budget. */
-		MOVED_TOO_QUICKLY,
-		/** A movement packet triggered the pending teleport's twenty-tick retry. */
-		TELEPORT_RETRY,
-		/** The horizontal residual after collision exceeded the strict quarter block. */
-		MOVED_WRONGLY,
-		/** The target box meets a block shape the pre-packet box did not. */
-		NEW_COLLISION
-	}
-
 	/**
 	 * The listener sent the client back to its pre-packet position with the
 	 * packet's rotation and zero velocity, and awaits the acknowledgement.
 	 */
-	public record Corrected(MovementPacket packet, Cause cause, double targetX, double targetY, double targetZ,
+	public record Corrected(MovementPacket packet, CorrectionReason reason, double targetX, double targetY, double targetZ,
 	    double resolvedX, double resolvedY, double resolvedZ, double residualSquared, double correctionX,
 	    double correctionY, double correctionZ, float correctionYRot, float correctionXRot, Optional<HurtCause> hurt,
 	    List<DamageEvent> damage) implements Transaction {
 		public Corrected {
 			Objects.requireNonNull(hurt, "hurt");
 			damage = List.copyOf(damage);
+		}
+
+		/** This correction without its survival effects, for the refusal that reports it. */
+		public MovementCorrection correction() {
+			return new MovementCorrection(this.packet, this.reason, this.targetX, this.targetY, this.targetZ,
+			    this.resolvedX, this.resolvedY, this.resolvedZ, this.residualSquared, this.correctionX,
+			    this.correctionY, this.correctionZ, this.correctionYRot, this.correctionXRot);
 		}
 	}
 }

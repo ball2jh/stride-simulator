@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerState;
@@ -143,7 +143,7 @@ public final class BaseTick {
 		        == WorldView.BubbleColumnMode.NONE;
 		if (eyesInWater) {
 			if (server.mayfly) {
-				throw new PendingServerWriteException(Refusal.PENDING_ABILITY,
+				throw new PendingServerWriteException(RefusalCause.PENDING_ABILITY,
 				    "the server would count down the"
 				        + " air of a player who may fly; whether the ability came with"
 				        + " invulnerability is not a captured fact");

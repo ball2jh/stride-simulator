@@ -4,7 +4,7 @@ import com.nettarion.stride.simulator.world.CompleteWorldView;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 import com.nettarion.stride.simulator.block.BubbleColumnBlock;
 import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
@@ -136,8 +136,8 @@ class ClientTickCreativeFlightTest {
 	}
 
 	private static PlayerInput action(
-	    final boolean forward, final boolean jump, final boolean shift, final boolean sprint) {
-		return new PlayerInput(forward, false, false, false, jump, shift, sprint, 0.0F, 0.0F);
+	    final boolean forward, final boolean jump, final boolean sneak, final boolean sprint) {
+		return new PlayerInput(forward, false, false, false, jump, sneak, sprint, 0.0F, 0.0F);
 	}
 
 	private static void assertRaw(final double expected, final double actual) {
@@ -209,8 +209,8 @@ class ClientTickCreativeFlightTest {
 			return x == 0 && y == 0 && z == 0 ? BubbleColumnMode.PUSH_UP : BubbleColumnMode.NONE;
 		}
 		@Override
-		public BlockBehaviour behaviourAt(final int x, final int y, final int z) {
-			return x == 0 && y == 0 && z == 0 ? BubbleColumnBlock.PUSH_UP : BlockBehaviour.INERT;
+		public BlockBehavior behaviorAt(final int x, final int y, final int z) {
+			return x == 0 && y == 0 && z == 0 ? BubbleColumnBlock.PUSH_UP : BlockBehavior.INERT;
 		}
 	}
 }

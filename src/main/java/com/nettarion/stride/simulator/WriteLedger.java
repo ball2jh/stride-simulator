@@ -25,6 +25,9 @@ import java.util.Optional;
  * predicted is unattributed, which is what makes it a correction.
  */
 public final class WriteLedger {
+	/** An empty ledger with no expectations and no observations. */
+	public WriteLedger() {}
+
 	private static final int RETAINED_CONFIRMATIONS = 64;
 
 	private final ValueStream<Boolean> sprint = new ValueStream<>();

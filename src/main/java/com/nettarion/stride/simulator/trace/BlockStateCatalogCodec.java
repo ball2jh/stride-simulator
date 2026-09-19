@@ -6,6 +6,8 @@ import com.nettarion.stride.simulator.world.WorldSnapshot;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
 
 /** Portable independently extracted source records accompanying a captured world. */
 public final class BlockStateCatalogCodec {
@@ -22,7 +24,7 @@ public final class BlockStateCatalogCodec {
 		out.writeInt(1);
 		out.writeUTF(catalog.minecraftVersion());
 		var snapshot = new WorldSnapshot(
-		    0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, catalog.entries(), new int[] {0});
+		    0, 0, 0, 1, 1, 1, OutsidePolicy.REFUSING, catalog.entries(), new int[] {0});
 		var text = new StringWriter();
 		WorldSnapshotCodec.write(snapshot, text);
 		byte[] bytes = text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -74,16 +76,16 @@ public final class BlockStateCatalogCodec {
 			throw new IOException("invalid source records", invalid);
 		}
 	}
-	private static List<WorldSnapshot.ShapeBox> boxes(final DataInputStream in) throws IOException {
-		var result = new ArrayList<WorldSnapshot.ShapeBox>();
+	private static List<ShapeBox> boxes(final DataInputStream in) throws IOException {
+		var result = new ArrayList<ShapeBox>();
 		for (int n = count(in, 100000); n > 0; n--)
-			result.add(new WorldSnapshot.ShapeBox(Double.longBitsToDouble(in.readLong()),
+			result.add(new ShapeBox(Double.longBitsToDouble(in.readLong()),
 			    Double.longBitsToDouble(in.readLong()), Double.longBitsToDouble(in.readLong()),
 			    Double.longBitsToDouble(in.readLong()), Double.longBitsToDouble(in.readLong()),
 			    Double.longBitsToDouble(in.readLong())));
 		return List.copyOf(result);
 	}
-	private static void boxes(final DataOutputStream out, final List<WorldSnapshot.ShapeBox> boxes) throws IOException {
+	private static void boxes(final DataOutputStream out, final List<ShapeBox> boxes) throws IOException {
 		out.writeInt(boxes.size());
 		for (var b : boxes)
 			for (double v : new double[] {b.minX(), b.minY(), b.minZ(), b.maxX(), b.maxY(), b.maxZ()})

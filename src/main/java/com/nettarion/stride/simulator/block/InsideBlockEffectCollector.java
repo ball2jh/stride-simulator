@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.block;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
@@ -79,7 +79,7 @@ public final class InsideBlockEffectCollector {
 	void collectPowderSnowContact() {
 		this.beforeExtinguish.add(() -> {
 			if (this.authority.serverState().remainingFireTicks > 0) {
-				throw UnimplementedMechanicException.deferred(Refusal.UNMODELLED_WORLD_WRITE,
+				throw UnimplementedMechanicException.deferred(RefusalCause.UNMODELED_WORLD_WRITE,
 				    ()
 				        -> "a burning player melts the powder"
 				        + " snow it is in: a world write the slice does not make");
@@ -163,7 +163,7 @@ public final class InsideBlockEffectCollector {
 
 	private void assertCollectedStepUnambiguous() {
 		if (anyPendingInStep() && this.collectedStepAmbiguous) {
-			throw new UnimplementedMechanicException(Refusal.UNDECLARED_BLOCK_STATE,
+			throw new UnimplementedMechanicException(RefusalCause.UNDECLARED_BLOCK_STATE,
 			    "inside-block collected-effect step grouping depends on an unclassified cell");
 		}
 	}
@@ -212,7 +212,7 @@ public final class InsideBlockEffectCollector {
 		this.finalServerEffects.clear();
 	}
 
-	boolean hasPendingEffects() {
+	boolean hasPendingHurts() {
 		return this.freezePendingInStep || this.clearFreezePendingInStep || this.fireIgnitePendingInStep
 		    || this.lavaIgnitePendingInStep || this.extinguishPendingInStep || !this.finalServerEffects.isEmpty();
 	}
@@ -230,7 +230,7 @@ public final class InsideBlockEffectCollector {
 		this.startedInsideBlockSweep = true;
 	}
 
-	/** InsideBlockEffectApplier.StepBasedCollector.flushStep for modelled effects. */
+	/** InsideBlockEffectApplier.StepBasedCollector.flushStep for modeled effects. */
 	private void flushStep() {
 		if (this.freezePendingInStep) {
 			this.freezeSteps++;

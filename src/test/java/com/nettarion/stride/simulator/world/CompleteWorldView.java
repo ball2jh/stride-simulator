@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.world;
 
-import com.nettarion.stride.simulator.block.BlockBehaviour;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 
 /** Test-world shorthand whose implementations intentionally model a complete slice. */
 public interface CompleteWorldView extends WorldView {
@@ -11,7 +11,7 @@ public interface CompleteWorldView extends WorldView {
 
 	/** A test world holds no block body unless it says which. */
 	@Override
-	default BlockBehaviour behaviourAt(final int x, final int y, final int z) {
-		return BlockBehaviour.INERT;
+	default BlockBehavior behaviorAt(final int x, final int y, final int z) {
+		return BlockBehavior.INERT;
 	}
 }

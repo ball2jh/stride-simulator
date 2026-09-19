@@ -18,8 +18,8 @@ public final class HurtMotion {
 	private static final double PACKED_MAX = 32766.0;
 
 	private final HurtCause cause;
-	private final int causeTick;
-	private final int writeAfterTick;
+	private final int causeAction;
+	private final int writeAfterAction;
 	private final long expectedStateDigest;
 	private final double writeX;
 	private final double writeY;
@@ -28,12 +28,12 @@ public final class HurtMotion {
 	private final double beforeY;
 	private final double beforeZ;
 
-	private HurtMotion(final HurtCause cause, final int causeTick, final int writeAfterTick,
+	private HurtMotion(final HurtCause cause, final int causeAction, final int writeAfterAction,
 	    final long expectedStateDigest, final double writeX, final double writeY, final double writeZ,
 	    final double beforeX, final double beforeY, final double beforeZ) {
 		this.cause = cause;
-		this.causeTick = causeTick;
-		this.writeAfterTick = writeAfterTick;
+		this.causeAction = causeAction;
+		this.writeAfterAction = writeAfterAction;
 		this.expectedStateDigest = expectedStateDigest;
 		this.writeX = writeX;
 		this.writeY = writeY;
@@ -48,10 +48,10 @@ public final class HurtMotion {
 	 * round it through the 26.2 entity-motion packet before it can enter
 	 * planning; the write completes after the tick following the cause.
 	 */
-	public static HurtMotion decoded(final HurtCause cause, final int causeTick, final PlayerState expectedState,
+	public static HurtMotion decoded(final HurtCause cause, final int causeAction, final PlayerState expectedState,
 	    final double serverVelocityX, final double serverVelocityY, final double serverVelocityZ) {
-		requireCauseTick(causeTick);
-		return decoded(cause, causeTick, Math.addExact(causeTick, 1), expectedState, serverVelocityX, serverVelocityY,
+		requireCauseTick(causeAction);
+		return decoded(cause, causeAction, Math.addExact(causeAction, 1), expectedState, serverVelocityX, serverVelocityY,
 		    serverVelocityZ);
 	}
 
@@ -62,12 +62,12 @@ public final class HurtMotion {
 	 * for a hit the server's own tick dealt after it, later when the
 	 * transport was scheduled to hold the packet.
 	 */
-	public static HurtMotion decoded(final HurtCause cause, final int causeTick, final int writeAfterTick,
+	public static HurtMotion decoded(final HurtCause cause, final int causeAction, final int writeAfterAction,
 	    final PlayerState expectedState, final double serverVelocityX, final double serverVelocityY,
 	    final double serverVelocityZ) {
 		Objects.requireNonNull(cause, "cause");
-		requireCauseTick(causeTick);
-		if (writeAfterTick < causeTick) {
+		requireCauseTick(causeAction);
+		if (writeAfterAction < causeAction) {
 			throw new IllegalArgumentException("the write cannot complete before its cause");
 		}
 		Objects.requireNonNull(expectedState, "expectedState");
@@ -75,7 +75,7 @@ public final class HurtMotion {
 		requireFinite(serverVelocityY, "serverVelocityY");
 		requireFinite(serverVelocityZ, "serverVelocityZ");
 		double scale = wireScale(serverVelocityX, serverVelocityY, serverVelocityZ);
-		return new HurtMotion(cause, causeTick, writeAfterTick, StateDigest.state(expectedState),
+		return new HurtMotion(cause, causeAction, writeAfterAction, StateDigest.state(expectedState),
 		    quantize(serverVelocityX, scale), quantize(serverVelocityY, scale), quantize(serverVelocityZ, scale),
 		    expectedState.deltaMovementX, expectedState.deltaMovementY, expectedState.deltaMovementZ);
 	}
@@ -95,13 +95,13 @@ public final class HurtMotion {
 	 * {@code -1} when the hit belongs to an input before the run that
 	 * delivers it.
 	 */
-	public int causeTick() {
-		return this.causeTick;
+	public int causeAction() {
+		return this.causeAction;
 	}
 
 	/** Returns the action index after which this velocity publication is applied. */
-	public int writeAfterTick() {
-		return this.writeAfterTick;
+	public int writeAfterAction() {
+		return this.writeAfterAction;
 	}
 
 	/** Returns the decoded server payload's X velocity, in blocks per tick. */
@@ -141,9 +141,9 @@ public final class HurtMotion {
 	/** Apply this packet after the client tick in which it arrives. */
 	public void applyAfterTick(final int completedTick, final PlayerState state) {
 		Objects.requireNonNull(state, "state");
-		if (completedTick != this.writeAfterTick) {
+		if (completedTick != this.writeAfterAction) {
 			throw new IllegalArgumentException(
-			    "authority write belongs after tick " + this.writeAfterTick + ", not " + completedTick);
+			    "authority write belongs after tick " + this.writeAfterAction + ", not " + completedTick);
 		}
 		long actualDigest = StateDigest.state(state);
 		if (actualDigest != this.expectedStateDigest) {
@@ -163,8 +163,8 @@ public final class HurtMotion {
 	@Override
 	public boolean equals(final Object other) {
 		return this == other
-		    || other instanceof HurtMotion event && this.cause == event.cause && this.causeTick == event.causeTick
-		    && this.writeAfterTick == event.writeAfterTick && this.expectedStateDigest == event.expectedStateDigest
+		    || other instanceof HurtMotion event && this.cause == event.cause && this.causeAction == event.causeAction
+		    && this.writeAfterAction == event.writeAfterAction && this.expectedStateDigest == event.expectedStateDigest
 		    && Double.doubleToRawLongBits(this.writeX) == Double.doubleToRawLongBits(event.writeX)
 		    && Double.doubleToRawLongBits(this.writeY) == Double.doubleToRawLongBits(event.writeY)
 		    && Double.doubleToRawLongBits(this.writeZ) == Double.doubleToRawLongBits(event.writeZ);
@@ -173,8 +173,8 @@ public final class HurtMotion {
 	@Override
 	public int hashCode() {
 		int result = this.cause.hashCode();
-		result = 31 * result + this.causeTick;
-		result = 31 * result + this.writeAfterTick;
+		result = 31 * result + this.causeAction;
+		result = 31 * result + this.writeAfterAction;
 		result = 31 * result + Long.hashCode(this.expectedStateDigest);
 		result = 31 * result + Long.hashCode(Double.doubleToRawLongBits(this.writeX));
 		result = 31 * result + Long.hashCode(Double.doubleToRawLongBits(this.writeY));
@@ -183,12 +183,12 @@ public final class HurtMotion {
 
 	@Override
 	public String toString() {
-		return "HurtMotion[" + this.cause + " at input " + this.causeTick + ", write (" + this.writeX + ", "
-		    + this.writeY + ", " + this.writeZ + ") after input " + this.writeAfterTick + "]";
+		return "HurtMotion[" + this.cause + " at input " + this.causeAction + ", write (" + this.writeX + ", "
+		    + this.writeY + ", " + this.writeZ + ") after input " + this.writeAfterAction + "]";
 	}
 
-	private static void requireCauseTick(final int causeTick) {
-		if (causeTick < -1 || causeTick == Integer.MAX_VALUE) {
+	private static void requireCauseTick(final int causeAction) {
+		if (causeAction < -1 || causeAction == Integer.MAX_VALUE) {
 			throw new IllegalArgumentException("cause tick is out of range");
 		}
 	}

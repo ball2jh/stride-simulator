@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
@@ -145,7 +145,7 @@ public final class AiStep {
 		// Sampled before input.tick() overwrites them. hasForwardImpulse reads
 		// the *previous* move vector, which is what makes the sprint double-tap
 		// window work at all.
-		boolean wasShiftKeyDown = PlayerTick.hasInput(state, PlayerInput.FLAG_SHIFT);
+		boolean wasShiftKeyDown = PlayerTick.hasInput(state, PlayerInput.FLAG_SNEAK);
 		boolean wasJumping = PlayerTick.hasInput(state, PlayerInput.FLAG_JUMP);
 		boolean hadForwardImpulse = state.inputMoveVectorY > 1.0E-5F;
 
@@ -271,11 +271,11 @@ public final class AiStep {
 			scratch.startFallFlying = true;
 		}
 
-		if (state.waterHeight > 0.0 && action.shift() && !state.flying) {
+		if (state.waterHeight > 0.0 && action.sneak() && !state.flying) {
 			state.deltaMovementY += -0.04F;
 		}
 		if (state.flying) {
-			int verticalInput = (action.jump() ? 1 : 0) - (action.shift() ? 1 : 0);
+			int verticalInput = (action.jump() ? 1 : 0) - (action.sneak() ? 1 : 0);
 			if (verticalInput != 0) {
 				state.deltaMovementY += verticalInput * state.flyingSpeed * 3.0F;
 			}
@@ -288,7 +288,7 @@ public final class AiStep {
 	 * on that axis to 0.1 towards it.
 	 *
 	 * <p>The distance compared is to the column's own edge, not to the player, and
-	 * the neighbour test is only made when the distance improves — vanilla's
+	 * the neighbor test is only made when the distance improves — vanilla's
 	 * {@code &&} short-circuit, kept because each test can throw on unclassified
 	 * space and refusing a query vanilla never makes would be a different engine.
 	 *
@@ -410,7 +410,7 @@ public final class AiStep {
 	public static void jumpFromGround(final PlayerState state, final WorldView world) {
 		if (!Float.isFinite(state.jumpBoostPower) || state.jumpBoostPower < 0.0F) {
 			throw UnimplementedMechanicException.deferred(
-			    Refusal.INADMISSIBLE_ATTRIBUTE, () -> "invalid Jump Boost power: " + state.jumpBoostPower);
+			    RefusalCause.INADMISSIBLE_ATTRIBUTE, () -> "invalid Jump Boost power: " + state.jumpBoostPower);
 		}
 		float jumpPower = JUMP_STRENGTH * SupportingBlock.getBlockJumpFactor(state, world) + state.jumpBoostPower;
 		if (jumpPower <= 1.0E-5F) {
@@ -446,7 +446,7 @@ public final class AiStep {
 	private static boolean shouldStopSwimSprinting(
 	    final PlayerState state, final PlayerInput action, final float moveVectorY) {
 		return !(state.foodLevel > 6 || state.mayfly) || !(state.waterHeight > 0.0)
-		    || !(moveVectorY > 1.0E-5F) && !state.onGround && !action.shift();
+		    || !(moveVectorY > 1.0E-5F) && !state.onGround && !action.sneak();
 	}
 
 	/**

@@ -16,7 +16,7 @@
  * overlay for edits.
  * {@link com.nettarion.stride.simulator.world.BlockStateCatalog} can verify portable block
  * facts against independently extracted source records during verified compilation; a tuple it cannot
- * identify as one admitted block behaviour refuses. {@link com.nettarion.stride.simulator.FluidSample}
+ * identify as one admitted block behavior refuses. {@link com.nettarion.stride.simulator.FluidSample}
  * and {@link com.nettarion.stride.simulator.world.SupportCell} are caller-owned query results.
  * {@link com.nettarion.stride.simulator.world.FlatFloorView} is the test helper of the same shape.
  *
@@ -25,8 +25,8 @@
  * composition's parts did not cover, which is a hole and never padding. Every section carries a
  * process-unique revision, so a proof keyed on {@code WorldView.spanRevision} over the sections
  * it touched survives a republication that kept them. Mutation
- * requires explicit interaction permission and an admitted neighbour closure. This package owns
- * no tick and no block physics; it answers the questions the tick and the block behaviours ask.
+ * requires explicit interaction permission and an admitted neighbor closure. This package owns
+ * no tick and no block physics; it answers the questions the tick and the block behaviors ask.
  */
 package com.nettarion.stride.simulator.world;
 import com.nettarion.stride.simulator.FluidSample;

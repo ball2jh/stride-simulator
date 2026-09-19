@@ -13,7 +13,7 @@ public record BlockUpdateWrite(int actionIndex, int x, int y, int z, int palette
 	public void applyAfterAction(final int action, final PlayerState player) {
 		if (action == this.actionIndex)
 			throw new UnimplementedMechanicException(
-			    Refusal.UNMODELLED_WORLD_WRITE, "block update needs client-world delivery");
+			    RefusalCause.UNMODELED_WORLD_WRITE, "block update needs client-world delivery");
 	}
 	/** Deliver to the client view compiled from the same palette as the server view. */
 	public void applyTo(final SnapshotView world) {

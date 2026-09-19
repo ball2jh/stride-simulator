@@ -86,7 +86,7 @@ class TraceCodecTest {
 	@Test
 	void negativeZeroIsNotZero() {
 		// The reason the relation is raw-bit rather than ==. Vanilla collision
-		// code produces signed zero and it changes later behaviour.
+		// code produces signed zero and it changes later behavior.
 		Trace positive = trace(TraceProducer.HEADLESS_VANILLA, state().set(StateField.DELTA_X, 0.0).build());
 		Trace negative = trace(TraceProducer.PURE_KERNEL, state().set(StateField.DELTA_X, -0.0).build());
 

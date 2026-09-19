@@ -20,7 +20,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  * <p><strong>State admission.</strong> The caller must supply a locally
  * authoritative, alive, unmounted,
  * non-spectator player state with ordinary collision enabled, default movement
- * attributes except the modelled sprint/frost modifiers and supported Speed,
+ * attributes except the modeled sprint/frost modifiers and supported Speed,
  * Slowness, and Jump Boost inputs, no Blindness, Dolphin's Grace or Depth
  * Strider, no item-use slowdown, and no external entity
  * or border collision.
@@ -53,7 +53,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  * immersed in), {@link AiStep} (the control decisions through the jump),
  * {@link Travel} (velocity from the medium, running {@link Move} for the
  * displacement), {@link com.nettarion.stride.simulator.block.BlockEffects} (the block bodies the movement
- * reached, dispatched per palette entry through {@link com.nettarion.stride.simulator.block.BlockBehaviour}),
+ * reached, dispatched per palette entry through {@link com.nettarion.stride.simulator.block.BlockBehavior}),
  * {@link Freezing} (the server's freezing tail), then
  * {@code LocalPlayer.aiStep}'s tail and {@link PlayerPose}. The same
  * sequence ticks the server's copy under server authority, where each

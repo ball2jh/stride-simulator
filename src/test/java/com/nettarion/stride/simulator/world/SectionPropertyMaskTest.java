@@ -9,7 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * validation: behaviours are answered per 16³ section, not per view.
+ * validation: behaviors are answered per 16³ section, not per view.
  *
  * <p>The world is 48 cells on a side, so it is three sections wide in each
  * direction and a query near the origin and a query at the far corner land in
@@ -66,7 +66,7 @@ class SectionPropertyMaskTest {
 	}
 
 	@Test
-	void aDistantBehaviourDoesNotTurnOnTheLocalGate() {
+	void aDistantBehaviorDoesNotTurnOnTheLocalGate() {
 		SnapshotView world = world();
 
 		// The control: every whole-view flag the kernel used to gate on is true,
@@ -84,7 +84,7 @@ class SectionPropertyMaskTest {
 	}
 
 	@Test
-	void theSectionThatOwnsTheBehaviourStillReportsIt() {
+	void theSectionThatOwnsTheBehaviorStillReportsIt() {
 		SnapshotView world = world();
 
 		assertEquals(
@@ -117,13 +117,13 @@ class SectionPropertyMaskTest {
 		// answering zero here would skip the lookup that is supposed to refuse.
 		assertNotEquals(0, world.propertiesIn(WorldView.PROPERTY_CLIMBABLE, -4, 1, 1, 1, 1, 1),
 		    "a span reaching outside must not be answered empty");
-		// A behaviour the snapshot does not have anywhere still answers zero, so
+		// A behavior the snapshot does not have anywhere still answers zero, so
 		// a dry world is not made to start scanning at the region edge.
 		assertEquals(0, world.propertiesIn(WorldView.PROPERTY_FLUID, -4, 1, 1, 1, 1, 1));
 	}
 
 	@Test
-	void replacementIntroducesTheBehaviourIntoItsOwnSection() {
+	void replacementIntroducesTheBehaviorIntoItsOwnSection() {
 		SnapshotView world = world();
 		assertEquals(0, world.propertiesIn(WorldView.PROPERTY_FRICTION, 1, 1, 1, 1, 1, 1));
 
@@ -132,7 +132,7 @@ class SectionPropertyMaskTest {
 		assertEquals(WorldView.PROPERTY_FRICTION, world.propertiesIn(WorldView.PROPERTY_FRICTION, 1, 1, 1, 1, 1, 1));
 		// The mask is set-only by design: removing the ice again may leave the bit
 		// standing, which costs a lookup that answers the default. The reverse
-		// error would silently drop a real behaviour, so it is the one ruled out.
+		// error would silently drop a real behavior, so it is the one ruled out.
 		world.replaceCell(1, 1, 1, AIR);
 		assertEquals(0.6F, world.friction(1, 1, 1), "the fact itself must be exact");
 	}
@@ -187,13 +187,13 @@ class SectionPropertyMaskTest {
 	}
 
 	private static SnapshotView fluidWorld(final int fluidIndex) {
-		return new SnapshotView(WorldSnapshot.builder(WorldSnapshot.OutsideRegion.SEALED, 0, 0, 0, SIZE, SIZE, SIZE)
+		return new SnapshotView(WorldSnapshot.builder(OutsidePolicy.SEALED, 0, 0, 0, SIZE, SIZE, SIZE)
 		        .palette(plain(AIR, "air", List.of()), plain(STONE, "stone", cube()))
-		        .fluidPalette(WorldSnapshot.FluidEntry.EMPTY,
-		            new WorldSnapshot.FluidEntry(
-		                1, "minecraft:water", WorldSnapshot.FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true),
-		            new WorldSnapshot.FluidEntry(
-		                2, "stride:empty_alias", WorldSnapshot.FluidKind.EMPTY, 0.0, 0.0, 0.0, 0.0, false))
+		        .fluidPalette(FluidEntry.EMPTY,
+		            new FluidEntry(
+		                1, "minecraft:water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true),
+		            new FluidEntry(
+		                2, "stride:empty_alias", FluidKind.EMPTY, 0.0, 0.0, 0.0, 0.0, false))
 		        .setFluid(FAR, FAR, FAR, fluidIndex)
 		        .build());
 	}
@@ -203,30 +203,30 @@ class SectionPropertyMaskTest {
 		cells[cell(FAR, 1, 1)] = ICE;
 		cells[cell(1, FAR, 1)] = VINE;
 		cells[cell(1, 1, FAR)] = BUBBLE;
-		return new SnapshotView(new WorldSnapshot(0, 0, 0, SIZE, SIZE, SIZE, WorldSnapshot.OutsideRegion.SEALED,
+		return new SnapshotView(new WorldSnapshot(0, 0, 0, SIZE, SIZE, SIZE, OutsidePolicy.SEALED,
 		    List.of(plain(AIR, "air", List.of()), plain(STONE, "stone", cube()),
-		        new WorldSnapshot.BlockEntry(ICE, "ice", 0.98F, 1.0F, 1.0F, false, false,
+		        new BlockEntry(ICE, "ice", 0.98F, 1.0F, 1.0F, false, false,
 		            WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		            WorldSnapshot.Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
+		            Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
 		            false, WorldView.Climbability.NONE, cube()),
-		        new WorldSnapshot.BlockEntry(VINE, "vine", 0.6F, 1.0F, 1.0F, false, false,
+		        new BlockEntry(VINE, "vine", 0.6F, 1.0F, 1.0F, false, false,
 		            WorldView.BubbleColumnMode.NONE, true, WorldView.CollisionBehavior.ORDINARY,
-		            WorldSnapshot.Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
+		            Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
 		            false, WorldView.Climbability.CLIMBABLE, List.of()),
-		        new WorldSnapshot.BlockEntry(BUBBLE, "bubble_column", 0.6F, 1.0F, 1.0F, false, false,
+		        new BlockEntry(BUBBLE, "bubble_column", 0.6F, 1.0F, 1.0F, false, false,
 		            WorldView.BubbleColumnMode.PUSH_UP, false, WorldView.CollisionBehavior.ORDINARY,
-		            WorldSnapshot.Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
+		            Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
 		            false, WorldView.Climbability.NONE, List.of())),
 		    cells));
 	}
 
-	private static WorldSnapshot.BlockEntry plain(
-	    final int id, final String name, final List<WorldSnapshot.ShapeBox> boxes) {
-		return new WorldSnapshot.BlockEntry(id, name, 0.6F, 1.0F, 1.0F, boxes);
+	private static BlockEntry plain(
+	    final int id, final String name, final List<ShapeBox> boxes) {
+		return new BlockEntry(id, name, 0.6F, 1.0F, 1.0F, boxes);
 	}
 
-	private static List<WorldSnapshot.ShapeBox> cube() {
-		return List.of(new WorldSnapshot.ShapeBox(0, 0, 0, 1, 1, 1));
+	private static List<ShapeBox> cube() {
+		return List.of(new ShapeBox(0, 0, 0, 1, 1, 1));
 	}
 
 	private static int cell(final int x, final int y, final int z) {

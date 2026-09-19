@@ -17,6 +17,9 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.FluidEntry;
 
 class CaptureTest {
 	@TempDir Path temporaryDirectory;
@@ -64,7 +67,7 @@ class CaptureTest {
 	void fluidOnlyWorldEventsKeepTheirCompanion() throws IOException {
 		Path base = Capture.basePath(this.temporaryDirectory, TraceProducer.LIVE_GAME, "fluid-only");
 		WorldEventTrace events = new WorldEventTrace(
-		    List.of(), List.of(new WorldEventTrace.FluidCellEvent(0, 0, 0, 0, WorldSnapshot.FluidEntry.EMPTY)));
+		    List.of(), List.of(new WorldEventTrace.FluidCellEvent(0, 0, 0, 0, FluidEntry.EMPTY)));
 
 		Capture.writeUnverified(base, Capture.of(trace("fluid-only"), world(), events, null));
 
@@ -116,8 +119,8 @@ class CaptureTest {
 	}
 
 	private static WorldSnapshot world() {
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry air = new BlockEntry(0, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
 		return new WorldSnapshot(
-		    0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(air), new int[] {0});
+		    0, 0, 0, 1, 1, 1, OutsidePolicy.REFUSING, List.of(air), new int[] {0});
 	}
 }

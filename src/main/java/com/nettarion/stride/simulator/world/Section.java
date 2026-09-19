@@ -95,8 +95,8 @@ public final class Section {
 	 * section. Every index is validated. A plane whose cells all agree is
 	 * dropped for the uniform form.
 	 */
-	static Section of(final int[] cells, final int[] fluidCells, final List<WorldSnapshot.BlockEntry> palette,
-	    final List<WorldSnapshot.FluidEntry> fluidPalette) {
+	static Section of(final int[] cells, final int[] fluidCells, final List<BlockEntry> palette,
+	    final List<FluidEntry> fluidPalette) {
 		if (cells.length != CELLS) {
 			throw new IllegalArgumentException("a section holds " + CELLS + " cells, received " + cells.length);
 		}
@@ -135,8 +135,8 @@ public final class Section {
 	}
 
 	/** The section every cell of which is {@code paletteIndex}, dry. */
-	static Section uniform(final int paletteIndex, final List<WorldSnapshot.BlockEntry> palette,
-	    final List<WorldSnapshot.FluidEntry> fluidPalette) {
+	static Section uniform(final int paletteIndex, final List<BlockEntry> palette,
+	    final List<FluidEntry> fluidPalette) {
 		if (paletteIndex < 0 || paletteIndex >= palette.size()) {
 			throw new IllegalArgumentException(
 			    "uniform section palette index " + paletteIndex + ", palette size is " + palette.size());
@@ -256,19 +256,19 @@ public final class Section {
 
 	/**
 	 * The section over these planes with its facts scanned once: per section
-	 * the count of cells that can collide, the union of behaviour bits and
+	 * the count of cells that can collide, the union of behavior bits and
 	 * whether any shape leaves its cell; the same bits and flag per fine
 	 * 4-cube; and the bits every fine cube carries. One pass over 4096 cells,
 	 * folding each fine run into locals before touching the grids.
 	 */
 	private static Section summarize(final int[] cells, final int uniform, final int[] fluidCells,
-	    final List<WorldSnapshot.BlockEntry> palette, final List<WorldSnapshot.FluidEntry> fluidPalette) {
+	    final List<BlockEntry> palette, final List<FluidEntry> fluidPalette) {
 		final int fine = SectionSummary.FINE;
 		final int finesPerEdge = EDGE / fine;
 		short[] fineProperties = new short[finesPerEdge * finesPerEdge * finesPerEdge];
 		boolean[] fineLarge = new boolean[fineProperties.length];
 		if (cells == null && fluidCells == null) {
-			WorldSnapshot.BlockEntry entry = palette.get(uniform);
+			BlockEntry entry = palette.get(uniform);
 			int count = SectionSummary.collisionPotential(entry) ? CELLS : 0;
 			short bits = (short) SectionSummary.propertyBits(entry);
 			boolean large = SectionSummary.largeShape(entry);
@@ -281,14 +281,14 @@ public final class Section {
 		boolean[] largeShape = new boolean[palette.size()];
 		short[] bits = new short[palette.size()];
 		for (int i = 0; i < palette.size(); i++) {
-			WorldSnapshot.BlockEntry entry = palette.get(i);
+			BlockEntry entry = palette.get(i);
 			potential[i] = SectionSummary.collisionPotential(entry);
 			largeShape[i] = SectionSummary.largeShape(entry);
 			bits[i] = (short) SectionSummary.propertyBits(entry);
 		}
 		boolean[] fluidBearing = new boolean[fluidPalette.size()];
 		for (int i = 0; i < fluidPalette.size(); i++) {
-			fluidBearing[i] = fluidPalette.get(i).kind() != WorldSnapshot.FluidKind.EMPTY;
+			fluidBearing[i] = fluidPalette.get(i).kind() != FluidKind.EMPTY;
 		}
 		int count = 0;
 		int sectionBits = 0;

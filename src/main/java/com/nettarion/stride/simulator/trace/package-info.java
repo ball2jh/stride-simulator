@@ -20,7 +20,7 @@
  * <p>Traces before version 13 carry no sprint speed modifier and no client
  * food level; readers admit them under the prior assumptions, the sprint
  * modifier following the sprint flag and food sufficient (20). World tuples
- * must identify one admitted block behaviour; incompatible legacy tuples
+ * must identify one admitted block behavior; incompatible legacy tuples
  * require explicit migration or recapture.
  *
  * <p>{@link Capture}, {@link CaptureFormat}, {@link Trace}, {@link TraceCodec},
@@ -33,10 +33,10 @@
  * mapping when the production representation is renamed; changing a wire name
  * is a deliberate capture migration. {@link SharedFlagBits} maps the admitted
  * Entity.DATA_SHARED_FLAGS_ID bits and preserves residual bits rather than
- * clearing unmodelled flags; unknown movement-affecting flag combinations
+ * clearing unmodeled flags; unknown movement-affecting flag combinations
  * still require admission checks.
  *
- * <p>{@link com.nettarion.stride.simulator.trace.ScheduledTrace} stores initial state/world,
+ * <p>{@link com.nettarion.stride.simulator.trace.ScheduledRecording} stores initial state/world,
  * atomic events and exact {@link com.nettarion.stride.simulator.trace.SimulationCheckpoint} evidence.
  * {@link com.nettarion.stride.simulator.trace.BoundaryCodec} preserves raw scalar schema and retained movements.
  * {@link com.nettarion.stride.simulator.trace.BlockStateCatalogCodec} persists independently extracted

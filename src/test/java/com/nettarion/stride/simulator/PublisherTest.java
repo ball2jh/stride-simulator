@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.Suffocation;
 
 /**
  * The retained publisher, rule by rule from {@code LocalPlayer.sendPosition}.
@@ -172,12 +175,12 @@ class PublisherTest {
 
 	private static WorldSnapshot flatWorld() {
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -6, -4, 9, 24, 9)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air")
-		                     .suffocation(WorldSnapshot.Suffocation.NO)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
+		        .palette(BlockEntry.builder(0, "minecraft:air")
+		                     .suffocation(Suffocation.NO)
 		                     .build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
-		                .suffocation(WorldSnapshot.Suffocation.YES)
+		            BlockEntry.builder(1, "minecraft:stone")
+		                .suffocation(Suffocation.YES)
 		                .fullCube()
 		                .build());
 		for (int z = -4; z <= 4; z++) {

@@ -13,6 +13,9 @@ import com.nettarion.stride.simulator.FluidSample;
  * comparing coordinates against a sentinel.
  */
 public final class SupportCell {
+	/** An empty support answer. */
+	public SupportCell() {}
+
 	/** Whether the coordinates hold a resolved support cell. */
 	public boolean present;
 	/** X coordinate of the resolved support cell. */

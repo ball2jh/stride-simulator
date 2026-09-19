@@ -3,7 +3,7 @@ package com.nettarion.stride.simulator.tick;
 import com.nettarion.stride.simulator.world.CompleteWorldView;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 import com.nettarion.stride.simulator.block.BubbleColumnBlock;
 import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
@@ -207,9 +207,9 @@ class ClientTickBubbleColumnTest {
 		}
 
 		@Override
-		public BlockBehaviour behaviourAt(final int x, final int y, final int z) {
+		public BlockBehavior behaviorAt(final int x, final int y, final int z) {
 			return switch (bubbleColumnModeAt(x, y, z)) {
-				case NONE -> BlockBehaviour.INERT;
+				case NONE -> BlockBehavior.INERT;
 				case DRAG_DOWN -> BubbleColumnBlock.DRAG_DOWN;
 				case PUSH_UP -> BubbleColumnBlock.PUSH_UP;
 			};

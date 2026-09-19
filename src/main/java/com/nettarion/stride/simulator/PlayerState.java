@@ -24,6 +24,9 @@ import com.nettarion.stride.simulator.world.WorldView;
  * caller can distinguish refusal from corrupt state.
  */
 public class PlayerState {
+	/** A client player at the origin with no box, no velocity, standing pose, and every flag clear; set position with {@link #placeAt} and validate with {@link #requireValidForTransition}. */
+	public PlayerState() {}
+
 	/** Set Entity's synchronized swimming flag. */
 	public void setSwimming(final boolean value) {
 		this.swimming = value;
@@ -201,7 +204,7 @@ public class PlayerState {
 	public boolean sprinting;
 	/** Whether MOVEMENT_SPEED currently has LivingEntity.SPEED_MODIFIER_SPRINTING. */
 	public boolean sprintingAttribute;
-	/** FoodData.getFoodLevel on this side, controlling exhaustive manoeuvre eligibility. */
+	/** FoodData.getFoodLevel on this side, controlling exhaustive maneuvere eligibility. */
 	public int foodLevel = 20;
 	/** Synchronized swimming flag, distinct from the current pose. */
 	public boolean swimming;
@@ -269,7 +272,7 @@ public class PlayerState {
 	 */
 	public void copyInto(final PlayerState copy) {
 		StateFields.copy(copy, this);
-		copyPoseFitCertificateInto(copy);
+		copyPoseFitCacheInto(copy);
 	}
 
 	/** Returns an immutable copy of the retained collision box. */
@@ -280,7 +283,7 @@ public class PlayerState {
 
 	/** Replaces the collision box and invalidates cached pose-fit evidence; position and pose are unchanged. */
 	public void setBox(final AABB box) {
-		clearPoseFitCertificate();
+		clearPoseFitCache();
 		this.boundingBoxMinX = box.minX();
 		this.boundingBoxMinY = box.minY();
 		this.boundingBoxMinZ = box.minZ();
@@ -301,7 +304,7 @@ public class PlayerState {
 		if (source == null) {
 			throw new NullPointerException("source");
 		}
-		clearPoseFitCertificate();
+		clearPoseFitCache();
 		this.x = source.x;
 		this.y = source.y;
 		this.z = source.z;
@@ -321,7 +324,7 @@ public class PlayerState {
 	 * invariant without widening {@link com.nettarion.stride.simulator.tick.ClientTick}'s transition interface.
 	 */
 	public void placeAt(final double x, final double y, final double z) {
-		clearPoseFitCertificate();
+		clearPoseFitCache();
 		this.x = x;
 		this.y = y;
 		this.z = z;
@@ -354,7 +357,7 @@ public class PlayerState {
 	 * Applies an observed entity-data publication to this client copy exactly
 	 * as the client applies one: the sprint, swimming and gliding bits of the
 	 * shared flags when present, the pose with its bounding box when present
-	 * and modelled, and the frozen ticks when present. This is the same
+	 * and modeled, and the frozen ticks when present. This is the same
 	 * application {@link EntityDataWrite#applyToDigestedState} makes for a
 	 * predicted publication, so a verifier explaining an observation with an
 	 * echo reaches the state the simulator would have. The sprint attribute
@@ -446,10 +449,10 @@ public class PlayerState {
 		    && z >= -MAX_HORIZONTAL_CENTER && z <= MAX_HORIZONTAL_CENTER;
 	}
 
-	/** Refuses a center outside the supported coordinate domain; does not validate the remaining state. */
+	/** RefusalException a center outside the supported coordinate domain; does not validate the remaining state. */
 	public static void requireSupportedCenter(final double x, final double y, final double z) {
 		if (!supportsCenterPosition(x, y, z)) {
-			throw UnimplementedMechanicException.deferred(Refusal.INADMISSIBLE_COORDINATE,
+			throw UnimplementedMechanicException.deferred(RefusalCause.INADMISSIBLE_COORDINATE,
 			    () -> "movement center lies outside the exact kernel coordinate domain: " + x + "," + y + "," + z);
 		}
 	}
@@ -474,12 +477,12 @@ public class PlayerState {
 	 * the world reference is kept, since the next proof is almost always in the
 	 * same world and would otherwise allocate a fresh reference every tick.
 	 */
-	void clearPoseFitCertificate() {
+	void clearPoseFitCache() {
 		this.poseFitHeight = -1.0F;
 	}
 
 	/** Returns whether a retained pose-fit proof still covers this position, pose, and world revision. */
-	public boolean hasPoseFitCertificate(final WorldView world, final Pose pose) {
+	public boolean hasCachedPoseFit(final WorldView world, final Pose pose) {
 		return this.poseFitWorld != 0L && this.poseFitXBits == Double.doubleToRawLongBits(this.x)
 		    && this.poseFitYBits == Double.doubleToRawLongBits(this.y)
 		    && this.poseFitZBits == Double.doubleToRawLongBits(this.z)
@@ -497,21 +500,21 @@ public class PlayerState {
 		if (identity != 0L && this.poseFitWorld == identity) {
 			// The very view the proof was taken in: immutable, nothing to read;
 			// mutable, the span's version says whether an edit reached it.
-			return world.movementFactsImmutable() || this.poseFitCollisionVersion == certifiedSpanVersion(world);
+			return world.movementFactsImmutable() || this.poseFitCollisionVersion == cachedSpanVersion(world);
 		}
 		// Another view: the proof holds there when it answers the same span
 		// revision, which a republication that kept the sections does.
-		return this.poseFitSpanRevision != 0L && this.poseFitSpanRevision == certifiedSpanRevision(world);
+		return this.poseFitSpanRevision != 0L && this.poseFitSpanRevision == cachedSpanRevision(world);
 	}
 
 	/**
 	 * Carry the proof across a publication: record, from the view it was
 	 * taken in, the span revision it stands under, so a later check in
-	 * another view can honour it. Nothing is read when the proof is absent,
+	 * another view can honor it. Nothing is read when the proof is absent,
 	 * already carried, or stale in its own view. A consumer calls this on the
 	 * states it keeps across a republication; the tick never does.
 	 */
-	public void carryPoseFitCertificate(final WorldView world) {
+	public void carryPoseFitCache(final WorldView world) {
 		if (this.poseFitSpanRevision != 0L || this.poseFitWorld == 0L || this.poseFitHeight < 0.0F) {
 			return;
 		}
@@ -519,24 +522,24 @@ public class PlayerState {
 		if (identity == 0L || this.poseFitWorld != identity) {
 			return;
 		}
-		if (!world.movementFactsImmutable() && this.poseFitCollisionVersion != certifiedSpanVersion(world)) {
+		if (!world.movementFactsImmutable() && this.poseFitCollisionVersion != cachedSpanVersion(world)) {
 			return;
 		}
-		this.poseFitSpanRevision = certifiedSpanRevision(world);
+		this.poseFitSpanRevision = cachedSpanRevision(world);
 	}
 
-	/** {@link WorldView#spanRevision} over the certified span, see {@link #certifiedSpanVersion}. */
-	private long certifiedSpanRevision(final WorldView world) {
+	/** {@link WorldView#spanRevision} over the certified span, see {@link #cachedSpanVersion}. */
+	private long cachedSpanRevision(final WorldView world) {
 		float halfWidth = Float.intBitsToFloat(this.poseFitWidthBits) / 2.0F;
-		double certifiedX = Double.longBitsToDouble(this.poseFitXBits);
-		double certifiedY = Double.longBitsToDouble(this.poseFitYBits);
-		double certifiedZ = Double.longBitsToDouble(this.poseFitZBits);
-		double minX = certifiedX - halfWidth + 1.0E-7;
-		double minY = certifiedY + 1.0E-7;
-		double minZ = certifiedZ - halfWidth + 1.0E-7;
-		double maxX = certifiedX + halfWidth - 1.0E-7;
-		double maxY = certifiedY + this.poseFitHeight - 1.0E-7;
-		double maxZ = certifiedZ + halfWidth - 1.0E-7;
+		double cachedX = Double.longBitsToDouble(this.poseFitXBits);
+		double cachedY = Double.longBitsToDouble(this.poseFitYBits);
+		double cachedZ = Double.longBitsToDouble(this.poseFitZBits);
+		double minX = cachedX - halfWidth + 1.0E-7;
+		double minY = cachedY + 1.0E-7;
+		double minZ = cachedZ - halfWidth + 1.0E-7;
+		double maxX = cachedX + halfWidth - 1.0E-7;
+		double maxY = cachedY + this.poseFitHeight - 1.0E-7;
+		double maxZ = cachedZ + halfWidth - 1.0E-7;
 		return world.spanRevision(Mth.floor(minX - 1.0E-7) - 1, Mth.floor(minY - 1.0E-7) - 1,
 		    Mth.floor(minZ - 1.0E-7) - 1, Mth.floor(maxX + 1.0E-7) + 1, Mth.floor(maxY + 1.0E-7) + 1,
 		    Mth.floor(maxZ + 1.0E-7) + 1);
@@ -549,7 +552,7 @@ public class PlayerState {
 	 * beside it: {@code Float.intBitsToFloat} inverts {@code floatToRawIntBits}
 	 * exactly, and the height is held as a float already, so this reproduces the
 	 * probe's box bit for bit. It uses the *certified* height, which
-	 * {@link #hasPoseFitCertificate} allows to exceed the pose being asked about,
+	 * {@link #hasCachedPoseFit} allows to exceed the pose being asked about,
 	 * so the span is the taller one and can only be too large.
 	 *
 	 * <p>Shapes are cell-bounded wherever a certificate can be issued — issuing is
@@ -557,17 +560,17 @@ public class PlayerState {
 	 * span can contribute a box that reaches the certified one, and a write out
 	 * there cannot make the proof false.
 	 */
-	private long certifiedSpanVersion(final WorldView world) {
+	private long cachedSpanVersion(final WorldView world) {
 		float halfWidth = Float.intBitsToFloat(this.poseFitWidthBits) / 2.0F;
-		double certifiedX = Double.longBitsToDouble(this.poseFitXBits);
-		double certifiedY = Double.longBitsToDouble(this.poseFitYBits);
-		double certifiedZ = Double.longBitsToDouble(this.poseFitZBits);
-		double minX = certifiedX - halfWidth + 1.0E-7;
-		double minY = certifiedY + 1.0E-7;
-		double minZ = certifiedZ - halfWidth + 1.0E-7;
-		double maxX = certifiedX + halfWidth - 1.0E-7;
-		double maxY = certifiedY + this.poseFitHeight - 1.0E-7;
-		double maxZ = certifiedZ + halfWidth - 1.0E-7;
+		double cachedX = Double.longBitsToDouble(this.poseFitXBits);
+		double cachedY = Double.longBitsToDouble(this.poseFitYBits);
+		double cachedZ = Double.longBitsToDouble(this.poseFitZBits);
+		double minX = cachedX - halfWidth + 1.0E-7;
+		double minY = cachedY + 1.0E-7;
+		double minZ = cachedZ - halfWidth + 1.0E-7;
+		double maxX = cachedX + halfWidth - 1.0E-7;
+		double maxY = cachedY + this.poseFitHeight - 1.0E-7;
+		double maxZ = cachedZ + halfWidth - 1.0E-7;
 		// The span collectCollisions scans for that box, derived the same way.
 		return world.collisionVersionIn(Mth.floor(minX - 1.0E-7) - 1, Mth.floor(minY - 1.0E-7) - 1,
 		    Mth.floor(minZ - 1.0E-7) - 1, Mth.floor(maxX + 1.0E-7) + 1, Mth.floor(maxY + 1.0E-7) + 1,
@@ -575,7 +578,7 @@ public class PlayerState {
 	}
 
 	/** Records a pose-fit proof already established by the caller; this method does not perform a collision query. */
-	public void certifyPoseFit(final WorldView world, final Pose pose) {
+	public void cachePoseFit(final WorldView world, final Pose pose) {
 		long xBits = Double.doubleToRawLongBits(this.x);
 		long yBits = Double.doubleToRawLongBits(this.y);
 		long zBits = Double.doubleToRawLongBits(this.z);
@@ -584,7 +587,7 @@ public class PlayerState {
 		// record, and every later test of the certificate is a miss.
 		long identity = world.identity();
 		if (identity == 0L) {
-			clearPoseFitCertificate();
+			clearPoseFitCache();
 			return;
 		}
 		// A fresh shorter proof cannot renew an invalid taller certificate.
@@ -600,13 +603,13 @@ public class PlayerState {
 		this.poseFitWidthBits = widthBits;
 		this.poseFitHeight = pose.height;
 		// Read last, over the span the fields above now describe. The span
-		// revision is not read here: see carryPoseFitCertificate.
+		// revision is not read here: see carryPoseFitCache.
 		this.poseFitSpanRevision = 0L;
-		this.poseFitCollisionVersion = world.movementFactsImmutable() ? 0L : certifiedSpanVersion(world);
+		this.poseFitCollisionVersion = world.movementFactsImmutable() ? 0L : cachedSpanVersion(world);
 	}
 
 	/** Records a caller-established collision-clear pose only when the retained box exactly matches that pose. */
-	public void certifyCurrentPoseAfterCollision(final WorldView world) {
+	public void cacheCurrentPoseAfterCollision(final WorldView world) {
 		double halfWidth = this.pose.width / 2.0F;
 		if (Double.doubleToRawLongBits(this.boundingBoxMinX) != Double.doubleToRawLongBits(this.x - halfWidth)
 		    || Double.doubleToRawLongBits(this.boundingBoxMinY) != Double.doubleToRawLongBits(this.y)
@@ -616,7 +619,7 @@ public class PlayerState {
 		    || Double.doubleToRawLongBits(this.boundingBoxMaxZ) != Double.doubleToRawLongBits(this.z + halfWidth)) {
 			return;
 		}
-		certifyPoseFit(world, this.pose);
+		cachePoseFit(world, this.pose);
 	}
 
 	/**
@@ -625,7 +628,7 @@ public class PlayerState {
 	 * revalidates against the world it is asked about, so a copy of a stale
 	 * certificate is a miss there, exactly as the original would be.
 	 */
-	private void copyPoseFitCertificateInto(final PlayerState copy) {
+	private void copyPoseFitCacheInto(final PlayerState copy) {
 		copy.poseFitWorld = this.poseFitWorld;
 		copy.poseFitCollisionVersion = this.poseFitCollisionVersion;
 		copy.poseFitSpanRevision = this.poseFitSpanRevision;

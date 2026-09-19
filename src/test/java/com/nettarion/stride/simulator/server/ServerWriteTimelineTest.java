@@ -38,8 +38,8 @@ final class ServerWriteTimelineTest {
 
 		ServerWriteTimeline rebased = timeline.afterConsuming(2);
 
-		assertEquals(1, rebased.events().size());
-		assertEquals(2, rebased.events().getFirst().actionIndex());
+		assertEquals(1, rebased.writes().size());
+		assertEquals(2, rebased.writes().getFirst().actionIndex());
 	}
 
 	@Test
@@ -50,7 +50,7 @@ final class ServerWriteTimelineTest {
 
 		ServerWriteTimeline timeline = ServerWriteTimeline.of(List.of(later, earlier));
 
-		assertEquals(List.of(earlier, later), timeline.events());
+		assertEquals(List.of(earlier, later), timeline.writes());
 	}
 
 	@Test

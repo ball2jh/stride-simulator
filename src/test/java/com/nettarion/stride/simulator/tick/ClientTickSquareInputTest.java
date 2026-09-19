@@ -44,7 +44,7 @@ class ClientTickSquareInputTest {
 
 	private static PlayerState groundedAfterShift() {
 		PlayerState state = grounded();
-		state.inputKeyPresses = (byte) PlayerInput.FLAG_SHIFT;
+		state.inputKeyPresses = (byte) PlayerInput.FLAG_SNEAK;
 		return state;
 	}
 

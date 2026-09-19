@@ -89,10 +89,6 @@ public final class Scratch {
 	public double segmentRequestedX;
 	public double segmentRequestedZ;
 
-	/** Hit point of the last successful {@code AABB.clip} against a unit cell. */
-	public double clipHitX;
-	public double clipHitY;
-	public double clipHitZ;
 
 	/** The retained collision span this workspace answers queries from. See {@link RetainedSpan}. */
 	public final RetainedSpan span = new RetainedSpan();

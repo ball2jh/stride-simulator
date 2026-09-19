@@ -9,6 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.Suffocation;
 
 /**
  * {@code CollisionGetter.getPreMoveCollisions} queries under a placement
@@ -44,28 +48,28 @@ class PreMoveCollisionQueryTest {
 		    "an ordinary block answers the same to both");
 	}
 
-	/** One block of the behaviour at (0,0,0) over a stone floor whose top is at y=-1. */
+	/** One block of the behavior at (0,0,0) over a stone floor whose top is at y=-1. */
 	private static WorldSnapshot oneBlock(final WorldView.CollisionBehavior behavior) {
-		WorldSnapshot.BlockEntry.Builder block =
-		    WorldSnapshot.BlockEntry.builder(2, "minecraft:test").suffocation(WorldSnapshot.Suffocation.NO);
+		BlockEntry.Builder block =
+		    BlockEntry.builder(2, "minecraft:test").suffocation(Suffocation.NO);
 		if (behavior == WorldView.CollisionBehavior.ORDINARY) {
 			block.fullCube();
 		} else if (behavior == WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS) {
 			block.collisionBehavior(behavior).landing(WorldView.Landing.POWDER_SNOW);
 		} else {
-			block.collisionBehavior(behavior).boxes(new WorldSnapshot.ShapeBox(0, 0.875, 0, 1, 1, 1),
-			    new WorldSnapshot.ShapeBox(0, 0, 0, 0.125, 1, 0.125),
-			    new WorldSnapshot.ShapeBox(0.875, 0, 0, 1, 1, 0.125),
-			    new WorldSnapshot.ShapeBox(0, 0, 0.875, 0.125, 1, 1),
-			    new WorldSnapshot.ShapeBox(0.875, 0, 0.875, 1, 1, 1));
+			block.collisionBehavior(behavior).boxes(new ShapeBox(0, 0.875, 0, 1, 1, 1),
+			    new ShapeBox(0, 0, 0, 0.125, 1, 0.125),
+			    new ShapeBox(0.875, 0, 0, 1, 1, 0.125),
+			    new ShapeBox(0, 0, 0.875, 0.125, 1, 1),
+			    new ShapeBox(0.875, 0, 0.875, 1, 1, 1));
 		}
 		WorldSnapshot.Builder world =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -6, -4, 9, 24, 9)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air")
-		                     .suffocation(WorldSnapshot.Suffocation.NO)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -6, -4, 9, 24, 9)
+		        .palette(BlockEntry.builder(0, "minecraft:air")
+		                     .suffocation(Suffocation.NO)
 		                     .build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
-		                .suffocation(WorldSnapshot.Suffocation.YES)
+		            BlockEntry.builder(1, "minecraft:stone")
+		                .suffocation(Suffocation.YES)
 		                .fullCube()
 		                .build(),
 		            block.build());

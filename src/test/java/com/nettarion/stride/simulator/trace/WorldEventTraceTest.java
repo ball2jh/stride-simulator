@@ -12,19 +12,21 @@ import java.io.StringWriter;
 import java.util.List;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.FluidKind;
+import com.nettarion.stride.simulator.world.FluidEntry;
 
 class WorldEventTraceTest {
 	@Test
 	void roundTripPreservesSameTickSourceOrder() throws IOException {
-		WorldSnapshot.FluidEntry flowingWater = new WorldSnapshot.FluidEntry(
-		    12, "minecraft:flowing_water", WorldSnapshot.FluidKind.WATER, 0.625, 0.25, 0.0, -0.5, false);
-		WorldSnapshot.FluidEntry neighbourDependentWater = new WorldSnapshot.FluidEntry(
-		    12, "minecraft:flowing_water", WorldSnapshot.FluidKind.WATER, 0.375, -0.25, 0.0, 0.5, false);
+		FluidEntry flowingWater = new FluidEntry(
+		    12, "minecraft:flowing_water", FluidKind.WATER, 0.625, 0.25, 0.0, -0.5, false);
+		FluidEntry neighborDependentWater = new FluidEntry(
+		    12, "minecraft:flowing_water", FluidKind.WATER, 0.375, -0.25, 0.0, 0.5, false);
 		WorldEventTrace original = new WorldEventTrace(List.of(new WorldEventTrace.CellStateEvent(8, 1, 2, 3, 100, 200),
 		                                                   new WorldEventTrace.CellStateEvent(8, -4, 5, 6, 101, 201),
 		                                                   new WorldEventTrace.CellStateEvent(27, 1, 2, 3, 102, 202)),
 		    List.of(new WorldEventTrace.FluidCellEvent(8, 1, 2, 3, flowingWater),
-		        new WorldEventTrace.FluidCellEvent(8, 2, 2, 3, neighbourDependentWater)));
+		        new WorldEventTrace.FluidCellEvent(8, 2, 2, 3, neighborDependentWater)));
 		StringWriter writer = new StringWriter();
 
 		WorldEventTrace.write(original, writer);
@@ -65,8 +67,8 @@ class WorldEventTraceTest {
 		assertThrows(IllegalArgumentException.class,
 		    ()
 		        -> new WorldEventTrace(List.of(),
-		            List.of(new WorldEventTrace.FluidCellEvent(2, 0, 0, 0, WorldSnapshot.FluidEntry.EMPTY),
-		                new WorldEventTrace.FluidCellEvent(1, 0, 0, 0, WorldSnapshot.FluidEntry.EMPTY))));
+		            List.of(new WorldEventTrace.FluidCellEvent(2, 0, 0, 0, FluidEntry.EMPTY),
+		                new WorldEventTrace.FluidCellEvent(1, 0, 0, 0, FluidEntry.EMPTY))));
 		String malformed = "#stride-world-events\t1\n"
 		    + "tick\tx\ty\tz\tstate_id\n"
 		    + "0\t1\t2\t3\n";

@@ -1,7 +1,7 @@
 package com.nettarion.stride.simulator.trace;
 
 /**
- * The bit layout of {@code Entity}'s synchronised shared-flags byte, and the
+ * The bit layout of {@code Entity}'s synchronized shared-flags byte, and the
  * one place that splits it into audited fields.
  *
  * <p>Bit numbers are read from the {@code Entity.setSharedFlag} call sites in
@@ -11,7 +11,7 @@ package com.nettarion.stride.simulator.trace;
  * these fields with {@code isSprinting()}, {@code isShiftKeyDown()} and
  * friends. For {@code shiftKeyDown} that is actively wrong:
  * {@code LocalPlayer} overrides {@code isShiftKeyDown()} to return
- * {@code input.keyPresses.shift()}, so the accessor answers a different
+ * {@code input.keyPresses.sneak()}, so the accessor answers a different
  * question than the flag does, and the two disagree by exactly the round-trip
  * latency this field is excluded for. Deriving every bit from the byte keeps
  * all implementations auditing the same fact.

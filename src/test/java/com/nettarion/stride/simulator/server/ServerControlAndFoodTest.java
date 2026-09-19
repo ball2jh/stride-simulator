@@ -18,6 +18,11 @@ import com.nettarion.stride.simulator.world.WorldSnapshot;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.FluidKind;
+import com.nettarion.stride.simulator.world.FluidEntry;
 
 /** Regression cases for server control authority and the first food-driven publication. */
 class ServerControlAndFoodTest {
@@ -29,11 +34,11 @@ class ServerControlAndFoodTest {
 		server.lastKnownClientMovementX = .25;
 		server.lastKnownClientMovementY = -.125;
 		server.lastKnownClientMovementZ = .5;
-		ServerGamePacketListenerImpl.handleClientTickEnd(server, true);
+		ServerMovementListener.handleClientTickEnd(server, true);
 		assertEquals(.25, server.lastKnownClientMovementX);
 		assertEquals(-.125, server.lastKnownClientMovementY);
 		assertEquals(.5, server.lastKnownClientMovementZ);
-		ServerGamePacketListenerImpl.handleClientTickEnd(server, false);
+		ServerMovementListener.handleClientTickEnd(server, false);
 		assertEquals(0.0, server.lastKnownClientMovementX);
 		assertEquals(0.0, server.lastKnownClientMovementY);
 		assertEquals(0.0, server.lastKnownClientMovementZ);
@@ -328,14 +333,14 @@ class ServerControlAndFoodTest {
 
 	private static SnapshotView world(final boolean water) {
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -8, -3, -8, 16, 12, 16)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
-		                .boxes(WorldSnapshot.ShapeBox.FULL_CUBE)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -3, -8, 16, 12, 16)
+		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		            BlockEntry.builder(1, "minecraft:stone")
+		                .boxes(ShapeBox.FULL_CUBE)
 		                .build())
-		        .fluidPalette(WorldSnapshot.FluidEntry.EMPTY,
-		            new WorldSnapshot.FluidEntry(
-		                1, "minecraft:water", WorldSnapshot.FluidKind.WATER, 1, 0, 0, 0, true));
+		        .fluidPalette(FluidEntry.EMPTY,
+		            new FluidEntry(
+		                1, "minecraft:water", FluidKind.WATER, 1, 0, 0, 0, true));
 		for (int x = -8; x < 8; x++) {
 			for (int z = -8; z < 8; z++) {
 				builder.set(x, -1, z, 1);

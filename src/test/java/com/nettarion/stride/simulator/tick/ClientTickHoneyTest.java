@@ -12,6 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.Suffocation;
 
 /**
  * {@code HoneyBlock.entityInside} on the client: the wall slide of a player
@@ -130,23 +134,23 @@ class ClientTickHoneyTest {
 	}
 
 	private static WorldSnapshot.Builder columnGrid(final boolean honey) {
-		WorldSnapshot.BlockEntry.Builder wall =
-		    WorldSnapshot.BlockEntry.builder(1, honey ? "minecraft:honey_block" : "test:honey_without_inside")
-		        .boxes(new WorldSnapshot.ShapeBox(0.0625, 0.0, 0.0625, 0.9375, 0.9375, 0.9375))
+		BlockEntry.Builder wall =
+		    BlockEntry.builder(1, honey ? "minecraft:honey_block" : "test:honey_without_inside")
+		        .boxes(new ShapeBox(0.0625, 0.0, 0.0625, 0.9375, 0.9375, 0.9375))
 		        .speedFactor(0.4F)
 		        .jumpFactor(0.5F)
 		        .suppressesBounce(true)
 		        .landing(honey ? WorldView.Landing.HONEY : WorldView.Landing.ORDINARY)
-		        .suffocation(WorldSnapshot.Suffocation.NO);
+		        .suffocation(Suffocation.NO);
 		if (honey) {
 			wall.insideEffect(WorldView.InsideEffect.HONEY);
 		}
 		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -3, -3, -3, 7, 7, 7)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(), wall.build(),
-		            WorldSnapshot.BlockEntry.builder(2, "minecraft:stone")
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -3, -3, -3, 7, 7, 7)
+		        .palette(BlockEntry.builder(0, "minecraft:air").build(), wall.build(),
+		            BlockEntry.builder(2, "minecraft:stone")
 		                .fullCube()
-		                .suffocation(WorldSnapshot.Suffocation.YES)
+		                .suffocation(Suffocation.YES)
 		                .build());
 		for (int y = -3; y <= 3; y++) {
 			grid.set(0, y, 0, 1);

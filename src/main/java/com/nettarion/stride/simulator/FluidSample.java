@@ -2,6 +2,9 @@ package com.nettarion.stride.simulator;
 
 /** Caller-owned result of one resolved world-fluid cell lookup. */
 public final class FluidSample {
+	/** An empty sample; the tick fills it. */
+	public FluidSample() {}
+
 	/** The supported fluid categories returned by a world query. */
 	public enum Kind {
 		/** No fluid is present in the queried cell. */

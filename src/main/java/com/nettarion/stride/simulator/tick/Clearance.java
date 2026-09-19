@@ -55,7 +55,7 @@ final class Clearance {
 		int all = FIT_SWIMMING | FIT_CROUCHING | FIT_STANDING;
 		// A proof at this height is a proof for every shorter same-width pose,
 		// which is exactly what the certificate's height comparison already means.
-		if (!world.hasContextSensitiveCollision() && state.hasPoseFitCertificate(world, tallest)) {
+		if (!world.hasContextSensitiveCollision() && state.hasCachedPoseFit(world, tallest)) {
 			return all;
 		}
 		double halfWidth = tallest.width / 2.0F;
@@ -97,11 +97,11 @@ final class Clearance {
 			// Certify the tallest pose actually proven, since the certificate
 			// covers every shorter one for free.
 			if (tallest == PlayerState.Pose.STANDING && (fits & FIT_STANDING) != 0) {
-				state.certifyPoseFit(world, PlayerState.Pose.STANDING);
+				state.cachePoseFit(world, PlayerState.Pose.STANDING);
 			} else if (tallest.height >= PlayerState.Pose.CROUCHING.height && (fits & FIT_CROUCHING) != 0) {
-				state.certifyPoseFit(world, PlayerState.Pose.CROUCHING);
+				state.cachePoseFit(world, PlayerState.Pose.CROUCHING);
 			} else if ((fits & FIT_SWIMMING) != 0) {
-				state.certifyPoseFit(world, PlayerState.Pose.SWIMMING);
+				state.cachePoseFit(world, PlayerState.Pose.SWIMMING);
 			}
 		}
 		return fits;

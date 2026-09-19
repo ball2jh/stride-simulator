@@ -11,13 +11,13 @@ import org.junit.jupiter.api.Test;
 final class SnapshotViewCompileTest {
 	@Test
 	void exposesOneSharedFrozenExactWorld() {
-		WorldSnapshot snapshot = new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING,
-		    List.of(new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of())), new int[] {0});
+		WorldSnapshot snapshot = new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.REFUSING,
+		    List.of(new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of())), new int[] {0});
 
 		SnapshotView compiled = SnapshotView.compile(snapshot);
 
 		assertSame(snapshot, compiled.snapshot());
-		assertSame(compiled, compiled.frozenFork());
+		assertSame(compiled, compiled.frozen());
 		assertSame(snapshot, compiled.fork().snapshot());
 		assertTrue(compiled.movementFactsImmutable());
 		assertThrows(IllegalStateException.class, () -> compiled.replaceCell(0, 0, 0, 0));
@@ -25,11 +25,11 @@ final class SnapshotViewCompileTest {
 
 	@Test
 	void sparseForkMutationCannotEscapeIntoTheSharedSnapshotBacking() {
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot.BlockEntry stone = new WorldSnapshot.BlockEntry(
-		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new WorldSnapshot.ShapeBox(0, 0, 0, 1, 1, 1)));
+		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry stone = new BlockEntry(
+		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0, 0, 0, 1, 1, 1)));
 		WorldSnapshot snapshot = new WorldSnapshot(
-		    0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(air, stone), new int[] {0});
+		    0, 0, 0, 1, 1, 1, OutsidePolicy.REFUSING, List.of(air, stone), new int[] {0});
 		SnapshotView compiled = SnapshotView.compile(snapshot);
 
 		SnapshotView successor = compiled.fork();

@@ -15,6 +15,9 @@ import com.nettarion.stride.simulator.world.WorldSnapshot;
 import java.util.List;
 import java.util.Random;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 final class ViewCellsTest {
 	private static final byte SPRINT_JUMP =
@@ -88,7 +91,7 @@ final class ViewCellsTest {
 	}
 
 	@Test
-	void pitchesInOneGlideCellProduceBitIdenticalGlideTicksAndNeighbouringCellsDoNot() {
+	void pitchesInOneGlideCellProduceBitIdenticalGlideTicksAndNeighboringCellsDoNot() {
 		Simulator kernel = new Simulator();
 		SnapshotView world = flatWorld(64);
 		long previousTable = 0;
@@ -136,7 +139,7 @@ final class ViewCellsTest {
 	}
 
 	@Test
-	void yawsInOneCellProduceBitIdenticalSprintJumpsAndNeighbouringCellsDoNot() {
+	void yawsInOneCellProduceBitIdenticalSprintJumpsAndNeighboringCellsDoNot() {
 		Simulator kernel = new Simulator();
 		SnapshotView world = flatWorld(8);
 		long previousCell = 0;
@@ -248,10 +251,10 @@ final class ViewCellsTest {
 			for (int x = 0; x < size; x++)
 				cells[z * size + x] = 1;
 		}
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot.BlockEntry stone = new WorldSnapshot.BlockEntry(
-		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
+		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry stone = new BlockEntry(
+		    1, "stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)));
 		return SnapshotView.compile(new WorldSnapshot(
-		    0, 0, 0, size, height, size, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(air, stone), cells));
+		    0, 0, 0, size, height, size, OutsidePolicy.REFUSING, List.of(air, stone), cells));
 	}
 }

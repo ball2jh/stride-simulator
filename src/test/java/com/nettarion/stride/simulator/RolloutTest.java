@@ -11,6 +11,8 @@ import com.nettarion.stride.simulator.world.WorldSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 /**
  * The owned rollout is the published step on other storage: the same
@@ -40,7 +42,7 @@ class RolloutTest {
 			boolean pending = rollout.tick(action, world, writes::add);
 			boundary = step.state();
 			assertEquals(step.writes(), writes);
-			assertEquals(boundary.hasPendingEffect(), pending);
+			assertEquals(boundary.hasPendingHurt(), pending);
 			assertEquals(boundary.digest(), rollout.digest());
 			assertEquals(boundary.digest(), rollout.boundary().digest());
 			assertTrue(PlayerState.rawEquals(boundary.clientState(), rollout.client()));
@@ -71,11 +73,11 @@ class RolloutTest {
 			}
 		}
 		assertTrue(refused, "the fixture must leave its region");
-		assertFalse(rollout.holdsBoundary());
+		assertFalse(rollout.isLoaded());
 		assertThrows(IllegalStateException.class, () -> rollout.tick(IDLE, world));
 		assertThrows(IllegalStateException.class, rollout::boundary);
 		rollout.load(boundary);
-		assertTrue(rollout.holdsBoundary());
+		assertTrue(rollout.isLoaded());
 		assertEquals(boundary.digest(), rollout.digest());
 	}
 
@@ -104,12 +106,12 @@ class RolloutTest {
 		rollout.load(new SimulationState(start, ServerPlayerState.atBoundary(start), 0));
 		for (int tick = 0; tick < 4; tick++)
 			rollout.tick(WALK, first);
-		assertTrue(rollout.client().hasPoseFitCertificate(first, rollout.client().pose));
-		assertFalse(rollout.client().hasPoseFitCertificate(again, rollout.client().pose));
+		assertTrue(rollout.client().hasCachedPoseFit(first, rollout.client().pose));
+		assertFalse(rollout.client().hasCachedPoseFit(again, rollout.client().pose));
 		rollout.carry(first);
-		assertTrue(rollout.client().hasPoseFitCertificate(again, rollout.client().pose));
+		assertTrue(rollout.client().hasCachedPoseFit(again, rollout.client().pose));
 		SimulationState kept = rollout.boundary();
-		assertTrue(kept.clientState().hasPoseFitCertificate(again, kept.clientState().pose),
+		assertTrue(kept.clientState().hasCachedPoseFit(again, kept.clientState().pose),
 		    "a published boundary carries the carried proof");
 		// Stepping on in the new view agrees bit for bit with a fresh rollout there.
 		Rollout fresh = new Rollout().load(kept);
@@ -134,10 +136,10 @@ class RolloutTest {
 
 		/** A stone floor at y 0 with a raised ledge whose edge a sprint jump clears and falls from. */
 		static SnapshotView ledge() {
-			WorldSnapshot.BlockEntry air = WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build();
-			WorldSnapshot.BlockEntry stone = WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build();
+			BlockEntry air = BlockEntry.builder(0, "minecraft:air").build();
+			BlockEntry stone = BlockEntry.builder(1, "minecraft:stone").fullCube().build();
 			WorldSnapshot.Builder builder =
-			    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -16, -1, -16, 32, 16, 32)
+			    WorldSnapshot.builder(OutsidePolicy.REFUSING, -16, -1, -16, 32, 16, 32)
 			        .palette(air, stone);
 			for (int x = -16; x < 16; x++) {
 				for (int z = -16; z < 16; z++) {

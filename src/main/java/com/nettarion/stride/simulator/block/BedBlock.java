@@ -4,7 +4,7 @@ import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.server.Survival;
 
 /** A bed: {@code BedBlock.fallOn}, half the fall distance at multiplier one. */
-final class BedBlock extends BlockBehaviour {
+final class BedBlock extends BlockBehavior {
 	static final BedBlock INSTANCE = new BedBlock();
 
 	private BedBlock() {}

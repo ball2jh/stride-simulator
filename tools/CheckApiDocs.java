@@ -30,7 +30,8 @@ public final class CheckApiDocs {
 			for (CompilationUnitTree unit : task.parse()) {
 				Path path = Path.of(unit.getSourceFile().toUri());
 				Path description = path.resolveSibling("package-info.java");
-				if (!Files.isRegularFile(description)) failures.add("Missing " + description);
+				boolean moduleDescriptor = path.getFileName().toString().equals("module-info.java");
+				if (!moduleDescriptor && !Files.isRegularFile(description)) failures.add("Missing " + description);
 				new TreePathScanner<Void, Void>() {
 					@Override
 					public Void visitClass(ClassTree type, Void ignored) {

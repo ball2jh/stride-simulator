@@ -63,12 +63,12 @@ public final class Rollout {
 	 * write to {@code writes} when it is not null.
 	 *
 	 * @return whether the previous input caused a hit whose write the next
-	 *     tick publishes, which is what {@link SimulationState#hasPendingEffect}
+	 *     tick publishes, which is what {@link SimulationState#hasPendingHurt}
 	 *     reports of the boundary this rollout now holds
 	 * @throws IllegalStateException when nothing is loaded, or the last tick
 	 *     refused and left no successor
 	 * @throws UnimplementedMechanicException when the client tick leaves the
-	 *     modelled slice or the server reaches a body it does not model
+	 *     modeled slice or the server reaches a body it does not model
 	 * @throws UnpredictedServerWriteException when the server would correct
 	 *     the client instead of accepting the reported movement
 	 * @throws PendingServerWriteException when the server's outcome is not
@@ -98,8 +98,8 @@ public final class Rollout {
 	public void carry(final SnapshotView leaving) {
 		this.simulator.carry(leaving, List.of());
 		if (this.loaded) {
-			this.client.carryPoseFitCertificate(leaving);
-			this.server.carryPoseFitCertificate(leaving);
+			this.client.carryPoseFitCache(leaving);
+			this.server.carryPoseFitCache(leaving);
 		}
 	}
 
@@ -124,7 +124,7 @@ public final class Rollout {
 	}
 
 	/** Whether the working copies hold a successor rather than a refused tick's remains. */
-	public boolean holdsBoundary() {
+	public boolean isLoaded() {
 		return this.loaded;
 	}
 

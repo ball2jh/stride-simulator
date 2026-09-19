@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.HurtCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerInput;
@@ -76,7 +76,7 @@ public final class Travel {
 			applySwimmingPitch(state, world, scratch);
 		}
 		boolean shiftDown =
-		    scratch.authority.isServer() ? scratch.authority.serverState().shiftKeyDown : action.shift();
+		    scratch.authority.isServer() ? scratch.authority.serverState().shiftKeyDown : action.sneak();
 		if (state.flying) {
 			double originalMovementY = state.deltaMovementY;
 			travel(state, shiftDown, world, scratch);
@@ -135,7 +135,7 @@ public final class Travel {
 		// neither outcome is a captured fact here, so both authorities refuse.
 		if (!world.hasChunkAt(belowX, belowZ)) {
 			throw UnimplementedMechanicException.deferred(
-			    Refusal.OUTSIDE_REGION, () -> "unknown space below the player at " + belowX + "," + belowZ);
+			    RefusalCause.OUTSIDE_REGION, () -> "unknown space below the player at " + belowX + "," + belowZ);
 		}
 		movementY -= PlayerTick.GRAVITY;
 
@@ -276,7 +276,7 @@ public final class Travel {
 		}
 		int checkFallFlyTicks = state.fallFlyTicks + 1;
 		if (checkFallFlyTicks % 10 == 0 && checkFallFlyTicks / 10 % 2 == 0) {
-			throw new PendingServerWriteException(Refusal.PENDING_ABILITY,
+			throw new PendingServerWriteException(RefusalCause.PENDING_ABILITY,
 			    "the server damages the glider at this"
 			        + " connection tick; whether it stays usable is not a captured fact");
 		}
@@ -407,16 +407,16 @@ public final class Travel {
 	 */
 	private static float movementSpeed(final boolean sprinting, final int frostSpeedTicks, final double multiplier) {
 		if (frostSpeedTicks < 0 || frostSpeedTicks > 140) {
-			throw UnimplementedMechanicException.deferred(Refusal.INADMISSIBLE_ATTRIBUTE,
+			throw UnimplementedMechanicException.deferred(RefusalCause.INADMISSIBLE_ATTRIBUTE,
 			    () -> "invalid synchronized powder-snow frost speed ticks: " + frostSpeedTicks);
 		}
 		if (!Double.isFinite(multiplier)) {
 			throw UnimplementedMechanicException.deferred(
-			    Refusal.INADMISSIBLE_ATTRIBUTE, () -> "invalid movement speed multiplier: " + multiplier);
+			    RefusalCause.INADMISSIBLE_ATTRIBUTE, () -> "invalid movement speed multiplier: " + multiplier);
 		}
 		if (frostSpeedTicks != 0 && Double.doubleToRawLongBits(multiplier) != Double.doubleToRawLongBits(1.0)) {
 			throw new UnimplementedMechanicException(
-			    Refusal.INADMISSIBLE_ATTRIBUTE, "movement speed modifiers combined with powder-snow frost speed");
+			    RefusalCause.INADMISSIBLE_ATTRIBUTE, "movement speed modifiers combined with powder-snow frost speed");
 		}
 		double value = (double) BASE_MOVEMENT_SPEED - (double) (0.05F * Math.min(1.0F, frostSpeedTicks / 140.0F));
 		value *= multiplier;
@@ -455,7 +455,7 @@ public final class Travel {
 		if (lengthSqr < 1.0E-7) {
 			// Vanilla returns Vec3.ZERO here and still performs the add. That add
 			// is not a no-op: -0.0 + 0.0 is +0.0, so a component left negative
-			// zero by an earlier collision is normalised every tick the player
+			// zero by an earlier collision is normalized every tick the player
 			// has no movement input. Returning early preserves the -0.0 and
 			// diverges raw-bit while comparing equal under `==`.
 			state.deltaMovementX += 0.0;

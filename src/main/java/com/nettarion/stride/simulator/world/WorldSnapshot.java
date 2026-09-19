@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.world;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,7 +33,7 @@ import java.util.Objects;
  * whose parts leave a section uncovered holds {@link Section#MISSING} there:
  * not padding and not air, a hole every cell read refuses across, as the
  * simulator refuses rather than guesses. {@link #hasMissingSections} says
- * whether a snapshot holds one; a materialised plane of such a snapshot
+ * whether a snapshot holds one; a materialized plane of such a snapshot
  * refuses, since a dense plane has no cell that means unknown.
  *
  * <p>Immutable. Two snapshots are equal only when they are the same object; a
@@ -46,7 +46,7 @@ public final class WorldSnapshot {
 	private final int sizeX;
 	private final int sizeY;
 	private final int sizeZ;
-	private final OutsideRegion outside;
+	private final OutsidePolicy outside;
 	private final List<BlockEntry> palette;
 	private final List<FluidEntry> fluidPalette;
 	private final SectionGrid grid;
@@ -66,10 +66,10 @@ public final class WorldSnapshot {
 	 * cell by cell, which a test fixture may do and a publication never does.
 	 */
 	public static WorldSnapshot compose(final int originX, final int originY, final int originZ, final int sizeX,
-	    final int sizeY, final int sizeZ, final OutsideRegion outside, final List<WorldSnapshot> parts) {
+	    final int sizeY, final int sizeZ, final OutsidePolicy outside, final List<WorldSnapshot> parts) {
 		Objects.requireNonNull(outside, "outside");
 		List<WorldSnapshot> immutableParts = List.copyOf(parts);
-		int cellCount = PlanningSnapshotRegion.requireCellCount(originX, originY, originZ, sizeX, sizeY, sizeZ);
+		int cellCount = SnapshotBounds.requireCellCount(originX, originY, originZ, sizeX, sizeY, sizeZ);
 		Map<BlockEntry, Integer> blockIndices = new LinkedHashMap<>();
 		List<BlockEntry> blockPalette = new ArrayList<>();
 		Map<FluidEntry, Integer> fluidIndices = new LinkedHashMap<>();
@@ -173,7 +173,7 @@ public final class WorldSnapshot {
 	public WorldSnapshot crop(final int windowX, final int windowY, final int windowZ, final int windowSizeX,
 	    final int windowSizeY, final int windowSizeZ) {
 		int cellCount =
-		    PlanningSnapshotRegion.requireCellCount(windowX, windowY, windowZ, windowSizeX, windowSizeY, windowSizeZ);
+		    SnapshotBounds.requireCellCount(windowX, windowY, windowZ, windowSizeX, windowSizeY, windowSizeZ);
 		if (windowX < this.originX || windowY < this.originY || windowZ < this.originZ
 		    || (long) windowX + windowSizeX > (long) this.originX + this.sizeX
 		    || (long) windowY + windowSizeY > (long) this.originY + this.sizeY
@@ -307,447 +307,25 @@ public final class WorldSnapshot {
 	}
 
 	/**
-	 * What lies beyond the captured region. Exact snapshots either describe a
-	 * deliberately sealed synthetic world or refuse a rollout at the boundary.
-	 */
-	public enum OutsideRegion {
-		/** Solid in every direction; the region is a sealed box. */
-		SEALED,
-		/** Touching it invalidates the rollout with a diagnosable reason. */
-		ROLLOUT_TERMINATING
-	}
-
-	/** One box of a block's collision shape, in block-local coordinates. */
-	public record ShapeBox(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
-		/** The shape of an ordinary solid block. */
-		public static final ShapeBox FULL_CUBE = new ShapeBox(0.0, 0.0, 0.0, 1.0, 1.0, 1.0);
-
-		public ShapeBox {
-			if (!Double.isFinite(minX) || !Double.isFinite(minY) || !Double.isFinite(minZ) || !Double.isFinite(maxX)
-			    || !Double.isFinite(maxY) || !Double.isFinite(maxZ) || minX > maxX || minY > maxY || minZ > maxZ) {
-				throw new IllegalArgumentException("invalid collision shape bounds");
-			}
-		}
-	}
-
-	/** Provenance for the broadphase distinction geometry alone cannot recover. */
-	public enum CollisionShapeIdentity {
-		/** Captured shape was not Minecraft's canonical singleton full block. */
-		GENERAL,
-		/** Capture observed object identity with Minecraft's canonical full block. */
-		CANONICAL_FULL,
-		/**
-		 * Source identity was not recorded. Replay the geometry classifier used by
-		 * snapshot formats through 13 without presenting its answer as source fact.
-		 */
-		LEGACY_GEOMETRY
-	}
-
-	/** One distinct block state, with everything the kernel needs from it. */
-	public record BlockEntry(int blockStateId, String name, float friction, float speedFactor, float jumpFactor,
-	    boolean movingPiston, boolean suppressesSupportingSpeedFactor, WorldView.BubbleColumnMode bubbleColumnMode,
-	    boolean fallDistanceResetting, WorldView.CollisionBehavior collisionBehavior, Suffocation suffocation,
-	    WorldView.InsideEffect insideEffect, float bounceRestitution, boolean suppressesBounce, WorldView.StepOn stepOn,
-	    boolean retainsSupportPos, WorldView.Climbability climbability, CollisionShapeIdentity collisionShapeIdentity,
-	    WorldView.Contact contact, WorldView.Landing landing, List<ShapeBox> boxes) {
-		/**
-		 * Equal entries hash equally, and cheaply: the state id and name decide
-		 * the bucket, so merging the palettes of hundreds of sections into one
-		 * publication does not hash every shape box of every entry each time.
-		 * Distinct states share a bucket only when they share an id and a name,
-		 * which is when the deep equality has to run anyway.
-		 */
-		@Override
-		public int hashCode() {
-			return 31 * this.blockStateId + this.name.hashCode();
-		}
-
-		public BlockEntry {
-			Objects.requireNonNull(name, "name");
-			Objects.requireNonNull(bubbleColumnMode, "bubbleColumnMode");
-			Objects.requireNonNull(collisionBehavior, "collisionBehavior");
-			Objects.requireNonNull(suffocation, "suffocation");
-			Objects.requireNonNull(insideEffect, "insideEffect");
-			Objects.requireNonNull(stepOn, "stepOn");
-			Objects.requireNonNull(climbability, "climbability");
-			Objects.requireNonNull(collisionShapeIdentity, "collisionShapeIdentity");
-			Objects.requireNonNull(contact, "contact");
-			// Older captures marked this server hook inert. The block name proves
-			// that omission; retain client replay but refuse server contact.
-			if (name.equals("minecraft:water_cauldron") || name.equals("minecraft:powder_snow_cauldron")) {
-				contact = WorldView.Contact.UNMODELLED;
-			}
-			Objects.requireNonNull(landing, "landing");
-			if (!Float.isFinite(friction) || !Float.isFinite(speedFactor) || !Float.isFinite(jumpFactor)
-			    || !Float.isFinite(bounceRestitution)) {
-				throw new IllegalArgumentException("block coefficients must be finite");
-			}
-			boxes = List.copyOf(boxes);
-			if (collisionShapeIdentity == CollisionShapeIdentity.CANONICAL_FULL
-			    && !boxes.equals(List.of(ShapeBox.FULL_CUBE))) {
-				throw new IllegalArgumentException("canonical full collision shape must be exactly one unit cube");
-			}
-		}
-
-		/**
-		 * Compatibility constructor for entries created before the contact and
-		 * landing bodies were captured: both are read from the block's name
-		 * where the name decides them, and are {@code UNKNOWN} where the
-		 * block state does, so a visit or landing there refuses instead of
-		 * guessing. New capture code supplies the bodies from the implementing
-		 * class and state.
-		 */
-		public BlockEntry(final int blockStateId, final String name, final float friction, final float speedFactor,
-		    final float jumpFactor, final boolean movingPiston, final boolean suppressesSupportingSpeedFactor,
-		    final WorldView.BubbleColumnMode bubbleColumnMode, final boolean fallDistanceResetting,
-		    final WorldView.CollisionBehavior collisionBehavior, final Suffocation suffocation,
-		    final WorldView.InsideEffect insideEffect, final float bounceRestitution, final boolean suppressesBounce,
-		    final WorldView.StepOn stepOn, final boolean retainsSupportPos, final WorldView.Climbability climbability,
-		    final CollisionShapeIdentity collisionShapeIdentity, final List<ShapeBox> boxes) {
-			this(blockStateId, name, friction, speedFactor, jumpFactor, movingPiston, suppressesSupportingSpeedFactor,
-			    bubbleColumnMode, fallDistanceResetting, collisionBehavior, suffocation, insideEffect,
-			    bounceRestitution, suppressesBounce, stepOn, retainsSupportPos, climbability, collisionShapeIdentity,
-			    legacyContact(name), legacyLanding(name), boxes);
-		}
-
-		/**
-		 * The contact body a block name alone decides, for entries captured
-		 * before the fact existed. Campfires and berry bushes depend on their
-		 * state and are unknown; the classes the classification lists as
-		 * hazardous or undecided and the slice does not model are unmodelled.
-		 */
-		public static WorldView.Contact legacyContact(final String name) {
-			return switch (name) {
-				case "minecraft:cactus" -> WorldView.Contact.CACTUS;
-				case "minecraft:magma_block" -> WorldView.Contact.HOT_FLOOR;
-				case "minecraft:fire" -> WorldView.Contact.FIRE;
-				case "minecraft:soul_fire" -> WorldView.Contact.SOUL_FIRE;
-				case "minecraft:lava_cauldron" -> WorldView.Contact.LAVA_CAULDRON;
-				case "minecraft:campfire", "minecraft:soul_campfire", "minecraft:sweet_berry_bush" ->
-					WorldView.Contact.UNKNOWN;
-				case "minecraft:water_cauldron", "minecraft:powder_snow_cauldron", "minecraft:wither_rose",
-				    "minecraft:sculk_sensor", "minecraft:calibrated_sculk_sensor", "minecraft:sculk_shrieker",
-				    "minecraft:turtle_egg", "minecraft:big_dripleaf", "minecraft:end_gateway", "minecraft:end_portal",
-				    "minecraft:nether_portal", "minecraft:moving_piston" ->
-					WorldView.Contact.UNMODELLED;
-				default -> WorldView.Contact.NONE;
-			};
-		}
-
-		/** The landing body a block name alone decides; a dripstone's tip is state and unknown. */
-		public static WorldView.Landing legacyLanding(final String name) {
-			if (name.endsWith("_bed")) {
-				return WorldView.Landing.BED;
-			}
-			return switch (name) {
-				case "minecraft:hay_block" -> WorldView.Landing.HAY;
-				case "minecraft:honey_block" -> WorldView.Landing.HONEY;
-				case "minecraft:slime_block" -> WorldView.Landing.SLIME;
-				case "minecraft:farmland" -> WorldView.Landing.FARMLAND;
-				case "minecraft:powder_snow" -> WorldView.Landing.POWDER_SNOW;
-				case "minecraft:pointed_dripstone" -> WorldView.Landing.UNKNOWN;
-				case "minecraft:turtle_egg" -> WorldView.Landing.UNMODELLED;
-				default -> WorldView.Landing.ORDINARY;
-			};
-		}
-
-		/**
-		 * Compatibility constructor for snapshots created before source shape
-		 * identity was represented. New capture code supplies explicit provenance.
-		 */
-		public BlockEntry(final int blockStateId, final String name, final float friction, final float speedFactor,
-		    final float jumpFactor, final boolean movingPiston, final boolean suppressesSupportingSpeedFactor,
-		    final WorldView.BubbleColumnMode bubbleColumnMode, final boolean fallDistanceResetting,
-		    final WorldView.CollisionBehavior collisionBehavior, final Suffocation suffocation,
-		    final WorldView.InsideEffect insideEffect, final float bounceRestitution, final boolean suppressesBounce,
-		    final WorldView.StepOn stepOn, final boolean retainsSupportPos, final WorldView.Climbability climbability,
-		    final List<ShapeBox> boxes) {
-			this(blockStateId, name, friction, speedFactor, jumpFactor, movingPiston, suppressesSupportingSpeedFactor,
-			    bubbleColumnMode, fallDistanceResetting, collisionBehavior, suffocation, insideEffect,
-			    bounceRestitution, suppressesBounce, stepOn, retainsSupportPos, climbability,
-			    CollisionShapeIdentity.LEGACY_GEOMETRY, boxes);
-		}
-
-		/** Creates an ordinary block whose suffocation fact has not been captured. */
-		public BlockEntry(final int blockStateId, final String name, final float friction, final float speedFactor,
-		    final float jumpFactor, final List<ShapeBox> boxes) {
-			this(blockStateId, name, friction, speedFactor, jumpFactor, false, false, WorldView.BubbleColumnMode.NONE,
-			    false, WorldView.CollisionBehavior.ORDINARY, Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F,
-			    false, WorldView.StepOn.NONE, false, WorldView.Climbability.NONE, boxes);
-		}
-
-		public boolean isEmpty() {
-			return this.boxes.isEmpty();
-		}
-
-		/** Whether capture proved canonical singleton identity rather than inferring it. */
-		public boolean canonicalFullCollisionShape() {
-			return this.collisionShapeIdentity == CollisionShapeIdentity.CANONICAL_FULL;
-		}
-
-		/**
-		 * Names every movement fact of one block state, starting from the
-		 * vanilla defaults an ordinary block carries.
-		 *
-		 * <p>The canonical constructor takes nineteen positional components
-		 * whose booleans and enums are easy to transpose silently. Fixtures
-		 * state only the facts that distinguish the block they mean.
-		 */
-		public static Builder builder(final int blockStateId, final String name) {
-			return new Builder(blockStateId, name);
-		}
-
-		/** Accumulates one {@link BlockEntry} by name rather than by position. */
-		public static final class Builder {
-			private final int blockStateId;
-			private final String name;
-			private float friction = 0.6F;
-			private float speedFactor = 1.0F;
-			private float jumpFactor = 1.0F;
-			private boolean movingPiston;
-			private boolean suppressesSupportingSpeedFactor;
-			private WorldView.BubbleColumnMode bubbleColumnMode = WorldView.BubbleColumnMode.NONE;
-			private boolean fallDistanceResetting;
-			private WorldView.CollisionBehavior collisionBehavior = WorldView.CollisionBehavior.ORDINARY;
-			private Suffocation suffocation = Suffocation.UNKNOWN;
-			private WorldView.InsideEffect insideEffect = WorldView.InsideEffect.NONE;
-			private float bounceRestitution;
-			private boolean suppressesBounce;
-			private WorldView.StepOn stepOn = WorldView.StepOn.NONE;
-			private WorldView.Contact contact = WorldView.Contact.NONE;
-			private WorldView.Landing landing = WorldView.Landing.ORDINARY;
-			private boolean retainsSupportPos;
-			private WorldView.Climbability climbability = WorldView.Climbability.NONE;
-			private CollisionShapeIdentity collisionShapeIdentity = CollisionShapeIdentity.GENERAL;
-			private List<ShapeBox> boxes = List.of();
-
-			private Builder(final int blockStateId, final String name) {
-				this.blockStateId = blockStateId;
-				this.name = Objects.requireNonNull(name, "name");
-				this.contact = legacyContact(name);
-				this.landing = legacyLanding(name);
-			}
-
-			/** Sets the captured friction coefficient used by movement on this block. Returns this builder. */
-			public Builder friction(final float value) {
-				this.friction = value;
-				return this;
-			}
-
-			/** Sets the captured movement-speed multiplier of the block. Returns this builder. */
-			public Builder speedFactor(final float value) {
-				this.speedFactor = value;
-				return this;
-			}
-
-			/** Sets the captured multiplier applied when jumping from this block. Returns this builder. */
-			public Builder jumpFactor(final float value) {
-				this.jumpFactor = value;
-				return this;
-			}
-
-			/** Declares the moving-piston collision fact for this palette entry. Returns this builder. */
-			public Builder movingPiston(final boolean value) {
-				this.movingPiston = value;
-				return this;
-			}
-
-			/** Declares whether this entry suppresses the supporting block's speed factor. Returns this builder. */
-			public Builder suppressesSupportingSpeedFactor(final boolean value) {
-				this.suppressesSupportingSpeedFactor = value;
-				return this;
-			}
-
-			/** Declares the captured bubble-column push or drag mode. Returns this builder. */
-			public Builder bubbleColumnMode(final WorldView.BubbleColumnMode value) {
-				this.bubbleColumnMode = value;
-				return this;
-			}
-
-			/** Declares whether this block resets fall distance along the admitted fall-reset query. Returns this builder. */
-			public Builder fallDistanceResetting(final boolean value) {
-				this.fallDistanceResetting = value;
-				return this;
-			}
-
-			/** Declares the context-dependent collision behavior for this block state. Returns this builder. */
-			public Builder collisionBehavior(final WorldView.CollisionBehavior value) {
-				this.collisionBehavior = value;
-				return this;
-			}
-
-			/** Declares the captured suffocation answer for this block state. Returns this builder. */
-			public Builder suffocation(final Suffocation value) {
-				this.suffocation = value;
-				return this;
-			}
-
-			/** Declares the client-visible entity-inside behavior. Returns this builder. */
-			public Builder insideEffect(final WorldView.InsideEffect value) {
-				this.insideEffect = value;
-				return this;
-			}
-
-			/** Declares the velocity restitution applied by this block's bounce rule. Returns this builder. */
-			public Builder bounceRestitution(final float value) {
-				this.bounceRestitution = value;
-				return this;
-			}
-
-			/** Declares whether landing on this entry suppresses the normal bounce behavior. Returns this builder. */
-			public Builder suppressesBounce(final boolean value) {
-				this.suppressesBounce = value;
-				return this;
-			}
-
-			/** The server-only contact body, {@code entityInside} or {@code stepOn}. */
-			public Builder contact(final WorldView.Contact value) {
-				this.contact = Objects.requireNonNull(value, "contact");
-				return this;
-			}
-
-			/** The {@code fallOn} body. */
-			public Builder landing(final WorldView.Landing value) {
-				this.landing = Objects.requireNonNull(value, "landing");
-				return this;
-			}
-
-			/** Declares the client movement behavior applied to a player stepping on this block. Returns this builder. */
-			public Builder stepOn(final WorldView.StepOn value) {
-				this.stepOn = value;
-				return this;
-			}
-
-			/** Declares whether the entry participates in retained support-position queries. Returns this builder. */
-			public Builder retainsSupportPos(final boolean value) {
-				this.retainsSupportPos = value;
-				return this;
-			}
-
-			/** Declares the block's climbable role, including facing-dependent ladder or trapdoor facts. Returns this builder. */
-			public Builder climbability(final WorldView.Climbability value) {
-				this.climbability = value;
-				return this;
-			}
-
-			/** The collision shape of an ordinary solid block. */
-			public Builder fullCube() {
-				this.collisionShapeIdentity = CollisionShapeIdentity.CANONICAL_FULL;
-				this.boxes = List.of(ShapeBox.FULL_CUBE);
-				return this;
-			}
-
-			/** Declares collision boxes in local block coordinates; list order is preserved. Returns this builder. */
-			public Builder boxes(final List<ShapeBox> value) {
-				this.collisionShapeIdentity = CollisionShapeIdentity.GENERAL;
-				this.boxes = List.copyOf(value);
-				return this;
-			}
-
-			public Builder boxes(final ShapeBox... value) {
-				return boxes(List.of(value));
-			}
-
-			/** Builds a block entry from the declared geometry, coefficients, and behavior facts. */
-			public BlockEntry build() {
-				return new BlockEntry(this.blockStateId, this.name, this.friction, this.speedFactor, this.jumpFactor,
-				    this.movingPiston, this.suppressesSupportingSpeedFactor, this.bubbleColumnMode,
-				    this.fallDistanceResetting, this.collisionBehavior, this.suffocation, this.insideEffect,
-				    this.bounceRestitution, this.suppressesBounce, this.stepOn, this.retainsSupportPos,
-				    this.climbability, this.collisionShapeIdentity, this.contact, this.landing, this.boxes);
-			}
-		}
-	}
-
-	/**
-	 * {@code BlockState.isSuffocating}, which {@code LocalPlayer.aiStep} reads
-	 * four times a tick through {@code moveTowardsClosestSpace}.
-	 *
-	 * <p>Carried per state rather than derived, because it cannot be derived: it
-	 * is a {@code BlockBehaviour.StatePredicate} supplied through {@code
-	 * Properties}, and stone, glass and oak leaves share one collision shape and
-	 * one full-cube answer while disagreeing about this .
-	 *
-	 * <p>{@link #UNKNOWN} is what a snapshot written before this fact existed
-	 * says, and it is not a synonym for {@link #NO}: a consumer that reaches a
-	 * cell whose suffocation could matter must fail closed rather than assume.
-	 */
-	public enum Suffocation { UNKNOWN, NO, YES }
-
-	/** The vanilla fluid tags whose player-motion semantics are in scope. */
-	public enum FluidKind { EMPTY, WATER, LAVA }
-
-	/**
-	 * One resolved fluid state. Height and flow deliberately live here rather
-	 * than on {@link BlockEntry}: both may depend on neighbouring cells even
-	 * when the underlying block and fluid state IDs are identical.
-	 */
-	public record FluidEntry(int fluidStateId, String name, FluidKind kind, double height, double flowX, double flowY,
-	    double flowZ, boolean source) {
-		/**
-		 * The entry for a cell holding no fluid, and the entry every fluid
-		 * palette begins with.
-		 *
-		 * <p>It is a convenience, not an identity: ask {@link #isEmpty()}
-		 * rather than comparing against this instance. A snapshot read back
-		 * from a capture, or composed from another, carries its own equal
-		 * copy, so {@code entry != EMPTY} is true of an empty cell whenever
-		 * the entry did not come from the one factory that returns this
-		 * constant. That comparison has already produced a defect once.
-		 */
-		public static final FluidEntry EMPTY =
-		    new FluidEntry(0, "minecraft:empty", FluidKind.EMPTY, 0.0, 0.0, 0.0, 0.0, false);
-
-		/**
-		 * Whether this entry describes a cell holding no fluid. The compact
-		 * constructor refuses an empty kind carrying any fluid semantics, so
-		 * the kind alone decides it however the entry was built.
-		 */
-		public boolean isEmpty() {
-			return this.kind == FluidKind.EMPTY;
-		}
-
-		/** Equal entries hash equally, by state id and name; see {@link BlockEntry#hashCode}. */
-		@Override
-		public int hashCode() {
-			return 31 * this.fluidStateId + this.name.hashCode();
-		}
-
-		public FluidEntry {
-			Objects.requireNonNull(name, "name");
-			Objects.requireNonNull(kind, "kind");
-			if (!Double.isFinite(height) || height < 0.0 || height > 1.0) {
-				throw new IllegalArgumentException("fluid height must be finite and in [0, 1]");
-			}
-			if (!Double.isFinite(flowX) || !Double.isFinite(flowY) || !Double.isFinite(flowZ)) {
-				throw new IllegalArgumentException("fluid flow must be finite");
-			}
-			if (kind == FluidKind.EMPTY && (height != 0.0 || flowX != 0.0 || flowY != 0.0 || flowZ != 0.0 || source)) {
-				throw new IllegalArgumentException("empty fluid cannot carry fluid semantics");
-			}
-		}
-	}
-
-	/**
 	 * Fills one dimensioned region cell by cell, in world coordinates.
 	 *
 	 * <p>Every caller that authors a snapshot otherwise repeats the same three
 	 * steps: allocate {@code sizeX * sizeY * sizeZ} cells, write them through an
 	 * open-coded {@code (y * sizeZ + z) * sizeX + x} index, and assemble a
-	 * palette. The open-coded index silently corrupts a neighbouring cell when
+	 * palette. The open-coded index silently corrupts a neighboring cell when
 	 * a coordinate leaves the region, so the builder refuses that write instead.
 	 *
 	 * <p>Cells start at palette index 0 and fluid cells at the canonical empty
 	 * fluid, so a fixture writes only what differs from an empty region.
 	 */
-	public static Builder builder(final OutsideRegion outside, final int originX, final int originY, final int originZ,
+	public static Builder builder(final OutsidePolicy outside, final int originX, final int originY, final int originZ,
 	    final int sizeX, final int sizeY, final int sizeZ) {
 		return new Builder(outside, originX, originY, originZ, sizeX, sizeY, sizeZ);
 	}
 
 	/** Accumulates the dense planes and palettes of one {@link WorldSnapshot}. */
 	public static final class Builder {
-		private final OutsideRegion outside;
+		private final OutsidePolicy outside;
 		private final int originX;
 		private final int originY;
 		private final int originZ;
@@ -759,10 +337,10 @@ public final class WorldSnapshot {
 		private final List<BlockEntry> palette = new ArrayList<>();
 		private List<FluidEntry> fluidPalette = List.of(FluidEntry.EMPTY);
 
-		private Builder(final OutsideRegion outside, final int originX, final int originY, final int originZ,
+		private Builder(final OutsidePolicy outside, final int originX, final int originY, final int originZ,
 		    final int sizeX, final int sizeY, final int sizeZ) {
 			this.outside = Objects.requireNonNull(outside, "outside");
-			int cellCount = PlanningSnapshotRegion.requireCellCount(originX, originY, originZ, sizeX, sizeY, sizeZ);
+			int cellCount = SnapshotBounds.requireCellCount(originX, originY, originZ, sizeX, sizeY, sizeZ);
 			this.originX = originX;
 			this.originY = originY;
 			this.originZ = originZ;
@@ -838,7 +416,7 @@ public final class WorldSnapshot {
 
 	/** Creates a snapshot without fluid cells. */
 	public WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
-	    final int sizeZ, final OutsideRegion outside, final List<BlockEntry> palette, final int[] cells) {
+	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette, final int[] cells) {
 		this(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, palette, cells, List.of(FluidEntry.EMPTY),
 		    new int[0]);
 	}
@@ -848,7 +426,7 @@ public final class WorldSnapshot {
 	 * sections and validated cell by cell against the palettes.
 	 */
 	public WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
-	    final int sizeZ, final OutsideRegion outside, final List<BlockEntry> palette, final int[] cells,
+	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette, final int[] cells,
 	    final List<FluidEntry> fluidPalette, final int[] fluidCells) {
 		this(fromDense(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, List.copyOf(palette), cells,
 		    List.copyOf(fluidPalette), fluidCells, false));
@@ -879,7 +457,7 @@ public final class WorldSnapshot {
 	 * read; a caller that keeps writing to the array breaks the snapshot.
 	 */
 	public static WorldSnapshot owning(final int originX, final int originY, final int originZ, final int sizeX,
-	    final int sizeY, final int sizeZ, final OutsideRegion outside, final List<BlockEntry> palette,
+	    final int sizeY, final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette,
 	    final int[] cells, final List<FluidEntry> fluidPalette, final int[] fluidCells) {
 		return fromDense(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, List.copyOf(palette), cells,
 		    List.copyOf(fluidPalette), fluidCells, true);
@@ -887,7 +465,7 @@ public final class WorldSnapshot {
 
 	/** {@link #owning} without a fluid plane. */
 	public static WorldSnapshot owning(final int originX, final int originY, final int originZ, final int sizeX,
-	    final int sizeY, final int sizeZ, final OutsideRegion outside, final List<BlockEntry> palette,
+	    final int sizeY, final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette,
 	    final int[] cells) {
 		return owning(originX, originY, originZ, sizeX, sizeY, sizeZ, outside, palette, cells,
 		    List.of(FluidEntry.EMPTY), new int[0]);
@@ -899,9 +477,9 @@ public final class WorldSnapshot {
 	 * are padding at index zero. {@code fluidCells} is empty for a dry plane.
 	 */
 	private static WorldSnapshot fromDense(final int originX, final int originY, final int originZ, final int sizeX,
-	    final int sizeY, final int sizeZ, final OutsideRegion outside, final List<BlockEntry> palette,
+	    final int sizeY, final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette,
 	    final int[] cells, final List<FluidEntry> fluidPalette, final int[] fluidCells, final boolean adopt) {
-		int expectedCells = PlanningSnapshotRegion.requireCellCount(originX, originY, originZ, sizeX, sizeY, sizeZ);
+		int expectedCells = SnapshotBounds.requireCellCount(originX, originY, originZ, sizeX, sizeY, sizeZ);
 		if (expectedCells != cells.length) {
 			throw new IllegalArgumentException(
 			    "snapshot dimensions require " + expectedCells + " cells, received " + cells.length);
@@ -955,7 +533,7 @@ public final class WorldSnapshot {
 
 	/** Adopts sections this class chose; the palettes are already immutable lists. */
 	private WorldSnapshot(final int originX, final int originY, final int originZ, final int sizeX, final int sizeY,
-	    final int sizeZ, final OutsideRegion outside, final List<BlockEntry> palette,
+	    final int sizeZ, final OutsidePolicy outside, final List<BlockEntry> palette,
 	    final List<FluidEntry> fluidPalette, final SectionGrid grid, final Section[] sections) {
 		this.originX = originX;
 		this.originY = originY;
@@ -993,7 +571,7 @@ public final class WorldSnapshot {
 
 	private void requireNoMissingSections(final String what) {
 		if (this.anyMissing) {
-			throw UnimplementedMechanicException.deferred(Refusal.OUTSIDE_REGION,
+			throw UnimplementedMechanicException.deferred(RefusalCause.OUTSIDE_REGION,
 			    () -> what + " of a snapshot with a missing section: a dense plane has no cell that means unknown");
 		}
 	}
@@ -1029,12 +607,12 @@ public final class WorldSnapshot {
 	}
 
 	/** Returns the declared policy for queries outside the captured region. */
-	public OutsideRegion outside() {
+	public OutsidePolicy outside() {
 		return this.outside;
 	}
 
 	/** This snapshot with the requested outside semantics, sharing its immutable sections and palettes. */
-	public WorldSnapshot withOutside(final OutsideRegion policy) {
+	public WorldSnapshot withOutside(final OutsidePolicy policy) {
 		Objects.requireNonNull(policy, "outside");
 		if (policy == this.outside) return this;
 		return new WorldSnapshot(this.originX, this.originY, this.originZ, this.sizeX, this.sizeY, this.sizeZ, policy,
@@ -1097,7 +675,7 @@ public final class WorldSnapshot {
 			int run = Math.min(count, Section.EDGE - localX);
 			if (section.isMissing()) {
 				throw new UnimplementedMechanicException(
-				    Refusal.OUTSIDE_REGION, "a dense copy reached a missing section at " + x + "," + y + "," + z);
+				    RefusalCause.OUTSIDE_REGION, "a dense copy reached a missing section at " + x + "," + y + "," + z);
 			}
 			int[] cells = section.rawCells();
 			if (cells == null) {
@@ -1124,7 +702,7 @@ public final class WorldSnapshot {
 			int run = Math.min(count, Section.EDGE - localX);
 			if (section.isMissing()) {
 				throw new UnimplementedMechanicException(
-				    Refusal.OUTSIDE_REGION, "a dense fluid copy reached a missing section at " + x + "," + y + "," + z);
+				    RefusalCause.OUTSIDE_REGION, "a dense fluid copy reached a missing section at " + x + "," + y + "," + z);
 			}
 			int[] fluids = section.rawFluidCells();
 			if (fluids == null) {

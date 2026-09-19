@@ -8,6 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 /**
  * The composed step places the server's glide stop at the phase the live
@@ -89,10 +92,10 @@ final class GlideStopEchoTest {
 	/** Stone with its top at y=0 everywhere in the region. */
 	private static SnapshotView floorWorld() {
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -6, -3, -6, 12, 12, 12)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
-		                .boxes(WorldSnapshot.ShapeBox.FULL_CUBE)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -6, -3, -6, 12, 12, 12)
+		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		            BlockEntry.builder(1, "minecraft:stone")
+		                .boxes(ShapeBox.FULL_CUBE)
 		                .build());
 		for (int z = -6; z < 6; z++) {
 			for (int x = -6; x < 6; x++) {

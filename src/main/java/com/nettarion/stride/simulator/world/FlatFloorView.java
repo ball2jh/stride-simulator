@@ -2,9 +2,9 @@ package com.nettarion.stride.simulator.world;
 
 import com.nettarion.stride.simulator.AABB;
 import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.geometry.CollisionQuerySpan;
 import com.nettarion.stride.simulator.geometry.Mth;
@@ -75,8 +75,8 @@ public final class FlatFloorView implements WorldView {
 
 	/** One ordinary block everywhere: no body anywhere. */
 	@Override
-	public BlockBehaviour behaviourAt(final int x, final int y, final int z) {
-		return BlockBehaviour.INERT;
+	public BlockBehavior behaviorAt(final int x, final int y, final int z) {
+		return BlockBehavior.INERT;
 	}
 
 	@Override
@@ -124,7 +124,7 @@ public final class FlatFloorView implements WorldView {
 		int y1 = Mth.floor(boundingBoxMaxY - 1.0E-7);
 		for (int y = y0; y <= y1; y++) {
 			if (solid(y)) {
-				throw UnimplementedMechanicException.at(Refusal.UNDECLARED_WORLD_FACT,
+				throw UnimplementedMechanicException.at(RefusalCause.UNDECLARED_WORLD_FACT,
 				    "a flat-floor world cannot resolve suffocation for the block at ", cellX, y, cellZ, "");
 			}
 		}

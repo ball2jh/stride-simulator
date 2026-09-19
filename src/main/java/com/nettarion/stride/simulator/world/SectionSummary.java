@@ -2,7 +2,7 @@ package com.nettarion.stride.simulator.world;
 
 /**
  * The flat grids a {@link SnapshotView} answers its coarse questions from:
- * per 16-cube section, how many cells can collide, which behaviour bits any
+ * per 16-cube section, how many cells can collide, which behavior bits any
  * cell carries and whether any shape leaves its cell; the same bits and flag
  * per fine cube; and per section the bits every fine cube inside it carries.
  *
@@ -22,7 +22,7 @@ final class SectionSummary {
 	static final int SECTION = Section.EDGE;
 	/** Fine cubes along one edge of a section. */
 	static final int FINES_PER_SECTION = SECTION / FINE;
-	/** The one behaviour bit a view derives rather than reads from a palette entry. */
+	/** The one behavior bit a view derives rather than reads from a palette entry. */
 	static final int PROPERTY_SERVER_MUTABLE = 1 << 10;
 
 	final int sectionsX;
@@ -33,7 +33,7 @@ final class SectionSummary {
 	final int finesZ;
 	/** Per section: cells whose entry can collide in some entity context. */
 	final int[] counts;
-	/** Per section: the union of its cells' behaviour bits. */
+	/** Per section: the union of its cells' behavior bits. */
 	final short[] properties;
 	/** Per section: whether any cell's shape leaves its own cell. */
 	final boolean[] large;
@@ -113,13 +113,13 @@ final class SectionSummary {
 	 */
 
 	/** Whether a cell of this entry can contribute a collision in some entity context. */
-	static boolean collisionPotential(final WorldSnapshot.BlockEntry entry) {
+	static boolean collisionPotential(final BlockEntry entry) {
 		return !entry.boxes().isEmpty() || entry.collisionBehavior() != WorldView.CollisionBehavior.ORDINARY;
 	}
 
 	/** Whether any box of this entry leaves the unit cell. */
-	static boolean largeShape(final WorldSnapshot.BlockEntry entry) {
-		for (WorldSnapshot.ShapeBox box : entry.boxes()) {
+	static boolean largeShape(final BlockEntry entry) {
+		for (ShapeBox box : entry.boxes()) {
 			if (box.minX() < 0.0 || box.minY() < 0.0 || box.minZ() < 0.0 || box.maxX() > 1.0 || box.maxY() > 1.0
 			    || box.maxZ() > 1.0) {
 				return true;
@@ -129,11 +129,11 @@ final class SectionSummary {
 	}
 
 	/**
-	 * One bit per behaviour a cell of this entry could make the movement path
+	 * One bit per behavior a cell of this entry could make the movement path
 	 * ask about, as {@link WorldView#propertiesIn} reports them. The fluid bit is
 	 * a cell's fluid entry's, not the block's, and is added by the scan.
 	 */
-	static int propertyBits(final WorldSnapshot.BlockEntry entry) {
+	static int propertyBits(final BlockEntry entry) {
 		int properties = 0;
 		if (entry.bubbleColumnMode() != WorldView.BubbleColumnMode.NONE) {
 			properties |= WorldView.PROPERTY_BUBBLE_COLUMN;

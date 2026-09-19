@@ -27,7 +27,10 @@ dependencies {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 25
-    options.compilerArgs.addAll(['-Xlint:all', '-Werror'])
+    // Every lint category is an error except `exports`: the exported world, block and geometry
+    // packages hold mechanism types whose signatures mention the non-exported tick and server
+    // packages. Those members are internal; the package documentation names the supported API.
+    options.compilerArgs.addAll(['-Xlint:all,-exports', '-Werror'])
 }
 
 tasks.named('test', Test) {
@@ -114,7 +117,7 @@ sourceSets.main.java.srcDir(generateShapeCollision)
 
 // One declared field table expands into the copy, equality, digest and wire
 // plumbing of the three player copies, so adding a field is one row and one
-// declaration. StateEncodingPinTest holds the expansion to the recorded bits.
+// declaration. StateEncodingStabilityTest holds the expansion to the recorded bits.
 def generateStateFields = tasks.register('generateStateFields', Exec) {
 	description = 'Expands the state field table into StateFields.java.'
 	def table = layout.projectDirectory.file('src/main/fields/state-fields.tsv')

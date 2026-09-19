@@ -24,11 +24,13 @@ import java.util.Arrays;
  *
  * <p>Reads position, pose, and {@link Scratch}'s movement segment; writes
  * its own retained workspace. {@link BlockEffects.Contact} checks contact and
- * applies behaviours; this owner controls limits, duplicate suppression, and
+ * applies behaviors; this owner controls limits, duplicate suppression, and
  * step advancement between those operations. One instance belongs to one
  * stepping thread and resets its visited sets for each traversal.
  */
 public final class InsideBlockTraversal {
+	/** The corner clip point of the current sweep segment, written by {@link AABB#clipCell}. */
+	private final double[] clipHit = new double[3];
 	private final BlockEffects.Contact contact = new BlockEffects.Contact();
 
 	/*
@@ -277,15 +279,15 @@ public final class InsideBlockTraversal {
 				tZ += tDeltaZ;
 			}
 			if (!AABB.clipCell(cellX, cellY, cellZ, fromCornerX, fromCornerY, fromCornerZ, toCornerX, toCornerY,
-			        toCornerZ, scratch)) {
+			        toCornerZ, this.clipHit)) {
 				continue;
 			}
 			iterations++;
 			// The lower clamp is float arithmetic and the upper is double, which
 			// is not interchangeable at these magnitudes.
-			double cornerHitX = Mth.clamp(scratch.clipHitX, cellX + 1.0E-5F, cellX + 1.0 - 1.0E-5F);
-			double cornerHitY = Mth.clamp(scratch.clipHitY, cellY + 1.0E-5F, cellY + 1.0 - 1.0E-5F);
-			double cornerHitZ = Mth.clamp(scratch.clipHitZ, cellZ + 1.0E-5F, cellZ + 1.0 - 1.0E-5F);
+			double cornerHitX = Mth.clamp(this.clipHit[0], cellX + 1.0E-5F, cellX + 1.0 - 1.0E-5F);
+			double cornerHitY = Mth.clamp(this.clipHit[1], cellY + 1.0E-5F, cellY + 1.0 - 1.0E-5F);
+			double cornerHitZ = Mth.clamp(this.clipHit[2], cellZ + 1.0E-5F, cellZ + 1.0 - 1.0E-5F);
 			if (!visitBoxInDirection(state, cellX, cellY, cellZ, Mth.floor(cornerHitX - boxSizeX * cornerDirX),
 			        Mth.floor(cornerHitY - boxSizeY * cornerDirY), Mth.floor(cornerHitZ - boxSizeZ * cornerDirZ),
 			        deltaMovementX, deltaMovementY, deltaMovementZ, iterations, true, minX, minY, minZ, maxX, maxY,
@@ -432,7 +434,7 @@ public final class InsideBlockTraversal {
 	 * this sub-movement's origin reached a shape at the cell.
 	 *
 	 * <p>{@code AABB.collidedAlongVector} inflates the shape by the player box's
-	 * own half-extents and asks whether the box's centre, swept along the
+	 * own half-extents and asks whether the box's center, swept along the
 	 * sub-movement, starts inside, ends inside, or crosses a face.
 	 */
 	public boolean collidedWithShapeMovingFrom(

@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
 import com.nettarion.stride.simulator.geometry.Mth;
@@ -46,7 +46,7 @@ public final class EntityFluidInteraction {
 	 * the deflated box widened by one block in X and Z be loaded, and answers
 	 * "no fluid at all" when one is not, whatever the box's own cells hold.
 	 * The server's copy stands in loaded chunks and answers from them, so an
-	 * unloaded neighbour makes the two copies disagree the way an unloaded
+	 * unloaded neighbor makes the two copies disagree the way an unloaded
 	 * column below does for gravity in {@link Travel}; neither outcome is a
 	 * captured fact, so the refresh refuses whenever those cells could hold
 	 * fluid and a column of the widened footprint is unknown.
@@ -156,7 +156,7 @@ public final class EntityFluidInteraction {
 				if (!world.hasChunkAt(x, z)) {
 					int atX = x;
 					int atZ = z;
-					throw UnimplementedMechanicException.deferred(Refusal.OUTSIDE_REGION,
+					throw UnimplementedMechanicException.deferred(RefusalCause.OUTSIDE_REGION,
 					    ()
 					        -> "unknown space beside the player at " + atX + "," + atZ
 					        + "; vanilla's fluid refresh finds no fluid there and the"
@@ -180,7 +180,7 @@ public final class EntityFluidInteraction {
 
 	static void requireSupported(final FluidSample cell, final int x, final int y, final int z) {
 		if (cell.kind != FluidSample.Kind.WATER && cell.kind != FluidSample.Kind.LAVA) {
-			throw UnimplementedMechanicException.deferred(Refusal.UNMODELLED_BLOCK,
+			throw UnimplementedMechanicException.deferred(RefusalCause.UNMODELED_BLOCK,
 			    ()
 			        -> "unsupported fluid at " + x + "," + y + "," + z + ": kind=" + cell.kind
 			        + ", source=" + cell.source + ", flow=" + cell.flowX + "," + cell.flowY + "," + cell.flowZ);

@@ -61,7 +61,7 @@ public final class BlockEffects {
 	 * endpoints — and therefore every box it builds — lie componentwise between
 	 * the two. {@code addCollisionsAlongTravel} sweeps a corner of the
 	 * destination box back along the same travel vector, so its ray lies in the
-	 * union too. The one-cell margin covers the neighbour cell
+	 * union too. The one-cell margin covers the neighbor cell
 	 * {@code applyBubbleColumnAt} reads above a column, and the {@code floor} of a
 	 * box face that lands exactly on a cell boundary.
 	 *
@@ -137,7 +137,10 @@ public final class BlockEffects {
 		ServerPlayerState server = scratch.authority.isServer() ? scratch.authority.serverState() : null;
 		boolean currentRecorded =
 		    server != null && scratch.hasMovementSegment && server.additionalMovementCount() >= 99;
-		if (currentRecorded) server.addMovementThisTick(scratch, toX, toY, toZ);
+		if (currentRecorded && scratch.hasMovementSegment) {
+			server.addMovementThisTick(scratch.segmentFromX, scratch.segmentFromY, scratch.segmentFromZ, toX, toY, toZ,
+			    scratch.segmentRequestedX, scratch.segmentRequestedZ);
+		}
 		if (server != null && server.movementThisTickPresent) {
 			scratch.insideEffects.begin();
 			scratch.insideTraversal.begin();
@@ -262,7 +265,7 @@ public final class BlockEffects {
 		boolean clientFluidFreeze = !server && fluids && (powder || state.ticksFrozen > 0);
 		boolean exactSteps = server && world instanceof SnapshotView snapshot && snapshot.hasSourceInsideShapes();
 		if (!powder && !insideEffects && !contacts && !clientFluidFreeze && (!bubbles || state.flying)
-		    && !(exactSteps && !completeTraversal && scratch.insideEffects.hasPendingEffects())) {
+		    && !(exactSteps && !completeTraversal && scratch.insideEffects.hasPendingHurts())) {
 			return;
 		}
 		if (completeTraversal) {
@@ -280,12 +283,12 @@ public final class BlockEffects {
 	 * only after traversal accepts the contact. No visited sets or step counters
 	 * belong here. A false detection leaves no result to apply.
 	 *
-	 * <p>Cells without a modelled callback are invisible to this slice. If that
+	 * <p>Cells without a modeled callback are invisible to this slice. If that
 	 * omission makes collected-step grouping ambiguous, the
 	 * {@link InsideBlockEffectCollector} refuses.
 	 */
 	static final class Contact {
-		private BlockBehaviour behaviour;
+		private BlockBehavior behavior;
 		private boolean contactBody;
 		private FluidSample.Kind fluid;
 		private boolean insideBlock;
@@ -295,17 +298,17 @@ public final class BlockEffects {
 
 		boolean find(final PlayerState state, final int x, final int y, final int z, final boolean includeFluids,
 		    final WorldView world, final Scratch scratch) {
-			this.behaviour = world.behaviourAt(x, y, z);
-			// The server-only entityInside bodies are the behaviour's contact half.
+			this.behavior = world.behaviorAt(x, y, z);
+			// The server-only entityInside bodies are the behavior's contact half.
 			// A hot floor is a stepOn body and runs from applyStepOn, not from a
 			// visit, so a magma block has none.
-			this.contactBody = this.behaviour.hasContact();
+			this.contactBody = this.behavior.hasContact();
 			this.fluid =
 			    includeFluids ? EntityFluidInteraction.kindAt(world, x, y, z, scratch) : FluidSample.Kind.EMPTY;
-			if (!this.behaviour.hasEntityInside() && !this.contactBody && this.fluid == FluidSample.Kind.EMPTY) {
+			if (!this.behavior.hasEntityInside() && !this.contactBody && this.fluid == FluidSample.Kind.EMPTY) {
 				if (includeFluids && scratch.authority.isServer() && world instanceof SnapshotView snapshot
 				    && snapshot.hasSourceInsideShapes()) {
-					this.insideBlock = snapshot.sourceInsideReached(state, x, y, z, scratch);
+					this.insideBlock = snapshot.sourceInsideReached(state, x, y, z, scratch.insideTraversal);
 					this.insideFluid = false;
 					return this.insideBlock;
 				}
@@ -329,9 +332,9 @@ public final class BlockEffects {
 			//
 			// Layered cauldrons are inert in the audited client vector. Their server
 			// contact requires a source catalog and branch-owned mutation delivery.
-			// Lava cauldrons have their own modelled shape and collected effect.
-			this.insideBlock = this.behaviour.hasEntityInside() || this.contactBody;
-			if (!this.behaviour.entityInsideShapeReached(state, x, y, z, scratch)) {
+			// Lava cauldrons have their own modeled shape and collected effect.
+			this.insideBlock = this.behavior.hasEntityInside() || this.contactBody;
+			if (!this.behavior.entityInsideShapeReached(state, x, y, z, scratch)) {
 				this.insideBlock = false;
 			}
 			// Entity.collidedWithFluid: the fluid's own box, the cell up to its
@@ -353,7 +356,7 @@ public final class BlockEffects {
 			// box overlaps the cell, which the bubble column's body reads.
 			boolean isPrecise =
 			    movedFar || (minX < x + 1.0 && maxX > x && minY < y + 1.0 && maxY > y && minZ < z + 1.0 && maxZ > z);
-			this.behaviour.entityInside(state, x, y, z, isPrecise, world, scratch);
+			this.behavior.entityInside(state, x, y, z, isPrecise, world, scratch);
 			if (this.insideFluid) {
 				visitFluid(this.fluid, scratch);
 			}
@@ -389,13 +392,13 @@ public final class BlockEffects {
 
 	/**
 	 * {@code Block.stepOn} for the block underfoot, at {@code getOnPosLegacy}:
-	 * the behaviour's, which on the server's copy deals the hot floor's hit
+	 * the behavior's, which on the server's copy deals the hot floor's hit
 	 * and refuses a body the slice does not model, and on both sides runs
 	 * the slime's damping.
 	 */
 	private static void applyStepOn(final PlayerState state, final WorldView world, final Scratch scratch) {
 		SupportingBlock.getOnPosLegacy(state, world, scratch);
-		world.behaviourAt(scratch.support.x, scratch.support.y, scratch.support.z)
+		world.behaviorAt(scratch.support.x, scratch.support.y, scratch.support.z)
 		    .stepOn(state, scratch.support.x, scratch.support.y, scratch.support.z, scratch);
 	}
 }

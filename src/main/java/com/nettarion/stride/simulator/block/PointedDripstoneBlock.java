@@ -9,7 +9,7 @@ import com.nettarion.stride.simulator.server.Survival;
  * A dripstone that is not an upward tip lands as an ordinary block and is
  * captured as one; a capture that predates the fact is {@link UnknownStateBlock}.
  */
-final class PointedDripstoneBlock extends BlockBehaviour {
+final class PointedDripstoneBlock extends BlockBehavior {
 	static final PointedDripstoneBlock INSTANCE = new PointedDripstoneBlock();
 
 	private PointedDripstoneBlock() {}

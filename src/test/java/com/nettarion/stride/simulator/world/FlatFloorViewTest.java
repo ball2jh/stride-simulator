@@ -33,7 +33,7 @@ class FlatFloorViewTest {
 		SupportCell out = new SupportCell();
 
 		// The slab reaches x = 1.0 exactly; the cell at x = 1 is not a candidate
-		// on X any more than it is on Z, whichever is nearer the centre.
+		// on X any more than it is on Z, whichever is nearer the center.
 		world.findSupportingBlock(0.4, 4.0 - 1.0E-6, 0.4, 1.0, 4.0, 1.0, 0.99, 4.0, 0.5, out);
 		assertTrue(out.present);
 		assertEquals(0, out.x);

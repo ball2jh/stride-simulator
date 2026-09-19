@@ -22,7 +22,7 @@ import java.util.Map;
  */
 public final class MovementClasses {
 	/** The admission decision for a block class that overrides a movement hook. */
-	public enum Classification { MODELLED, GEOMETRY_ONLY, NO_MOVEMENT_EFFECT, UNSUPPORTED }
+	public enum Classification { MODELED, GEOMETRY_ONLY, NO_MOVEMENT_EFFECT, UNSUPPORTED }
 
 	/**
 	 * The third column: the body the block's {@code entityInside} or
@@ -40,9 +40,9 @@ public final class MovementClasses {
 		/** No such body, or one that writes nothing on a player. */
 		NONE,
 		/** A body the simulator's server tick runs; the capture names the class. */
-		MODELLED,
+		MODELED,
 		/** A body the slice does not model; a visit refuses. */
-		UNMODELLED
+		UNMODELED
 	}
 
 	private static final String RESOURCE = "/stride/movement-classes.tsv";
@@ -92,10 +92,10 @@ public final class MovementClasses {
 				// Parsed rather than defaulted, so a class added without deciding this
 				// question fails the load instead of silently reading as harmless.
 				switch (parts[2]) {
-					case "NONE", "MODELLED", "UNMODELLED" -> contacts.put(parts[0], ServerContact.valueOf(parts[2]));
+					case "NONE", "MODELED", "UNMODELED" -> contacts.put(parts[0], ServerContact.valueOf(parts[2]));
 					default ->
 						throw new IllegalArgumentException("'" + parts[2] + "' is not a server contact for " + parts[0]
-						    + "; use NONE, MODELLED or UNMODELLED");
+						    + "; use NONE, MODELED or UNMODELED");
 				}
 				reasons.put(parts[0], parts[3]);
 			}

@@ -18,38 +18,45 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.ShapeProvenance;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.Suffocation;
+import com.nettarion.stride.simulator.world.FluidKind;
+import com.nettarion.stride.simulator.world.FluidEntry;
 
 class WorldSnapshotCodecTest {
 	@Test
 	void rejectsACellWhosePaletteIndexDoesNotExist() {
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
 		assertThrows(IllegalArgumentException.class,
-		    () -> new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(air), new int[] {1}));
+		    () -> new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(air), new int[] {1}));
 	}
 
 	@Test
 	void rejectsAFluidCellWhosePaletteIndexDoesNotExist() {
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
 		assertThrows(IllegalArgumentException.class,
 		    ()
-		        -> new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(air), new int[] {0},
-		            List.of(WorldSnapshot.FluidEntry.EMPTY), new int[] {1}));
+		        -> new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(air), new int[] {0},
+		            List.of(FluidEntry.EMPTY), new int[] {1}));
 	}
 
 	private static WorldSnapshot sample() {
 		// A slab is the shape that matters here: half-height geometry is what
 		// the flat-floor world could never represent.
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot.BlockEntry stone = new WorldSnapshot.BlockEntry(
-		    1, "minecraft:stone", 0.6F, 1.0F, 1.0F, List.of(new WorldSnapshot.ShapeBox(0, 0, 0, 1, 1, 1)));
-		WorldSnapshot.BlockEntry slab = new WorldSnapshot.BlockEntry(
-		    2, "minecraft:stone_slab", 0.6F, 1.0F, 1.0F, List.of(new WorldSnapshot.ShapeBox(0, 0, 0, 1, 0.5, 1)));
+		BlockEntry air = new BlockEntry(0, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry stone = new BlockEntry(
+		    1, "minecraft:stone", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0, 0, 0, 1, 1, 1)));
+		BlockEntry slab = new BlockEntry(
+		    2, "minecraft:stone_slab", 0.6F, 1.0F, 1.0F, List.of(new ShapeBox(0, 0, 0, 1, 0.5, 1)));
 
 		int[] cells = new int[2 * 2 * 2];
 		cells[0] = 1;
 		cells[3] = 2;
 		return new WorldSnapshot(
-		    10, -60, 20, 2, 2, 2, WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, List.of(air, stone, slab), cells);
+		    10, -60, 20, 2, 2, 2, OutsidePolicy.REFUSING, List.of(air, stone, slab), cells);
 	}
 
 	@Test
@@ -74,12 +81,12 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void roundTripPreservesCanonicalFullIdentityApartFromGeometry() throws IOException {
-		WorldSnapshot.BlockEntry canonical = WorldSnapshot.BlockEntry.builder(1, "test:canonical").fullCube().build();
-		WorldSnapshot.BlockEntry general = WorldSnapshot.BlockEntry.builder(2, "test:general-unit-cube")
-		                                       .boxes(WorldSnapshot.ShapeBox.FULL_CUBE)
+		BlockEntry canonical = BlockEntry.builder(1, "test:canonical").fullCube().build();
+		BlockEntry general = BlockEntry.builder(2, "test:general-unit-cube")
+		                                       .boxes(ShapeBox.FULL_CUBE)
 		                                       .build();
 		WorldSnapshot original = new WorldSnapshot(
-		    0, 0, 0, 2, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(canonical, general), new int[] {0, 1});
+		    0, 0, 0, 2, 1, 1, OutsidePolicy.SEALED, List.of(canonical, general), new int[] {0, 1});
 		StringWriter writer = new StringWriter();
 		WorldSnapshotCodec.write(original, writer);
 
@@ -93,19 +100,19 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void versionThirteenUnitCubesRetainLegacyClassificationWithoutInventingIdentity() throws IOException {
-		WorldSnapshot.BlockEntry general = WorldSnapshot.BlockEntry.builder(1, "test:legacy-unit-cube")
-		                                       .boxes(new WorldSnapshot.ShapeBox(-0.0, -0.0, -0.0, 1.0, 1.0, 1.0))
+		BlockEntry general = BlockEntry.builder(1, "test:legacy-unit-cube")
+		                                       .boxes(new ShapeBox(-0.0, -0.0, -0.0, 1.0, 1.0, 1.0))
 		                                       .build();
 		WorldSnapshot original =
-		    new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(general), new int[] {0});
+		    new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(general), new int[] {0});
 		StringWriter writer = new StringWriter();
 		WorldSnapshotCodec.write(original, writer);
 
 		WorldSnapshot decoded =
 		    WorldSnapshotCodec.read(new BufferedReader(new StringReader(asVersionThirteen(writer.toString()))));
 
-		assertEquals(WorldSnapshot.CollisionShapeIdentity.LEGACY_GEOMETRY,
-		    decoded.palette().getFirst().collisionShapeIdentity());
+		assertEquals(ShapeProvenance.LEGACY_GEOMETRY,
+		    decoded.palette().getFirst().shapeProvenance());
 		assertEquals(false, decoded.palette().getFirst().canonicalFullCollisionShape(),
 		    "legacy geometry classification is not source identity");
 
@@ -116,12 +123,12 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void roundTripPreservesExplicitMovingPistonBehavior() throws IOException {
-		WorldSnapshot.BlockEntry piston = new WorldSnapshot.BlockEntry(36, "not-used-for-behavior", 0.6F, 1.0F, 1.0F,
+		BlockEntry piston = new BlockEntry(36, "not-used-for-behavior", 0.6F, 1.0F, 1.0F,
 		    true, false, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		    WorldSnapshot.Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
-		    WorldView.Climbability.NONE, List.of(new WorldSnapshot.ShapeBox(0, 0, 0, 1.5, 1, 1)));
+		    Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
+		    WorldView.Climbability.NONE, List.of(new ShapeBox(0, 0, 0, 1.5, 1, 1)));
 		WorldSnapshot original =
-		    new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(piston), new int[] {0});
+		    new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(piston), new int[] {0});
 		StringWriter writer = new StringWriter();
 		WorldSnapshotCodec.write(original, writer);
 
@@ -132,12 +139,12 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void roundTripPreservesBubbleColumnModeWithoutInferringFromName() throws IOException {
-		WorldSnapshot.BlockEntry bubble = new WorldSnapshot.BlockEntry(77, "not-used-for-behavior", 0.6F, 1.0F, 1.0F,
+		BlockEntry bubble = new BlockEntry(77, "not-used-for-behavior", 0.6F, 1.0F, 1.0F,
 		    false, true, WorldView.BubbleColumnMode.PUSH_UP, false, WorldView.CollisionBehavior.ORDINARY,
-		    WorldSnapshot.Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
+		    Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
 		    WorldView.Climbability.NONE, List.of());
 		WorldSnapshot original =
-		    new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(bubble), new int[] {0});
+		    new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(bubble), new int[] {0});
 		StringWriter writer = new StringWriter();
 		WorldSnapshotCodec.write(original, writer);
 
@@ -148,12 +155,12 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void roundTripPreservesExplicitClimbableBehaviorWithoutInferringFromShape() throws IOException {
-		WorldSnapshot.BlockEntry vine = new WorldSnapshot.BlockEntry(88, "not-used-for-behavior", 0.6F, 1.0F, 1.0F,
+		BlockEntry vine = new BlockEntry(88, "not-used-for-behavior", 0.6F, 1.0F, 1.0F,
 		    false, false, WorldView.BubbleColumnMode.NONE, true, WorldView.CollisionBehavior.ORDINARY,
-		    WorldSnapshot.Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
+		    Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
 		    WorldView.Climbability.CLIMBABLE, List.of());
 		WorldSnapshot original =
-		    new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(vine), new int[] {0});
+		    new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(vine), new int[] {0});
 		StringWriter writer = new StringWriter();
 		WorldSnapshotCodec.write(original, writer);
 
@@ -164,12 +171,12 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void roundTripPreservesResolvedClimbabilityRole() throws IOException {
-		WorldSnapshot.BlockEntry trapdoor = new WorldSnapshot.BlockEntry(89, "not-used-for-behavior", 0.6F, 1.0F, 1.0F,
+		BlockEntry trapdoor = new BlockEntry(89, "not-used-for-behavior", 0.6F, 1.0F, 1.0F,
 		    false, false, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		    WorldSnapshot.Suffocation.NO, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
+		    Suffocation.NO, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
 		    WorldView.Climbability.OPEN_TRAPDOOR_WEST, List.of());
 		WorldSnapshot original =
-		    new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(trapdoor), new int[] {0});
+		    new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(trapdoor), new int[] {0});
 		StringWriter writer = new StringWriter();
 		WorldSnapshotCodec.write(original, writer);
 
@@ -180,13 +187,13 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void roundTripPreservesExplicitContextSensitiveCollisionBehavior() throws IOException {
-		WorldSnapshot.BlockEntry scaffolding =
-		    new WorldSnapshot.BlockEntry(89, "not-used-for-behavior", 0.6F, 1.0F, 1.0F, false, false,
+		BlockEntry scaffolding =
+		    new BlockEntry(89, "not-used-for-behavior", 0.6F, 1.0F, 1.0F, false, false,
 		        WorldView.BubbleColumnMode.NONE, true, WorldView.CollisionBehavior.SCAFFOLDING_SUPPORTED,
-		        WorldSnapshot.Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
+		        Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE,
 		        false, WorldView.Climbability.CLIMBABLE, List.of());
 		WorldSnapshot original = new WorldSnapshot(
-		    0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(scaffolding), new int[] {0});
+		    0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(scaffolding), new int[] {0});
 		StringWriter writer = new StringWriter();
 		WorldSnapshotCodec.write(original, writer);
 
@@ -198,13 +205,13 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void roundTripPreservesUnstableBottomScaffoldingBehavior() throws IOException {
-		WorldSnapshot.BlockEntry scaffolding =
-		    new WorldSnapshot.BlockEntry(90, "not-used-for-behavior", 0.6F, 1.0F, 1.0F, false, false,
+		BlockEntry scaffolding =
+		    new BlockEntry(90, "not-used-for-behavior", 0.6F, 1.0F, 1.0F, false, false,
 		        WorldView.BubbleColumnMode.NONE, true, WorldView.CollisionBehavior.SCAFFOLDING_UNSTABLE_BOTTOM,
-		        WorldSnapshot.Suffocation.NO, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
+		        Suffocation.NO, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
 		        WorldView.Climbability.CLIMBABLE, List.of());
 		WorldSnapshot original = new WorldSnapshot(
-		    0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(scaffolding), new int[] {0});
+		    0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(scaffolding), new int[] {0});
 		StringWriter writer = new StringWriter();
 		WorldSnapshotCodec.write(original, writer);
 
@@ -216,12 +223,12 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void roundTripPreservesPowderSnowCollisionBehavior() throws IOException {
-		WorldSnapshot.BlockEntry powder = new WorldSnapshot.BlockEntry(90, "not-used-for-behavior", 0.6F, 1.0F, 1.0F,
+		BlockEntry powder = new BlockEntry(90, "not-used-for-behavior", 0.6F, 1.0F, 1.0F,
 		    false, false, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.POWDER_SNOW_NO_BOOTS,
-		    WorldSnapshot.Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
+		    Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
 		    WorldView.Climbability.NONE, List.of());
 		WorldSnapshot original =
-		    new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(powder), new int[] {0});
+		    new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(powder), new int[] {0});
 		StringWriter writer = new StringWriter();
 		WorldSnapshotCodec.write(original, writer);
 
@@ -233,23 +240,23 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void roundTripPreservesResolvedFluidBitsAndIndependentBlockBehavior() throws IOException {
-		WorldSnapshot.BlockEntry waterBlock = new WorldSnapshot.BlockEntry(42, "not-used-for-behavior", 0.6F, 1.0F,
+		BlockEntry waterBlock = new BlockEntry(42, "not-used-for-behavior", 0.6F, 1.0F,
 		    1.0F, false, true, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		    WorldSnapshot.Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
+		    Suffocation.UNKNOWN, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
 		    WorldView.Climbability.NONE, List.of());
 		double height = (double) 0.9F;
 		double flowX = Double.longBitsToDouble(1L);
 		double flowY = -0.0;
 		double flowZ = -0.125;
-		WorldSnapshot.FluidEntry water = new WorldSnapshot.FluidEntry(
-		    7, "minecraft:flowing_water", WorldSnapshot.FluidKind.WATER, height, flowX, flowY, flowZ, false);
-		WorldSnapshot original = new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED,
-		    List.of(waterBlock), new int[] {0}, List.of(WorldSnapshot.FluidEntry.EMPTY, water), new int[] {1});
+		FluidEntry water = new FluidEntry(
+		    7, "minecraft:flowing_water", FluidKind.WATER, height, flowX, flowY, flowZ, false);
+		WorldSnapshot original = new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED,
+		    List.of(waterBlock), new int[] {0}, List.of(FluidEntry.EMPTY, water), new int[] {1});
 		StringWriter writer = new StringWriter();
 		WorldSnapshotCodec.write(original, writer);
 
 		WorldSnapshot decoded = WorldSnapshotCodec.read(new BufferedReader(new StringReader(writer.toString())));
-		WorldSnapshot.FluidEntry decodedWater = decoded.fluidEntryAt(0, 0, 0);
+		FluidEntry decodedWater = decoded.fluidEntryAt(0, 0, 0);
 
 		assertEquals(true, decoded.hasFluids());
 		assertEquals(true, decoded.palette().getFirst().suppressesSupportingSpeedFactor());
@@ -264,43 +271,43 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void roundTripPreservesSuffocationIndependentlyOfShapeAndName() throws IOException {
-		WorldSnapshot.BlockEntry stone = new WorldSnapshot.BlockEntry(1, "minecraft:stone", 0.6F, 1.0F, 1.0F, false,
+		BlockEntry stone = new BlockEntry(1, "minecraft:stone", 0.6F, 1.0F, 1.0F, false,
 		    false, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		    WorldSnapshot.Suffocation.YES, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
-		    WorldView.Climbability.NONE, List.of(new WorldSnapshot.ShapeBox(0, 0, 0, 1, 1, 1)));
-		WorldSnapshot.BlockEntry glass = new WorldSnapshot.BlockEntry(2, "minecraft:glass", 0.6F, 1.0F, 1.0F, false,
+		    Suffocation.YES, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
+		    WorldView.Climbability.NONE, List.of(new ShapeBox(0, 0, 0, 1, 1, 1)));
+		BlockEntry glass = new BlockEntry(2, "minecraft:glass", 0.6F, 1.0F, 1.0F, false,
 		    false, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		    WorldSnapshot.Suffocation.NO, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
-		    WorldView.Climbability.NONE, List.of(new WorldSnapshot.ShapeBox(0, 0, 0, 1, 1, 1)));
+		    Suffocation.NO, WorldView.InsideEffect.NONE, 0.0F, false, WorldView.StepOn.NONE, false,
+		    WorldView.Climbability.NONE, List.of(new ShapeBox(0, 0, 0, 1, 1, 1)));
 		WorldSnapshot snapshot = new WorldSnapshot(
-		    0, 0, 0, 2, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(stone, glass), new int[] {0, 1});
+		    0, 0, 0, 2, 1, 1, OutsidePolicy.SEALED, List.of(stone, glass), new int[] {0, 1});
 
 		StringWriter text = new StringWriter();
 		WorldSnapshotCodec.write(snapshot, text);
 		WorldSnapshot decoded = WorldSnapshotCodec.read(new BufferedReader(new StringReader(text.toString())));
 
-		assertEquals(WorldSnapshot.Suffocation.YES, decoded.entryAt(0, 0, 0).suffocation());
-		assertEquals(WorldSnapshot.Suffocation.NO, decoded.entryAt(1, 0, 0).suffocation());
+		assertEquals(Suffocation.YES, decoded.entryAt(0, 0, 0).suffocation());
+		assertEquals(Suffocation.NO, decoded.entryAt(1, 0, 0).suffocation());
 	}
 
 	@Test
 	void roundTripPreservesInsideEffectIndependentlyOfShapeAndName() throws IOException {
 		// Both carry no geometry and both are named nothing the reader could key
 		// on, so the decoded effect can only have come from the written column.
-		WorldSnapshot.BlockEntry web = new WorldSnapshot.BlockEntry(1, "minecraft:cobweb", 0.6F, 1.0F, 1.0F, false,
+		BlockEntry web = new BlockEntry(1, "minecraft:cobweb", 0.6F, 1.0F, 1.0F, false,
 		    false, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		    WorldSnapshot.Suffocation.NO, WorldView.InsideEffect.COBWEB, 0.0F, false, WorldView.StepOn.NONE, false,
+		    Suffocation.NO, WorldView.InsideEffect.COBWEB, 0.0F, false, WorldView.StepOn.NONE, false,
 		    WorldView.Climbability.NONE, List.of());
-		WorldSnapshot.BlockEntry bush = new WorldSnapshot.BlockEntry(2, "minecraft:sweet_berry_bush", 0.6F, 1.0F, 1.0F,
+		BlockEntry bush = new BlockEntry(2, "minecraft:sweet_berry_bush", 0.6F, 1.0F, 1.0F,
 		    false, false, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		    WorldSnapshot.Suffocation.NO, WorldView.InsideEffect.SWEET_BERRY_BUSH, 0.0F, false, WorldView.StepOn.NONE,
+		    Suffocation.NO, WorldView.InsideEffect.SWEET_BERRY_BUSH, 0.0F, false, WorldView.StepOn.NONE,
 		    false, WorldView.Climbability.NONE, List.of());
-		WorldSnapshot.BlockEntry lavaCauldron = new WorldSnapshot.BlockEntry(3, "minecraft:lava_cauldron", 0.6F, 1.0F,
+		BlockEntry lavaCauldron = new BlockEntry(3, "minecraft:lava_cauldron", 0.6F, 1.0F,
 		    1.0F, false, false, WorldView.BubbleColumnMode.NONE, false, WorldView.CollisionBehavior.ORDINARY,
-		    WorldSnapshot.Suffocation.NO, WorldView.InsideEffect.LAVA_CAULDRON, 0.0F, false, WorldView.StepOn.NONE,
+		    Suffocation.NO, WorldView.InsideEffect.LAVA_CAULDRON, 0.0F, false, WorldView.StepOn.NONE,
 		    false, WorldView.Climbability.NONE, List.of());
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot snapshot = new WorldSnapshot(0, 0, 0, 4, 1, 1, WorldSnapshot.OutsideRegion.SEALED,
+		BlockEntry air = new BlockEntry(0, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
+		WorldSnapshot snapshot = new WorldSnapshot(0, 0, 0, 4, 1, 1, OutsidePolicy.SEALED,
 		    List.of(web, bush, lavaCauldron, air), new int[] {0, 1, 2, 3});
 
 		StringWriter text = new StringWriter();
@@ -315,13 +322,13 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void allEmptyDenseFluidPlaneCanonicalizesWithoutLosingLookupSemantics() {
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot snapshot = new WorldSnapshot(0, 0, 0, 2, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(air),
-		    new int[] {0, 0}, List.of(WorldSnapshot.FluidEntry.EMPTY), new int[] {0, 0});
+		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
+		WorldSnapshot snapshot = new WorldSnapshot(0, 0, 0, 2, 1, 1, OutsidePolicy.SEALED, List.of(air),
+		    new int[] {0, 0}, List.of(FluidEntry.EMPTY), new int[] {0, 0});
 
 		assertEquals(false, snapshot.hasFluids());
 		assertEquals(0, snapshot.fluidCells().length);
-		assertEquals(WorldSnapshot.FluidEntry.EMPTY, snapshot.fluidEntryAt(1, 0, 0));
+		assertEquals(FluidEntry.EMPTY, snapshot.fluidEntryAt(1, 0, 0));
 		assertNull(snapshot.fluidEntryAt(2, 0, 0));
 	}
 
@@ -341,7 +348,7 @@ class WorldSnapshotCodecTest {
 		WorldSnapshotCodec.write(sample(), writer);
 		WorldSnapshot decoded = WorldSnapshotCodec.read(new BufferedReader(new StringReader(writer.toString())));
 
-		WorldSnapshot.ShapeBox slab = decoded.palette().get(2).boxes().getFirst();
+		ShapeBox slab = decoded.palette().get(2).boxes().getFirst();
 		assertEquals(Double.doubleToRawLongBits(0.5), Double.doubleToRawLongBits(slab.maxY()));
 	}
 
@@ -357,11 +364,11 @@ class WorldSnapshotCodecTest {
 
 	@Test
 	void denseFluidCellsCannotMutateASharedSnapshot() {
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot.FluidEntry water =
-		    new WorldSnapshot.FluidEntry(1, "water", WorldSnapshot.FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true);
-		WorldSnapshot snapshot = new WorldSnapshot(0, 0, 0, 1, 1, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(air),
-		    new int[] {0}, List.of(WorldSnapshot.FluidEntry.EMPTY, water), new int[] {1});
+		BlockEntry air = new BlockEntry(0, "air", 0.6F, 1.0F, 1.0F, List.of());
+		FluidEntry water =
+		    new FluidEntry(1, "water", FluidKind.WATER, 1.0, 0.0, 0.0, 0.0, true);
+		WorldSnapshot snapshot = new WorldSnapshot(0, 0, 0, 1, 1, 1, OutsidePolicy.SEALED, List.of(air),
+		    new int[] {0}, List.of(FluidEntry.EMPTY, water), new int[] {1});
 		int[] exposed = snapshot.fluidCells();
 		exposed[0] = 0;
 

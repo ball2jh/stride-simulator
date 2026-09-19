@@ -77,7 +77,7 @@ public record ImpulseWrite(int actionIndex, ExternalActor actor, long sequence, 
 				state.deltaMovementZ = this.z;
 			}
 			case MOVE ->
-				throw UnimplementedMechanicException.deferred(Refusal.UNMODELLED_IMPULSE,
+				throw UnimplementedMechanicException.deferred(RefusalCause.UNMODELED_IMPULSE,
 				    ()
 				        -> "a collision-resolved external displacement by " + this.actor
 				        + " is not reducible to a velocity write");

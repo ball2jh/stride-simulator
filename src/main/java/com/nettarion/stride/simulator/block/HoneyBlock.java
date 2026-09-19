@@ -10,9 +10,9 @@ import com.nettarion.stride.simulator.world.WorldView;
  * A honey block: {@code HoneyBlock.entityInside}, the wall slide a falling
  * player gets against its side, and {@code HoneyBlock.fallOn}, a landing at
  * one fifth of the fall. Its speed and jump factors and its bounce
- * suppression are coefficients the palette carries beside the behaviour.
+ * suppression are coefficients the palette carries beside the behavior.
  */
-final class HoneyBlock extends BlockBehaviour {
+final class HoneyBlock extends BlockBehavior {
 	static final HoneyBlock INSTANCE = new HoneyBlock();
 
 	private HoneyBlock() {}
@@ -32,7 +32,7 @@ final class HoneyBlock extends BlockBehaviour {
 	 *
 	 * <p>Unlike the two stuck blocks this reads the *visited* cell's coordinates
 	 * rather than only the player's, because {@code isSlidingDown} measures the
-	 * player against that cell's centre and its top face. It also reads
+	 * player against that cell's center and its top face. It also reads
 	 * {@code onGround}, which is this tick's post-move value — the traversal runs
 	 * after {@code move} — so a player who has just landed on honey does not
 	 * slide, and one still falling past it does.

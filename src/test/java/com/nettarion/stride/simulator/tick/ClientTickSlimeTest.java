@@ -11,6 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.Suffocation;
 
 /**
  * {@code SlimeBlock.stepOn} on the client, paired against the same floor with
@@ -59,8 +62,8 @@ class ClientTickSlimeTest {
 
 	@Test
 	void shiftReleasedThisTickDampsEvenWhenPreviousInputWasShift() {
-		PlayerState slime = walkingState((byte) PlayerInput.FLAG_SHIFT);
-		PlayerState control = walkingState((byte) PlayerInput.FLAG_SHIFT);
+		PlayerState slime = walkingState((byte) PlayerInput.FLAG_SNEAK);
+		PlayerState control = walkingState((byte) PlayerInput.FLAG_SNEAK);
 
 		new ClientTick().tick(slime, IDLE, floor(true));
 		new ClientTick().tick(control, IDLE, floor(false));
@@ -74,8 +77,8 @@ class ClientTickSlimeTest {
 
 	@Test
 	void shiftHeldAcrossTicksSuppressesDamping() {
-		PlayerState slime = walkingState((byte) PlayerInput.FLAG_SHIFT);
-		PlayerState control = walkingState((byte) PlayerInput.FLAG_SHIFT);
+		PlayerState slime = walkingState((byte) PlayerInput.FLAG_SNEAK);
+		PlayerState control = walkingState((byte) PlayerInput.FLAG_SNEAK);
 
 		new ClientTick().tick(slime, SHIFT, floor(true));
 		new ClientTick().tick(control, SHIFT, floor(false));
@@ -108,19 +111,19 @@ class ClientTickSlimeTest {
 	 * difference between the paired ticks is the body under test.
 	 */
 	private static SnapshotView floor(final boolean slime) {
-		WorldSnapshot.BlockEntry.Builder floor =
-		    WorldSnapshot.BlockEntry.builder(1, slime ? "minecraft:slime_block" : "test:slime_without_step_on")
+		BlockEntry.Builder floor =
+		    BlockEntry.builder(1, slime ? "minecraft:slime_block" : "test:slime_without_step_on")
 		        .fullCube()
 		        .friction(0.8F)
 		        .bounceRestitution(1.0F)
 		        .landing(slime ? WorldView.Landing.SLIME : WorldView.Landing.ORDINARY)
-		        .suffocation(WorldSnapshot.Suffocation.NO);
+		        .suffocation(Suffocation.NO);
 		if (slime) {
 			floor.stepOn(WorldView.StepOn.SLIME);
 		}
 		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -2, -2, -2, 5, 5, 5)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(), floor.build());
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -2, -2, -2, 5, 5, 5)
+		        .palette(BlockEntry.builder(0, "minecraft:air").build(), floor.build());
 		for (int z = -2; z <= 2; z++) {
 			for (int x = -2; x <= 2; x++) {
 				grid.set(x, -1, z, 1);

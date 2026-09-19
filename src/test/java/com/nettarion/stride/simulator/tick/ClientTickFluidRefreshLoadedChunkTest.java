@@ -11,6 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.FluidKind;
+import com.nettarion.stride.simulator.world.FluidEntry;
 
 /**
  * Vanilla's {@code EntityFluidInteraction.update} answers "no fluid" when any
@@ -31,7 +36,7 @@ final class ClientTickFluidRefreshLoadedChunkTest {
 	}
 
 	@Test
-	void anUnknownNeighbouringColumnRefusesTheRefreshByName() {
+	void anUnknownNeighboringColumnRefusesTheRefreshByName() {
 		// A box at 7.2..7.8 widens to columns 6..8, and column 8 is unknown.
 		PlayerState state = swimmer(7.5);
 		UnimplementedMechanicException refusal = assertThrows(UnimplementedMechanicException.class,
@@ -65,14 +70,14 @@ final class ClientTickFluidRefreshLoadedChunkTest {
 
 	private static SnapshotView pool(final boolean water) {
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -8, -3, -8, 16, 12, 16)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
-		                .boxes(WorldSnapshot.ShapeBox.FULL_CUBE)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -3, -8, 16, 12, 16)
+		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		            BlockEntry.builder(1, "minecraft:stone")
+		                .boxes(ShapeBox.FULL_CUBE)
 		                .build())
-		        .fluidPalette(WorldSnapshot.FluidEntry.EMPTY,
-		            new WorldSnapshot.FluidEntry(
-		                1, "minecraft:water", WorldSnapshot.FluidKind.WATER, 8.0 / 9.0, 0, 0, 0, true));
+		        .fluidPalette(FluidEntry.EMPTY,
+		            new FluidEntry(
+		                1, "minecraft:water", FluidKind.WATER, 8.0 / 9.0, 0, 0, 0, true));
 		for (int x = -8; x < 8; x++) {
 			for (int z = -8; z < 8; z++) {
 				builder.set(x, -1, z, 1);

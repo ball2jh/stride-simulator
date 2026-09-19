@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import com.nettarion.stride.simulator.world.FluidEntry;
 
 /**
  * A recording from a live session: the trace, the world it happened in, and
@@ -127,7 +128,7 @@ public record Capture(Trace trace, Optional<WorldSnapshot> world, WorldEventTrac
 	}
 
 	/** Resolves the exact fluid-palette entry named by a timed fluid event. */
-	public int fluidPaletteIndex(final WorldSnapshot.FluidEntry fluid) {
+	public int fluidPaletteIndex(final FluidEntry fluid) {
 		WorldSnapshot snapshot =
 		    this.world.orElseThrow(() -> new IllegalStateException("capture has no world snapshot"));
 		int index = snapshot.fluidPalette().indexOf(fluid);

@@ -1,11 +1,12 @@
 package com.nettarion.stride.simulator;
 
 import com.nettarion.stride.simulator.server.ServerTick;
-import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 class ScheduledSimulationTest {
 	@Test
@@ -117,10 +118,10 @@ class ScheduledSimulationTest {
 		}
 		var packet = state();
 		packet.placeAt(22.5, 0, 0.5);
-		assertEquals(ServerTick.Cause.MOVED_TOO_QUICKLY,
+		assertEquals(CorrectionReason.MOVED_TOO_QUICKLY,
 		    assertInstanceOf(
 		        ServerTick.Corrected.class, tick.handleMovePlayer(packet, MovementPacket.POS, server, world()))
-		        .cause());
+		        .reason());
 		assertEquals(6, server.receivedMovePacketCount);
 		assertEquals(0.5, server.firstGoodX);
 		assertEquals(21.5, server.lastGoodX);
@@ -144,10 +145,10 @@ class ScheduledSimulationTest {
 		assertEquals(originalId, server.awaitingTeleport);
 		tick.tickConnection(server, world());
 		assertEquals(originalId, server.awaitingTeleport, "no autonomous retry");
-		assertEquals(ServerTick.Cause.TELEPORT_RETRY,
+		assertEquals(CorrectionReason.TELEPORT_RETRY,
 		    assertInstanceOf(
 		        ServerTick.Corrected.class, tick.handleMovePlayer(packet, MovementPacket.POS, server, world()))
-		        .cause());
+		        .reason());
 		tick.handleAcceptTeleportPacket(server, originalId);
 		assertTrue(server.correctionPending);
 		tick.handleAcceptTeleportPacket(server, server.awaitingTeleport);
@@ -157,17 +158,13 @@ class ScheduledSimulationTest {
 	@Test
 	void movementTailIsCopiedDigestedAndCappedWithVanillaMerge() {
 		var server = ServerPlayerState.atBoundary(state());
-		var scratch = new Scratch();
-		scratch.hasMovementSegment = true;
 		for (int i = 0; i < 100; i++) {
-			scratch.segmentFromX = i;
-			server.addMovementThisTick(scratch, i + 1, 0, 0);
+			server.addMovementThisTick(i, 0, 0, i + 1, 0, 0, 0, 0);
 		}
 		var fork = server.copy();
 		assertTrue(ServerPlayerState.rawEquals(server, fork));
 		long digest = StateDigest.server(server);
-		scratch.segmentFromX = 100;
-		server.addMovementThisTick(scratch, 101, 0, 0);
+		server.addMovementThisTick(100, 0, 0, 101, 0, 0, 0, 0);
 		assertEquals(99, server.additionalMovements.size());
 		assertFalse(server.movementAxisDependent);
 		assertEquals(0, server.movementFromX);
@@ -187,9 +184,9 @@ class ScheduledSimulationTest {
 		return state;
 	}
 	static SnapshotView world() {
-		var builder = WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -2, -4, 36, 16, 36)
-		                  .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		                      WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build());
+		var builder = WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -2, -4, 36, 16, 36)
+		                  .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		                      BlockEntry.builder(1, "minecraft:stone").fullCube().build());
 		for (int x = -4; x < 32; x++)
 			for (int z = -4; z < 32; z++)
 				builder.set(x, -1, z, 1);

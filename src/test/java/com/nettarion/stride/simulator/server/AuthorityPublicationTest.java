@@ -14,6 +14,8 @@ import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 class AuthorityPublicationTest {
 	@Test
@@ -90,9 +92,9 @@ class AuthorityPublicationTest {
 	}
 
 	private static SnapshotView world() {
-		var builder = WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -2, -4, 32, 16, 8)
-		                  .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		                      WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build());
+		var builder = WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -2, -4, 32, 16, 8)
+		                  .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		                      BlockEntry.builder(1, "minecraft:stone").fullCube().build());
 		for (int x = -4; x < 28; x++)
 			for (int z = -4; z < 4; z++)
 				builder.set(x, -1, z, 1);

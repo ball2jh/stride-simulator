@@ -39,7 +39,7 @@ public record StateEventTrace(String scenario, List<StateEvent> events) {
 	 * <p>The rule, rather than the list, is what to check a candidate against:
 	 * **a field belongs here when the client itself assigns it from a packet
 	 * handler, outside {@code LocalPlayer.tick()}**. Position and velocity
-	 * ({@code handleMovePlayer}, {@code handleSetEntityMotion}), the synchronised entity-data
+	 * ({@code handleMovePlayer}, {@code handleSetEntityMotion}), the synchronized entity-data
 	 * byte and pose, the abilities packet, and the two freeze values are all such
 	 * writes.
 	 *
@@ -64,7 +64,7 @@ public record StateEventTrace(String scenario, List<StateEvent> events) {
 	    // ServerEntity publishes it with sendToTrackingPlayersAndSelf whenever
 	    // `hurtMarked` is set, so in practice this is damage knockback.
 	    StateField.DELTA_X, StateField.DELTA_Y, StateField.DELTA_Z,
-	    // The synchronised shared-flags byte, echoed back to its own player
+	    // The synchronized shared-flags byte, echoed back to its own player
 	    // , and the pose that travels with it.
 	    StateField.SPRINTING, StateField.SPRINTING_ATTRIBUTE, StateField.FOOD_LEVEL, StateField.SWIMMING,
 	    StateField.FALL_FLYING, StateField.SHIFT_KEY_DOWN, StateField.SHARED_FLAGS_RESIDUAL, StateField.POSE,

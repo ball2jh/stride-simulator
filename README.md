@@ -129,7 +129,7 @@ air. Choose bounds large enough for the player's body and surrounding queries.
 A refused transition has no valid successor. The main categories are
 `UnimplementedMechanicException`, `PendingServerWriteException`,
 `UnpredictedServerWriteException`, and `StaleServerWriteException`. They implement
-`Refuses`, whose `cause()` supplies a stable `Refusal` enum for classification.
+`RefusalException`, whose `cause()` supplies a stable `RefusalCause` enum for classification.
 Messages provide detail; do not parse them to identify the category. Stack traces
 are disabled by default for these hot-path outcomes; enable them with
 `-Dstride.refusal.trace=true` while debugging.

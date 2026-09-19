@@ -5,7 +5,7 @@ import com.nettarion.stride.simulator.world.CompleteWorldView;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.StateDigest;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
+import com.nettarion.stride.simulator.block.BlockBehavior;
 import com.nettarion.stride.simulator.tick.ClientTick;
 import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.FluidSample;
@@ -19,6 +19,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Random;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.Suffocation;
 
 /**
  * Retained-span reuse must be an acceleration and nothing else.
@@ -83,9 +87,9 @@ class SpanReuseTest {
 
 	@Test
 	void canonicalSupportOwnersMatchDirectQueriesAcrossNegativeCellsAndTies() {
-		var builder = WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -4, -3, -4, 8, 6, 8)
-		                  .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		                      WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build());
+		var builder = WorldSnapshot.builder(OutsidePolicy.REFUSING, -4, -3, -4, 8, 6, 8)
+		                  .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		                      BlockEntry.builder(1, "minecraft:stone").fullCube().build());
 		for (int x = -3; x <= 2; x++)
 			for (int z = -3; z <= 2; z++) {
 				builder.set(x, -1, z, 1);
@@ -254,9 +258,9 @@ class SpanReuseTest {
 	}
 
 	private static SnapshotView slabWorld() {
-		return new SnapshotView(WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, 0, 0, 0, 1, 1, 1)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:stone_slab")
-		                .boxes(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0))
+		return new SnapshotView(WorldSnapshot.builder(OutsidePolicy.REFUSING, 0, 0, 0, 1, 1, 1)
+		        .palette(BlockEntry.builder(0, "minecraft:stone_slab")
+		                .boxes(new ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0))
 		                .build())
 		        .build());
 	}
@@ -267,21 +271,21 @@ class SpanReuseTest {
 		// randomized walk through this terrain does put a box corner in a column
 		// these occupy.
 		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -8, -8, -8, 16, 16, 16)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air")
-		                     .suffocation(WorldSnapshot.Suffocation.NO)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -8, -8, 16, 16, 16)
+		        .palette(BlockEntry.builder(0, "minecraft:air")
+		                     .suffocation(Suffocation.NO)
 		                     .build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
+		            BlockEntry.builder(1, "minecraft:stone")
 		                .fullCube()
-		                .suffocation(WorldSnapshot.Suffocation.YES)
+		                .suffocation(Suffocation.YES)
 		                .build(),
-		            WorldSnapshot.BlockEntry.builder(2, "minecraft:stone_slab")
-		                .boxes(new WorldSnapshot.ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0))
-		                .suffocation(WorldSnapshot.Suffocation.NO)
+		            BlockEntry.builder(2, "minecraft:stone_slab")
+		                .boxes(new ShapeBox(0.0, 0.0, 0.0, 1.0, 0.5, 1.0))
+		                .suffocation(Suffocation.NO)
 		                .build(),
-		            WorldSnapshot.BlockEntry.builder(3, "minecraft:fence")
-		                .boxes(new WorldSnapshot.ShapeBox(0.375, 0.0, 0.375, 0.625, 1.0, 0.625))
-		                .suffocation(WorldSnapshot.Suffocation.NO)
+		            BlockEntry.builder(3, "minecraft:fence")
+		                .boxes(new ShapeBox(0.375, 0.0, 0.375, 0.625, 1.0, 0.625))
+		                .suffocation(Suffocation.NO)
 		                .build());
 		Random random = new Random(99L);
 		for (int y = -8; y < 8; y++) {
@@ -335,8 +339,8 @@ class SpanReuseTest {
 		}
 
 		@Override
-		public BlockBehaviour behaviourAt(final int x, final int y, final int z) {
-			return this.delegate.behaviourAt(x, y, z);
+		public BlockBehavior behaviorAt(final int x, final int y, final int z) {
+			return this.delegate.behaviorAt(x, y, z);
 		}
 
 		@Override

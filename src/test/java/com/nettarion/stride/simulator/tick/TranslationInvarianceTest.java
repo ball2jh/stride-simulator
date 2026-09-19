@@ -71,7 +71,7 @@ class TranslationInvarianceTest {
 		double reference = origin.z - 0.5;
 		assertTrue(Math.abs(reference) > 1.0,
 		    "the reference run must actually travel, or every comparison below is"
-		        + " an agreement about a player standing still; travelled " + reference);
+		        + " an agreement about a player standing still; traveled " + reference);
 
 		StringBuilder table =
 		    new StringBuilder("\ntranslation invariance of " + TICKS + " sprint-jump ticks on flat ground:\n");

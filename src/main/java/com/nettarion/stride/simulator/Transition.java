@@ -30,7 +30,7 @@ import java.util.Objects;
  * sample, and is not thread-safe. It sends nothing and queues nothing: the
  * runner that calls a phase owns what it produced.
  */
-public final class Transition {
+final class Transition {
 	private final ClientTick clientTick = new ClientTick();
 	private final Scratch clientScratch = new Scratch();
 	private final ServerTick serverTick = new ServerTick();

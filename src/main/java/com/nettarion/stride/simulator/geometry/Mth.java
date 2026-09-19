@@ -6,7 +6,7 @@ package com.nettarion.stride.simulator.geometry;
  * <p>{@code Mth.sin} is a 65,536-entry float lookup table, and an
  * approximation of any kind breaks parity. The table is regenerated here with
  * the same expression and the same index arithmetic as the pinned source, so
- * yaw values that fall between table entries quantise identically.
+ * yaw values that fall between table entries quantize identically.
  */
 public final class Mth {
 	private static final double SIN_SCALE = 10430.378350470453;

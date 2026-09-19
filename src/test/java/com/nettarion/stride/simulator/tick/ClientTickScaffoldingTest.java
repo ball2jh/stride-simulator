@@ -16,6 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
+import com.nettarion.stride.simulator.world.Suffocation;
 
 class ClientTickScaffoldingTest {
 	private static final PlayerInput IDLE = PlayerInput.idle(0.0F, 0.0F);
@@ -161,16 +165,16 @@ class ClientTickScaffoldingTest {
 
 	private static SnapshotView scaffoldingColumn(final WorldView.CollisionBehavior collisionBehavior) {
 		WorldSnapshot.Builder grid =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -2, -2, -2, 5, 8, 5)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone").fullCube().build(),
-		            WorldSnapshot.BlockEntry.builder(2, "minecraft:scaffolding")
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -2, -2, -2, 5, 8, 5)
+		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		            BlockEntry.builder(1, "minecraft:stone").fullCube().build(),
+		            BlockEntry.builder(2, "minecraft:scaffolding")
 		                .fallDistanceResetting(true)
 		                .collisionBehavior(collisionBehavior)
 		                // Not a full cube in any context, so isSuffocating's default
 		                // predicate answers no and moveTowardsClosestSpace never sees
 		                // this column.
-		                .suffocation(WorldSnapshot.Suffocation.NO)
+		                .suffocation(Suffocation.NO)
 		                .climbability(WorldView.Climbability.CLIMBABLE)
 		                .boxes(stableScaffoldingBoxes())
 		                .build());
@@ -185,10 +189,10 @@ class ClientTickScaffoldingTest {
 		return new SnapshotView(grid.build());
 	}
 
-	private static List<WorldSnapshot.ShapeBox> stableScaffoldingBoxes() {
-		return List.of(new WorldSnapshot.ShapeBox(0, 0.875, 0, 1, 1, 1),
-		    new WorldSnapshot.ShapeBox(0, 0, 0, 0.125, 1, 0.125), new WorldSnapshot.ShapeBox(0.875, 0, 0, 1, 1, 0.125),
-		    new WorldSnapshot.ShapeBox(0, 0, 0.875, 0.125, 1, 1), new WorldSnapshot.ShapeBox(0.875, 0, 0.875, 1, 1, 1));
+	private static List<ShapeBox> stableScaffoldingBoxes() {
+		return List.of(new ShapeBox(0, 0.875, 0, 1, 1, 1),
+		    new ShapeBox(0, 0, 0, 0.125, 1, 0.125), new ShapeBox(0.875, 0, 0, 1, 1, 0.125),
+		    new ShapeBox(0, 0, 0.875, 0.125, 1, 1), new ShapeBox(0.875, 0, 0.875, 1, 1, 1));
 	}
 
 	private static void assertRaw(final double expected, final double actual) {

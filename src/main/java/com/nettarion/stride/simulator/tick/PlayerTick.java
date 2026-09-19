@@ -1,6 +1,6 @@
 package com.nettarion.stride.simulator.tick;
 
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.PendingServerWriteException;
 import com.nettarion.stride.simulator.PlayerInput;
 import com.nettarion.stride.simulator.PlayerState;
@@ -49,7 +49,7 @@ public final class PlayerTick {
 	 */
 	public static boolean isShiftKeyDown(final PlayerState state, final Scratch scratch) {
 		return scratch.authority.isServer() ? scratch.authority.serverState().shiftKeyDown
-		                                    : hasInput(state, PlayerInput.FLAG_SHIFT);
+		                                    : hasInput(state, PlayerInput.FLAG_SNEAK);
 	}
 
 	public static void tick(
@@ -61,7 +61,7 @@ public final class PlayerTick {
 	    final WorldView world, final Scratch scratch) {
 		if (!world.movementFactsComplete()) {
 			throw new UnimplementedMechanicException(
-			    Refusal.INADMISSIBLE_WORLD, "the world view has not declared complete movement facts");
+			    RefusalCause.INADMISSIBLE_WORLD, "the world view has not declared complete movement facts");
 		}
 		PlayerState.requireSupportedCenter(state.x, state.y, state.z);
 		validateSupportedState(state);
@@ -114,19 +114,19 @@ public final class PlayerTick {
 
 	static void validateSupportedState(final PlayerState state) {
 		if (state.autoJumpEnabled) {
-			throw new UnimplementedMechanicException(Refusal.INADMISSIBLE_STATE, "auto-jump is enabled");
+			throw new UnimplementedMechanicException(RefusalCause.INADMISSIBLE_STATE, "auto-jump is enabled");
 		}
 		if (state.autoJumpTime != 0) {
-			throw UnimplementedMechanicException.deferred(Refusal.INADMISSIBLE_STATE,
+			throw UnimplementedMechanicException.deferred(RefusalCause.INADMISSIBLE_STATE,
 			    () -> "pending auto-jump input is outside the supported slice: " + state.autoJumpTime);
 		}
 		if (state.sprintWindowTicks < 0 || state.sprintWindowTicks > 10) {
 			throw UnimplementedMechanicException.deferred(
-			    Refusal.INADMISSIBLE_STATE, () -> "sprint window outside vanilla range: " + state.sprintWindowTicks);
+			    RefusalCause.INADMISSIBLE_STATE, () -> "sprint window outside vanilla range: " + state.sprintWindowTicks);
 		}
 		if (state.flying && !state.mayfly) {
 			throw new UnimplementedMechanicException(
-			    Refusal.INADMISSIBLE_STATE, "flying without mayfly is outside the creative-flight slice");
+			    RefusalCause.INADMISSIBLE_STATE, "flying without mayfly is outside the creative-flight slice");
 		}
 		// Values vanilla's player never holds: its counters never go negative,
 		// powder snow caps the frozen count at the freeze threshold, the food
@@ -135,26 +135,26 @@ public final class PlayerTick {
 		if (state.noJumpDelay < 0 || state.jumpTriggerTime < 0 || state.sprintTriggerTime < 0 || state.fallFlyTicks < 0
 		    || state.autoJumpTime < 0) {
 			throw new UnimplementedMechanicException(
-			    Refusal.INADMISSIBLE_STATE, "negative tick counter is outside vanilla's range");
+			    RefusalCause.INADMISSIBLE_STATE, "negative tick counter is outside vanilla's range");
 		}
 		if (state.ticksFrozen < 0 || state.ticksFrozen > ServerPlayerState.DEFAULT_TICKS_REQUIRED_TO_FREEZE
 		    || state.frostSpeedTicks < 0
 		    || state.frostSpeedTicks > ServerPlayerState.DEFAULT_TICKS_REQUIRED_TO_FREEZE) {
-			throw UnimplementedMechanicException.deferred(Refusal.INADMISSIBLE_STATE,
+			throw UnimplementedMechanicException.deferred(RefusalCause.INADMISSIBLE_STATE,
 			    () -> "frozen count outside 0.." + ServerPlayerState.DEFAULT_TICKS_REQUIRED_TO_FREEZE);
 		}
 		if (state.foodLevel < 0 || state.foodLevel > 20) {
 			throw UnimplementedMechanicException.deferred(
-			    Refusal.INADMISSIBLE_STATE, () -> "food level outside the bar: " + state.foodLevel);
+			    RefusalCause.INADMISSIBLE_STATE, () -> "food level outside the bar: " + state.foodLevel);
 		}
 		if (state.yya != 0.0F) {
 			throw UnimplementedMechanicException.deferred(
-			    Refusal.INADMISSIBLE_STATE, () -> "a player's vertical input is always zero: " + state.yya);
+			    RefusalCause.INADMISSIBLE_STATE, () -> "a player's vertical input is always zero: " + state.yya);
 		}
 		if (!Float.isFinite(state.inputMoveVectorX) || !Float.isFinite(state.inputMoveVectorY)
 		    || !Float.isFinite(state.yRot) || !Float.isFinite(state.xRot)) {
 			throw new UnimplementedMechanicException(
-			    Refusal.INADMISSIBLE_STATE, "retained input and rotation must be finite");
+			    RefusalCause.INADMISSIBLE_STATE, "retained input and rotation must be finite");
 		}
 	}
 
@@ -191,7 +191,7 @@ public final class PlayerTick {
 	 */
 	public static void causeFoodExhaustion(final ServerPlayerState state, final float amount) {
 		if (state.mayfly && (amount != 0.0F || Float.floatToRawIntBits(state.exhaustionLevel) == NEGATIVE_ZERO_BITS)) {
-			throw new PendingServerWriteException(Refusal.PENDING_ABILITY,
+			throw new PendingServerWriteException(RefusalCause.PENDING_ABILITY,
 			    "food exhaustion depends on the"
 			        + " uncaptured invulnerable ability of a player who may fly");
 		}

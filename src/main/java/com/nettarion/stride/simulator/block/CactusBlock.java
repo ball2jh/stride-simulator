@@ -6,7 +6,7 @@ import com.nettarion.stride.simulator.tick.Scratch;
 import com.nettarion.stride.simulator.world.WorldView;
 
 /** A cactus: {@code CactusBlock.entityInside}, one point on every visit of the server's copy. */
-final class CactusBlock extends BlockBehaviour {
+final class CactusBlock extends BlockBehavior {
 	static final CactusBlock INSTANCE = new CactusBlock();
 
 	private CactusBlock() {}

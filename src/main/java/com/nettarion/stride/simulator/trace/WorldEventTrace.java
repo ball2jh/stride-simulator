@@ -10,6 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import com.nettarion.stride.simulator.world.FluidKind;
+import com.nettarion.stride.simulator.world.FluidEntry;
 
 /**
  * Ordered block and resolved-fluid changes published before a movement tick.
@@ -75,7 +77,7 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 		writer.write("#fluid-events\t" + trace.fluidEvents().size() + "\n");
 		writer.write(String.join("\t", FLUID_COLUMNS) + "\n");
 		for (FluidCellEvent event : trace.fluidEvents()) {
-			WorldSnapshot.FluidEntry fluid = event.fluid();
+			FluidEntry fluid = event.fluid();
 			writer.write(event.tick() + "\t" + event.x() + "\t" + event.y() + "\t" + event.z() + "\t"
 			    + fluid.fluidStateId() + "\t" + fluid.name() + "\t" + fluid.kind().name() + "\t" + hex64(fluid.height())
 			    + "\t" + hex64(fluid.flowX()) + "\t" + hex64(fluid.flowY()) + "\t" + hex64(fluid.flowZ()) + "\t"
@@ -182,15 +184,15 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 				throw new IOException(
 				    "world fluid-event " + i + " has " + values.length + " columns, expected " + FLUID_COLUMNS.length);
 			}
-			WorldSnapshot.FluidKind kind;
+			FluidKind kind;
 			try {
-				kind = WorldSnapshot.FluidKind.valueOf(values[6]);
+				kind = FluidKind.valueOf(values[6]);
 			} catch (IllegalArgumentException invalid) {
 				throw new IOException("invalid fluid kind at event " + i + ": " + values[6], invalid);
 			}
 			fluids.add(new FluidCellEvent(parseInt(values[0], "fluid tick " + i), parseInt(values[1], "fluid x " + i),
 			    parseInt(values[2], "fluid y " + i), parseInt(values[3], "fluid z " + i),
-			    new WorldSnapshot.FluidEntry(parseInt(values[4], "fluid state id " + i), values[5], kind,
+			    new FluidEntry(parseInt(values[4], "fluid state id " + i), values[5], kind,
 			        parseHexDouble(values[7], "fluid height " + i), parseHexDouble(values[8], "fluid flow x " + i),
 			        parseHexDouble(values[9], "fluid flow y " + i), parseHexDouble(values[10], "fluid flow z " + i),
 			        parseBoolean(values[11], "fluid source " + i))));
@@ -277,7 +279,7 @@ public record WorldEventTrace(List<CellStateEvent> events, List<FluidCellEvent> 
 	}
 
 	/** One fully resolved fluid fact published after all block changes for a tick. */
-	public record FluidCellEvent(int tick, int x, int y, int z, WorldSnapshot.FluidEntry fluid) {
+	public record FluidCellEvent(int tick, int x, int y, int z, FluidEntry fluid) {
 		public FluidCellEvent {
 			if (fluid == null) {
 				throw new IllegalArgumentException("fluid event requires resolved facts");

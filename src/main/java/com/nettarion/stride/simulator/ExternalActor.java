@@ -14,7 +14,7 @@ public record ExternalActor(Kind kind, int entityId) {
 	/** The id of an actor that is not an entity. */
 	public static final int NO_ENTITY = -1;
 
-	/** The actors this slice can name; every other writer is unmodelled. */
+	/** The actors this slice can name; every other writer is unmodeled. */
 	public enum Kind {
 		/** {@code ServerExplosion}: the owner's {@code ClientboundExplodePacket} adds its vector. */
 		EXPLOSION,

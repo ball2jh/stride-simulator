@@ -52,22 +52,22 @@ class FallResetWaterShapeTest {
 	void aCertainHitFurtherAlongTheSegmentStillAnswers() {
 		// Cell 1 is water met only in its top ninth; cell 2 is a tagged block,
 		// which the clip meets as a full cube whatever the water's shape.
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(AIR, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot.BlockEntry cobweb =
-		    WorldSnapshot.BlockEntry.builder(9, "minecraft:cobweb").fallDistanceResetting(true).build();
-		WorldSnapshot.FluidEntry water = new WorldSnapshot.FluidEntry(
-		    7, "minecraft:water", WorldSnapshot.FluidKind.WATER, OWN_HEIGHT, 0.0, 0.0, 0.0, true);
-		SnapshotView world = new SnapshotView(new WorldSnapshot(0, 0, 0, 3, 2, 1, WorldSnapshot.OutsideRegion.SEALED,
+		BlockEntry air = new BlockEntry(AIR, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
+		BlockEntry cobweb =
+		    BlockEntry.builder(9, "minecraft:cobweb").fallDistanceResetting(true).build();
+		FluidEntry water = new FluidEntry(
+		    7, "minecraft:water", FluidKind.WATER, OWN_HEIGHT, 0.0, 0.0, 0.0, true);
+		SnapshotView world = new SnapshotView(new WorldSnapshot(0, 0, 0, 3, 2, 1, OutsidePolicy.SEALED,
 		    List.of(air, cobweb), new int[] {AIR, AIR, 1, AIR, AIR, AIR},
-		    List.of(WorldSnapshot.FluidEntry.EMPTY, water), new int[] {0, 1, 0, 0, 0, 0}));
+		    List.of(FluidEntry.EMPTY, water), new int[] {0, 1, 0, 0, 0, 0}));
 		assertTrue(world.resetsFallDistanceAlong(0.1, 0.95, 0.5, 2.9, 0.95, 0.5));
 	}
 
 	private static SnapshotView world(final double height, final boolean source) {
-		WorldSnapshot.BlockEntry air = new WorldSnapshot.BlockEntry(AIR, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
-		WorldSnapshot.FluidEntry water = new WorldSnapshot.FluidEntry(
-		    7, "minecraft:water", WorldSnapshot.FluidKind.WATER, height, 0.0, 0.0, 0.0, source);
-		return new SnapshotView(new WorldSnapshot(0, 0, 0, 2, 2, 1, WorldSnapshot.OutsideRegion.SEALED, List.of(air),
-		    new int[] {AIR, AIR, AIR, AIR}, List.of(WorldSnapshot.FluidEntry.EMPTY, water), new int[] {0, 1, 0, 0}));
+		BlockEntry air = new BlockEntry(AIR, "minecraft:air", 0.6F, 1.0F, 1.0F, List.of());
+		FluidEntry water = new FluidEntry(
+		    7, "minecraft:water", FluidKind.WATER, height, 0.0, 0.0, 0.0, source);
+		return new SnapshotView(new WorldSnapshot(0, 0, 0, 2, 2, 1, OutsidePolicy.SEALED, List.of(air),
+		    new int[] {AIR, AIR, AIR, AIR}, List.of(FluidEntry.EMPTY, water), new int[] {0, 1, 0, 0}));
 	}
 }

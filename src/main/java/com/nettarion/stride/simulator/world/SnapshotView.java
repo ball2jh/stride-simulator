@@ -1,15 +1,15 @@
 package com.nettarion.stride.simulator.world;
 
 import com.nettarion.stride.simulator.FluidSample;
-import com.nettarion.stride.simulator.Refusal;
+import com.nettarion.stride.simulator.RefusalCause;
 import com.nettarion.stride.simulator.PlayerState;
 import com.nettarion.stride.simulator.UnimplementedMechanicException;
-import com.nettarion.stride.simulator.block.BlockBehaviour;
+import com.nettarion.stride.simulator.block.BlockBehavior;
+import com.nettarion.stride.simulator.block.InsideBlockTraversal;
 import com.nettarion.stride.simulator.geometry.CollisionBuffer;
 import com.nettarion.stride.simulator.geometry.CollisionCollector;
 import com.nettarion.stride.simulator.geometry.CollisionQuerySpan;
 import com.nettarion.stride.simulator.geometry.Mth;
-import com.nettarion.stride.simulator.tick.Scratch;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -85,8 +85,8 @@ public final class SnapshotView implements WorldView {
 	private final InsideEffect[] insideEffect;
 	private final float[] bounceRestitution;
 	private final boolean[] suppressesBounce;
-	/** Each palette entry's {@link BlockBehaviour}, resolved once here. */
-	private final BlockBehaviour[] behaviour;
+	/** Each palette entry's {@link BlockBehavior}, resolved once here. */
+	private final BlockBehavior[] behavior;
 	// Optional source-proven inside shapes; compiled before the view is frozen.
 	double[][] sourceInsideShapes;
 	boolean[] sourceInsideFull;
@@ -96,17 +96,17 @@ public final class SnapshotView implements WorldView {
 	}
 	/** Tests the source inside shape for one visited cell, refusing undeclared or context-dependent shapes. */
 	public boolean sourceInsideReached(
-	    final PlayerState state, final int x, final int y, final int z, final Scratch scratch) {
+	    final PlayerState state, final int x, final int y, final int z, final InsideBlockTraversal traversal) {
 		int index = paletteIndexAt(x, y, z);
 		if (index < 0)
 			throw new UnimplementedMechanicException(
-			    Refusal.OUTSIDE_REGION, "inside-block traversal leaves source-verified region");
+			    RefusalCause.OUTSIDE_REGION, "inside-block traversal leaves source-verified region");
 		if (this.air[index]) return false;
 		if (this.sourceInsideShapes[index] == null)
 			throw new UnimplementedMechanicException(
-			    Refusal.UNDECLARED_BLOCK_STATE, "source inside shape is entity-dependent or unknown");
+			    RefusalCause.UNDECLARED_BLOCK_STATE, "source inside shape is entity-dependent or unknown");
 		return this.sourceInsideFull[index]
-		    || scratch.insideTraversal.collidedWithShapeMovingFrom(state, x, y, z, this.sourceInsideShapes[index]);
+		    || traversal.collidedWithShapeMovingFrom(state, x, y, z, this.sourceInsideShapes[index]);
 	}
 	private final boolean[] retainsSupportPos;
 	private final CollisionBehavior[] collisionBehavior;
@@ -225,7 +225,7 @@ public final class SnapshotView implements WorldView {
 	private final boolean hasAnySuffocation;
 	/** Whether any section is {@link Section#MISSING}; see {@link #hasChunkAt}. */
 	private final boolean hasMissingSections;
-	private final WorldSnapshot.OutsideRegion outside;
+	private final OutsidePolicy outside;
 	/** Linear lookup wins for the tiny edit sets used by normal replay. */
 	private static final int OVERRIDE_HASH_THRESHOLD = 16;
 	private int[] overrideCells = new int[4];
@@ -254,15 +254,15 @@ public final class SnapshotView implements WorldView {
 	 * it and mutates only the returned worker-confined child.
 	 */
 	public static SnapshotView compile(final WorldSnapshot snapshot) {
-		return new SnapshotView(snapshot).frozenFork();
+		return new SnapshotView(snapshot).frozen();
 	}
 
 	/** Verify portable block facts and compile the source-proven cauldron successors once. */
 	public static SnapshotView compile(
 	    final WorldSnapshot snapshot, final BlockStateCatalog catalog, final String minecraftVersion) {
 		SnapshotView result = new SnapshotView(catalog.withSuccessors(snapshot, minecraftVersion));
-		catalog.installBehaviours(result, result.snapshot, result.behaviour);
-		return result.frozenFork();
+		catalog.installBehaviors(result, result.snapshot, result.behavior);
+		return result.frozen();
 	}
 
 	/** Compiles a synthetic snapshot without independent catalog verification; use a catalog-backed factory for observations. */
@@ -306,7 +306,7 @@ public final class SnapshotView implements WorldView {
 		this.insideEffect = new InsideEffect[size];
 		this.bounceRestitution = new float[size];
 		this.suppressesBounce = new boolean[size];
-		this.behaviour = new BlockBehaviour[size];
+		this.behavior = new BlockBehavior[size];
 		this.retainsSupportPos = new boolean[size];
 		this.collisionBehavior = new CollisionBehavior[size];
 		this.collisionPotential = new boolean[size];
@@ -325,14 +325,14 @@ public final class SnapshotView implements WorldView {
 		boolean anyJumpFactor = false;
 
 		for (int i = 0; i < size; i++) {
-			WorldSnapshot.BlockEntry entry = snapshot.palette().get(i);
+			BlockEntry entry = snapshot.palette().get(i);
 			if (entry.movingPiston()) {
 				throw new IllegalArgumentException("moving-piston collision is outside the supported kernel slice");
 			}
-			List<WorldSnapshot.ShapeBox> boxes = entry.boxes();
+			List<ShapeBox> boxes = entry.boxes();
 			double[] converted = new double[boxes.size() * 6];
 			for (int b = 0; b < boxes.size(); b++) {
-				WorldSnapshot.ShapeBox box = boxes.get(b);
+				ShapeBox box = boxes.get(b);
 				validate(box, i, b);
 				int at = b * 6;
 				converted[at] = box.minX();
@@ -345,7 +345,7 @@ public final class SnapshotView implements WorldView {
 			boolean large = SectionSummary.largeShape(entry);
 			this.shapes[i] = converted;
 			this.air[i] = isAirIdentity(entry.name());
-			this.shapeClass[i] = classify(converted, entry.collisionShapeIdentity());
+			this.shapeClass[i] = classify(converted, entry.shapeProvenance());
 			this.largeShape[i] = large;
 			anyLarge |= large;
 			this.friction[i] = entry.friction();
@@ -368,7 +368,7 @@ public final class SnapshotView implements WorldView {
 			this.insideEffect[i] = entry.insideEffect();
 			this.bounceRestitution[i] = entry.bounceRestitution();
 			this.suppressesBounce[i] = entry.suppressesBounce();
-			this.behaviour[i] = BlockBehaviour.of(entry);
+			this.behavior[i] = BlockBehavior.of(entry);
 			this.retainsSupportPos[i] = entry.retainsSupportPos();
 			anyFriction |= entry.friction() != 0.6F;
 			anySpeedFactor |= entry.speedFactor() != 1.0F || entry.suppressesSupportingSpeedFactor();
@@ -383,7 +383,7 @@ public final class SnapshotView implements WorldView {
 			anyServerMutableCollision |= this.collisionBehavior[i] == CollisionBehavior.SERVER_MUTABLE_SUPPORT;
 			anyPowderSnow |= this.collisionBehavior[i] == CollisionBehavior.POWDER_SNOW_NO_BOOTS;
 			this.collisionPotential[i] = SectionSummary.collisionPotential(entry);
-			// One bit per behaviour a cell of this entry could make the movement
+			// One bit per behavior a cell of this entry could make the movement
 			// path ask about, defined once with the section summary so a section's
 			// mask is the same predicate over fewer cells.
 			int properties = SectionSummary.propertyBits(entry);
@@ -420,7 +420,7 @@ public final class SnapshotView implements WorldView {
 		this.fluidSource = new boolean[fluidSize];
 		this.hasFluidCells = snapshot.hasFluids();
 		for (int i = 0; i < fluidSize; i++) {
-			WorldSnapshot.FluidEntry entry = snapshot.fluidPalette().get(i);
+			FluidEntry entry = snapshot.fluidPalette().get(i);
 			this.fluidKind[i] = switch (entry.kind()) {
 				case EMPTY -> FluidSample.Kind.EMPTY;
 				case WATER -> FluidSample.Kind.WATER;
@@ -485,7 +485,7 @@ public final class SnapshotView implements WorldView {
 		this.insideEffect = source.insideEffect;
 		this.bounceRestitution = source.bounceRestitution;
 		this.suppressesBounce = source.suppressesBounce;
-		this.behaviour = source.behaviour;
+		this.behavior = source.behavior;
 		this.sourceInsideShapes = source.sourceInsideShapes;
 		this.sourceInsideFull = source.sourceInsideFull;
 		this.retainsSupportPos = source.retainsSupportPos;
@@ -581,7 +581,7 @@ public final class SnapshotView implements WorldView {
 	 * later detaches and publishes replacements. Use {@link #fork} when the child
 	 * itself must accept replacements.
 	 */
-	public SnapshotView frozenFork() {
+	public SnapshotView frozen() {
 		return this.immutable ? this : new SnapshotView(this, true);
 	}
 
@@ -590,7 +590,7 @@ public final class SnapshotView implements WorldView {
 	 *
 	 * <p>This publishes geometry and surface coefficients immediately, so a
 	 * consumer implements source order by calling it before the movement step
-	 * for that tick. It performs no placement validation, redstone, neighbour
+	 * for that tick. It performs no placement validation, redstone, neighbor
 	 * updates or other game logic. Effective changes increment
 	 * {@link #collisionVersion}; replacing with the current entry is a no-op.
 	 * This method and all reads of this instance are worker-confined once any
@@ -619,7 +619,7 @@ public final class SnapshotView implements WorldView {
 		// Set only. Clearing would need a count per property per section, and the
 		// error it would remove is the harmless one: a bit left set after the cell
 		// that justified it is gone costs a lookup that answers the default, while
-		// a bit wrongly clear silently drops a real behaviour.
+		// a bit wrongly clear silently drops a real behavior.
 		this.sectionProperties[collisionSectionIndex(x, y, z)] |= this.paletteProperties[paletteIndex];
 		if (this.largeShape[paletteIndex]) {
 			detachLargeShapeGrids();
@@ -648,14 +648,14 @@ public final class SnapshotView implements WorldView {
 		this.sectionVersion[collisionSectionIndex(x, y, z)] = this.collisionVersion;
 	}
 
-	/** Refuse cauldron notifications that could activate an unmodelled neighbour or vibration listener. */
+	/** Refuse cauldron notifications that could activate an unmodeled neighbor or vibration listener. */
 	public void requireCauldronUpdateClosure(final int x, final int y, final int z) {
 		for (var entry : this.snapshot.palette()) {
 			if (entry.name().equals("minecraft:sculk_sensor")
 			    || entry.name().equals("minecraft:calibrated_sculk_sensor")
 			    || entry.name().equals("minecraft:sculk_shrieker"))
 				throw new UnimplementedMechanicException(
-				    Refusal.UNMODELLED_WORLD_WRITE, "cauldron block-change vibration reaches an unmodelled listener");
+				    RefusalCause.UNMODELED_WORLD_WRITE, "cauldron block-change vibration reaches an unmodeled listener");
 		}
 		for (int axis = 0; axis < 3; axis++)
 			for (int sign : new int[] {-1, 1})
@@ -664,13 +664,13 @@ public final class SnapshotView implements WorldView {
 					    y + (axis == 1 ? sign * distance : 0), z + (axis == 2 ? sign * distance : 0));
 					if (index < 0)
 						throw new UnimplementedMechanicException(
-						    Refusal.OUTSIDE_REGION, "cauldron neighbour updates leave the captured region");
+						    RefusalCause.OUTSIDE_REGION, "cauldron neighbor updates leave the captured region");
 					String name = this.snapshot.palette().get(index).name();
 					if (!isAirIdentity(name) && !name.equals("minecraft:stone") && !name.equals("minecraft:cauldron")
 					    && !name.equals("minecraft:water_cauldron") && !name.equals("minecraft:powder_snow_cauldron")
 					    && !name.equals("minecraft:lava_cauldron"))
-						throw UnimplementedMechanicException.deferred(Refusal.UNMODELLED_WORLD_WRITE,
-						    () -> "cauldron neighbour-update closure is unmodelled for " + name);
+						throw UnimplementedMechanicException.deferred(RefusalCause.UNMODELED_WORLD_WRITE,
+						    () -> "cauldron neighbor-update closure is unmodeled for " + name);
 				}
 	}
 
@@ -756,7 +756,7 @@ public final class SnapshotView implements WorldView {
 
 	/** Same compiled fact plane and effective sparse replacements; different compilations conservatively differ. */
 	public static boolean sameWorld(final SnapshotView a, final SnapshotView b) {
-		if (a.snapshot != b.snapshot || a.behaviour != b.behaviour || a.sourceInsideShapes != b.sourceInsideShapes
+		if (a.snapshot != b.snapshot || a.behavior != b.behavior || a.sourceInsideShapes != b.sourceInsideShapes
 		    || a.overrideCount != b.overrideCount || a.overrideFluidCount != b.overrideFluidCount)
 			return false;
 		for (int i = 0; i < a.overrideCount; i++) {
@@ -812,7 +812,7 @@ public final class SnapshotView implements WorldView {
 		int cell = baseCellIndex(x, y, z);
 		if (cell < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "fluid query left the captured region at ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "fluid query left the captured region at ", x, y, z, "");
 		}
 		int index = effectiveFluidPaletteIndex(cell);
 		target.set(this.fluidKind[index], this.fluidHeight[index], this.fluidFlowX[index], this.fluidFlowY[index],
@@ -824,7 +824,7 @@ public final class SnapshotView implements WorldView {
 		int index = paletteIndexAt(x, y, z);
 		if (index < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "bubble-column query left the captured region at ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "bubble-column query left the captured region at ", x, y, z, "");
 		}
 		return this.bubbleColumnMode[index];
 	}
@@ -839,7 +839,7 @@ public final class SnapshotView implements WorldView {
 		int index = paletteIndexAt(x, y, z);
 		if (index < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "collision-shape query left the captured region at ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "collision-shape query left the captured region at ", x, y, z, "");
 		}
 		return this.shapes[index].length != 0;
 	}
@@ -849,7 +849,7 @@ public final class SnapshotView implements WorldView {
 		int index = paletteIndexAt(x, y, z);
 		if (index < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "climbable query left the captured region at ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "climbable query left the captured region at ", x, y, z, "");
 		}
 		Climbability role = this.climbability[index];
 		if (role == Climbability.NONE || role == Climbability.GLIDE_THROUGH && fallFlying) {
@@ -861,7 +861,7 @@ public final class SnapshotView implements WorldView {
 		int below = paletteIndexAt(x, y - 1, z);
 		if (below < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "trapdoor climbable query left the captured region below ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "trapdoor climbable query left the captured region below ", x, y, z, "");
 		}
 		return switch (role) {
 			case OPEN_TRAPDOOR_NORTH -> this.climbability[below] == Climbability.LADDER_NORTH;
@@ -877,7 +877,7 @@ public final class SnapshotView implements WorldView {
 		int index = paletteIndexAt(x, y, z);
 		if (index < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "collision-behavior query left the captured region at ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "collision-behavior query left the captured region at ", x, y, z, "");
 		}
 		return this.collisionBehavior[index];
 	}
@@ -887,7 +887,7 @@ public final class SnapshotView implements WorldView {
 		int index = paletteIndexAt(x, y, z);
 		if (index < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "bounce query left the captured region at ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "bounce query left the captured region at ", x, y, z, "");
 		}
 		return this.bounceRestitution[index];
 	}
@@ -897,7 +897,7 @@ public final class SnapshotView implements WorldView {
 		int index = paletteIndexAt(x, y, z);
 		if (index < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "bounce-suppression query left the captured region at ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "bounce-suppression query left the captured region at ", x, y, z, "");
 		}
 		return this.suppressesBounce[index];
 	}
@@ -907,7 +907,7 @@ public final class SnapshotView implements WorldView {
 		int index = paletteIndexAt(x, y, z);
 		if (index < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "support-pos query left the captured region at ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "support-pos query left the captured region at ", x, y, z, "");
 		}
 		return this.retainsSupportPos[index];
 	}
@@ -974,7 +974,7 @@ public final class SnapshotView implements WorldView {
 					    || z >= this.endZ) {
 						if (cursorType == 0
 						    && intersects(minX, minY, minZ, maxX, maxY, maxZ, x, y, z, x + 1.0, y + 1.0, z + 1.0)) {
-							throw UnimplementedMechanicException.at(Refusal.OUTSIDE_REGION,
+							throw UnimplementedMechanicException.at(RefusalCause.OUTSIDE_REGION,
 							    "supporting-block query left the captured region at ", x, y, z, "");
 						}
 						continue;
@@ -1002,7 +1002,7 @@ public final class SnapshotView implements WorldView {
 						// it does not hold.
 						case SERVER_MUTABLE_SUPPORT -> {
 							if (intersects(minX, minY, minZ, maxX, maxY, maxZ, x, y, z, x + 1.0, y + 1.0, z + 1.0)) {
-								throw UnimplementedMechanicException.at(Refusal.UNDECLARED_SERVER_MUTABLE,
+								throw UnimplementedMechanicException.at(RefusalCause.UNDECLARED_SERVER_MUTABLE,
 								    "support query reached server-mutable collision at ", x, y, z, "");
 							}
 							yield null;
@@ -1086,7 +1086,7 @@ public final class SnapshotView implements WorldView {
 			sessionDependent |= hit == RESET_SESSION_DEPENDENT;
 		}
 		if (sessionDependent) {
-			throw UnimplementedMechanicException.deferred(Refusal.UNDECLARED_WORLD_FACT,
+			throw UnimplementedMechanicException.deferred(RefusalCause.UNDECLARED_WORLD_FACT,
 			    ()
 			        -> "the fall-distance-resetting clip from " + fromX + "," + fromY + "," + fromZ + " to " + toX + ","
 			        + toY + "," + toZ + " meets water only above the height the client's session-cached"
@@ -1120,7 +1120,7 @@ public final class SnapshotView implements WorldView {
 		int cell = baseCellIndex(x, y, z);
 		if (cell < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "fall-distance-resetting query left the captured region at ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "fall-distance-resetting query left the captured region at ", x, y, z, "");
 		}
 		int palette = effectivePaletteIndex(cell);
 		boolean resettingBlock = this.fallDistanceResettingBlock[palette]
@@ -1197,13 +1197,13 @@ public final class SnapshotView implements WorldView {
 	}
 
 	@Override
-	public BlockBehaviour behaviourAt(final int x, final int y, final int z) {
+	public BlockBehavior behaviorAt(final int x, final int y, final int z) {
 		int index = paletteIndexAt(x, y, z);
 		if (index < 0) {
 			throw UnimplementedMechanicException.at(
-			    Refusal.OUTSIDE_REGION, "behaviour query left the captured region at ", x, y, z, "");
+			    RefusalCause.OUTSIDE_REGION, "behavior query left the captured region at ", x, y, z, "");
 		}
-		return this.behaviour[index];
+		return this.behavior[index];
 	}
 
 	/**
@@ -1224,7 +1224,7 @@ public final class SnapshotView implements WorldView {
 					int cell = baseCellIndex(x, y, z);
 					if (cell < 0) {
 						throw UnimplementedMechanicException.at(
-						    Refusal.OUTSIDE_REGION, "suffocation query left the captured region at ", x, y, z, "");
+						    RefusalCause.OUTSIDE_REGION, "suffocation query left the captured region at ", x, y, z, "");
 					}
 					int palette = effectivePaletteIndex(cell);
 					if (this.suffocation[palette] == SUFFOCATION_NO) {
@@ -1244,7 +1244,7 @@ public final class SnapshotView implements WorldView {
 						continue;
 					}
 					if (this.suffocation[palette] == SUFFOCATION_UNKNOWN) {
-						throw UnimplementedMechanicException.at(Refusal.UNDECLARED_BLOCK_STATE,
+						throw UnimplementedMechanicException.at(RefusalCause.UNDECLARED_BLOCK_STATE,
 						    "suffocation is undeclared for the colliding cell at ", x, y, z, "");
 					}
 					return true;
@@ -1274,7 +1274,7 @@ public final class SnapshotView implements WorldView {
 			return false;
 		}
 		// The column path is exact wherever no shape can reach into the column, and
-		// that is a question about this column's neighbourhood rather than about the
+		// that is a question about this column's neighborhood rather than about the
 		// world: validation gated it on the palette-wide flag, which one fence anywhere
 		// turns off for every query . The span tested is the one the general
 		// form would scan, the column expanded by the Cursor3D ring.
@@ -1335,7 +1335,7 @@ public final class SnapshotView implements WorldView {
 					double[] shape = this.shapes[index];
 					if (this.collisionBehavior[index] != CollisionBehavior.ORDINARY) {
 						if (reaches(shape, this.shapeClass[index], x, y, z, minX, minY, minZ, maxX, maxY, maxZ)) {
-							throw UnimplementedMechanicException.at(Refusal.UNDECLARED_WORLD_FACT,
+							throw UnimplementedMechanicException.at(RefusalCause.UNDECLARED_WORLD_FACT,
 							    "suffocation query reached context-sensitive collision at ", x, y, z, "");
 						}
 						continue;
@@ -1344,7 +1344,7 @@ public final class SnapshotView implements WorldView {
 						continue;
 					}
 					if (suffocates == SUFFOCATION_UNKNOWN) {
-						throw UnimplementedMechanicException.at(Refusal.UNDECLARED_BLOCK_STATE,
+						throw UnimplementedMechanicException.at(RefusalCause.UNDECLARED_BLOCK_STATE,
 						    "suffocation is unknown for the block at ", x, y, z,
 						    "; the snapshot predates the fact and the query reached it");
 					}
@@ -1387,12 +1387,12 @@ public final class SnapshotView implements WorldView {
 		int y1 = Mth.floor(maxY);
 		if (cellX < this.originX || cellX >= this.endX || cellZ < this.originZ || cellZ >= this.endZ) {
 			throw UnimplementedMechanicException.deferred(
-			    Refusal.OUTSIDE_REGION, () -> "suffocation query left the captured region at " + cellX + ",*," + cellZ);
+			    RefusalCause.OUTSIDE_REGION, () -> "suffocation query left the captured region at " + cellX + ",*," + cellZ);
 		}
 		for (int y = y0; y <= y1; y++) {
 			if (y < this.originY || y >= this.endY) {
 				throw UnimplementedMechanicException.at(
-				    Refusal.OUTSIDE_REGION, "suffocation query left the captured region at ", cellX, y, cellZ, "");
+				    RefusalCause.OUTSIDE_REGION, "suffocation query left the captured region at ", cellX, y, cellZ, "");
 			}
 			int index = paletteIndexAt(cellX, y, cellZ);
 			byte suffocates = this.suffocation[index];
@@ -1402,7 +1402,7 @@ public final class SnapshotView implements WorldView {
 			double[] shape = this.shapes[index];
 			if (this.collisionBehavior[index] != CollisionBehavior.ORDINARY) {
 				if (reaches(shape, this.shapeClass[index], cellX, y, cellZ, minX, minY, minZ, maxX, maxY, maxZ)) {
-					throw UnimplementedMechanicException.at(Refusal.UNDECLARED_WORLD_FACT,
+					throw UnimplementedMechanicException.at(RefusalCause.UNDECLARED_WORLD_FACT,
 					    "suffocation query reached context-sensitive collision at ", cellX, y, cellZ, "");
 				}
 				continue;
@@ -1411,7 +1411,7 @@ public final class SnapshotView implements WorldView {
 				continue;
 			}
 			if (suffocates == SUFFOCATION_UNKNOWN) {
-				throw UnimplementedMechanicException.at(Refusal.UNDECLARED_BLOCK_STATE,
+				throw UnimplementedMechanicException.at(RefusalCause.UNDECLARED_BLOCK_STATE,
 				    "suffocation is unknown for the block at ", cellX, y, cellZ,
 				    "; the snapshot predates the fact and the query reached it");
 			}
@@ -1444,7 +1444,7 @@ public final class SnapshotView implements WorldView {
 			return;
 		}
 		throw UnimplementedMechanicException.at(
-		    Refusal.OUTSIDE_REGION, "suffocation query left the captured region at ", x, y, z, "");
+		    RefusalCause.OUTSIDE_REGION, "suffocation query left the captured region at ", x, y, z, "");
 	}
 
 	@Override
@@ -1482,7 +1482,7 @@ public final class SnapshotView implements WorldView {
 	    final double maxY, final double maxZ, final CollisionBuffer target) {
 		if (this.hasContextSensitiveCollision) {
 			throw new UnimplementedMechanicException(
-			    Refusal.UNDECLARED_WORLD_FACT, "context-free collision query cannot resolve contextual collision");
+			    RefusalCause.UNDECLARED_WORLD_FACT, "context-free collision query cannot resolve contextual collision");
 		}
 		collectCollisionBoxes(minX, minY, minZ, maxX, maxY, maxZ, Double.NEGATIVE_INFINITY, false, 0.0, false, target);
 	}
@@ -1530,7 +1530,7 @@ public final class SnapshotView implements WorldView {
 			return;
 		}
 		// The interior scan reads captured shapes without consulting collision
-		// behaviour, so it may only run where no cell refuses. Context-sensitive
+		// behavior, so it may only run where no cell refuses. Context-sensitive
 		// cells are excluded for the whole view; a server-mutable cell refuses
 		// without context, so it withdraws only the queries that reach it.
 		if (scanInside && !ring && !this.hasContextSensitiveCollision
@@ -1580,7 +1580,7 @@ public final class SnapshotView implements WorldView {
 							    : null;
 						case SERVER_MUTABLE_SUPPORT -> {
 							if (intersects(minX, minY, minZ, maxX, maxY, maxZ, x, y, z, x + 1.0, y + 1.0, z + 1.0)) {
-								throw UnimplementedMechanicException.at(Refusal.UNDECLARED_SERVER_MUTABLE,
+								throw UnimplementedMechanicException.at(RefusalCause.UNDECLARED_SERVER_MUTABLE,
 								    "movement reached server-mutable collision at ", x, y, z, "");
 							}
 							yield null;
@@ -1714,7 +1714,7 @@ public final class SnapshotView implements WorldView {
 		}
 		// Cell-boundedness, per span. A retained span is refiltered for sub-queries,
 		// so a shape owned one cell outside it could reach into one of those and be
-		// missed — hence the ring, the same neighbourhood the scan itself walks.
+		// missed — hence the ring, the same neighborhood the scan itself walks.
 		if (largeShapeIn(x0 - 1, y0 - 1, z0 - 1, x1 + 1, y1 + 1, z1 + 1)) {
 			return false;
 		}
@@ -1722,7 +1722,7 @@ public final class SnapshotView implements WorldView {
 		// sub-queries, so it cannot ask a server-mutable cell's refusal question,
 		// which depends on the querying box. Declining the span sends those
 		// queries down the ordinary path, which refuses exactly when a box
-		// overlaps the cell. The ring matches the neighbourhood that path scans.
+		// overlaps the cell. The ring matches the neighborhood that path scans.
 		if (this.hasServerMutableCollision
 		    && propertiesIn(PROPERTY_SERVER_MUTABLE, x0 - 1, y0 - 1, z0 - 1, x1 + 1, y1 + 1, z1 + 1) != 0) {
 			return false;
@@ -2073,7 +2073,7 @@ public final class SnapshotView implements WorldView {
 	 *
 	 * <p>Conservative in one direction only: true may be returned for a span that
 	 * holds none, which costs the general path; false must mean there is none, since
-	 * a caller takes it as licence to skip the ring. A span not wholly inside the
+	 * a caller takes it as license to skip the ring. A span not wholly inside the
 	 * region answers true, because outside cells are unknown and the general path is
 	 * the one that owns that semantic.
 	 *
@@ -2217,7 +2217,7 @@ public final class SnapshotView implements WorldView {
 		}
 	}
 
-	private static byte classify(final double[] shape, final WorldSnapshot.CollisionShapeIdentity identity) {
+	private static byte classify(final double[] shape, final ShapeProvenance identity) {
 		if (shape.length == 0) {
 			return SHAPE_EMPTY;
 		}
@@ -2233,7 +2233,7 @@ public final class SnapshotView implements WorldView {
 		    && shape[4] == 1.0 && shape[5] == 1.0;
 	}
 
-	private static void validate(final WorldSnapshot.ShapeBox box, final int paletteIndex, final int shapeIndex) {
+	private static void validate(final ShapeBox box, final int paletteIndex, final int shapeIndex) {
 		if (!Double.isFinite(box.minX()) || !Double.isFinite(box.minY()) || !Double.isFinite(box.minZ())
 		    || !Double.isFinite(box.maxX()) || !Double.isFinite(box.maxY()) || !Double.isFinite(box.maxZ())
 		    || box.minX() > box.maxX() || box.minY() > box.maxY() || box.minZ() > box.maxZ()) {
@@ -2262,9 +2262,9 @@ public final class SnapshotView implements WorldView {
 					target.addCanonicalFullCube(x, y, z);
 				}
 			}
-			case ROLLOUT_TERMINATING -> {
+			case REFUSING -> {
 				if (intersects(minX, minY, minZ, maxX, maxY, maxZ, x, y, z, x + 1.0, y + 1.0, z + 1.0)) {
-					throw UnimplementedMechanicException.at(Refusal.OUTSIDE_REGION,
+					throw UnimplementedMechanicException.at(RefusalCause.OUTSIDE_REGION,
 					    "collision query left the captured region at ", x, y, z,
 					    "; the snapshot declares outside space rollout-terminating");
 				}
@@ -2342,7 +2342,7 @@ public final class SnapshotView implements WorldView {
 					if (cell < 0) {
 						// Sealed space is solid, so it decides; terminating space
 						// claims nothing about the cell.
-						if (this.outside == WorldSnapshot.OutsideRegion.SEALED) {
+						if (this.outside == OutsidePolicy.SEALED) {
 							return Air.NOT_AIR;
 						}
 						unknown = true;
@@ -2415,7 +2415,7 @@ public final class SnapshotView implements WorldView {
 		int x = ((this.sectionOriginX + sectionX) << Section.SHIFT) + (local & Section.MASK);
 		int y = ((this.sectionOriginY + sectionY) << Section.SHIFT) + (local >>> (2 * Section.SHIFT));
 		int z = ((this.sectionOriginZ + sectionZ) << Section.SHIFT) + ((local >>> Section.SHIFT) & Section.MASK);
-		return UnimplementedMechanicException.deferred(Refusal.OUTSIDE_REGION,
+		return UnimplementedMechanicException.deferred(RefusalCause.OUTSIDE_REGION,
 		    () -> "query reached a section the world does not hold at " + x + "," + y + "," + z);
 	}
 

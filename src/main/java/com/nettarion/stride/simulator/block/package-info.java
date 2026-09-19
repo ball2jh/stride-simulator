@@ -1,11 +1,11 @@
 /**
- * Block behaviours keyed by palette entry, and the traversal that applies them inside one tick.
+ * Block behaviors keyed by palette entry, and the traversal that applies them inside one tick.
  *
- * <p>{@link com.nettarion.stride.simulator.block.BlockBehaviour} dispatches each admitted tuple to
- * one upstream owner: a singleton behaviour per block class with its captured coefficients and
+ * <p>{@link com.nettarion.stride.simulator.block.BlockBehavior} dispatches each admitted tuple to
+ * one upstream owner: a singleton behavior per block class with its captured coefficients and
  * the {@code entityInside}, {@code stepOn}, {@code fallOn}, speed and jump hooks the source gives
- * it. A tuple with no admitted behaviour compiles to
- * {@link com.nettarion.stride.simulator.block.UnmodelledBlock} or
+ * it. A tuple with no admitted behavior compiles to
+ * {@link com.nettarion.stride.simulator.block.UnmodeledBlock} or
  * {@link com.nettarion.stride.simulator.block.UnknownStateBlock} and refuses at its first required
  * transition; the simulator never combines unrelated callbacks.
  * {@link com.nettarion.stride.simulator.block.BlockEffects} is the phase entry
@@ -15,7 +15,7 @@
  * until traversal finishes, so immediate callbacks precede collected damage.
  *
  * <p>Sounds, particles and statistics are omitted only where they cannot alter admitted movement
- * or required randomness. Ambiguous grouping refuses. Adding a block is adding one behaviour here
+ * or required randomness. Ambiguous grouping refuses. Adding a block is adding one behavior here
  * with one source-derived test and one oracle pairing; no branch on a block name belongs in the tick.
  */
 package com.nettarion.stride.simulator.block;

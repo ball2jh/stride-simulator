@@ -10,6 +10,9 @@ import com.nettarion.stride.simulator.SimulationState;
 import com.nettarion.stride.simulator.Simulator;
 import com.nettarion.stride.simulator.world.SnapshotView;
 import com.nettarion.stride.simulator.world.WorldSnapshot;
+import com.nettarion.stride.simulator.world.OutsidePolicy;
+import com.nettarion.stride.simulator.world.ShapeBox;
+import com.nettarion.stride.simulator.world.BlockEntry;
 
 /** A runnable introduction to snapshot construction, exact stepping, and branch ownership. */
 public final class GettingStarted {
@@ -61,10 +64,10 @@ public final class GettingStarted {
 	/** Builds a finite, explicitly declared air-and-stone world for this example. */
 	private static SnapshotView flatWorld() {
 		WorldSnapshot.Builder builder =
-		    WorldSnapshot.builder(WorldSnapshot.OutsideRegion.ROLLOUT_TERMINATING, -8, -2, -8, 32, 12, 40)
-		        .palette(WorldSnapshot.BlockEntry.builder(0, "minecraft:air").build(),
-		            WorldSnapshot.BlockEntry.builder(1, "minecraft:stone")
-		                .boxes(WorldSnapshot.ShapeBox.FULL_CUBE)
+		    WorldSnapshot.builder(OutsidePolicy.REFUSING, -8, -2, -8, 32, 12, 40)
+		        .palette(BlockEntry.builder(0, "minecraft:air").build(),
+		            BlockEntry.builder(1, "minecraft:stone")
+		                .boxes(ShapeBox.FULL_CUBE)
 		                .build());
 		for (int x = -8; x < 24; x++) {
 			for (int z = -8; z < 32; z++)

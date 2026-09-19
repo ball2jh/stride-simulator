@@ -11,7 +11,7 @@ import com.nettarion.stride.simulator.world.WorldView;
  * point, two for soul fire) for the step, in {@code InsideBlockEffectType}
  * order.
  */
-final class BaseFireBlock extends BlockBehaviour {
+final class BaseFireBlock extends BlockBehavior {
 	static final BaseFireBlock FIRE = new BaseFireBlock(false);
 	static final BaseFireBlock SOUL_FIRE = new BaseFireBlock(true);
 
