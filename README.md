@@ -21,8 +21,7 @@ the author's namespace, which is why the Maven group is `com.nettarion.stride`.
 
 ## Status
 
-Pre-1.0: the API may change between minor versions, and [CHANGELOG.md](CHANGELOG.md) records every
-breaking change. A green build proves that the modeled mechanics reproduce vanilla on the scenarios the
+Pre-1.0: the API may change between minor versions. A green build proves that the modeled mechanics reproduce vanilla on the scenarios the
 tests cover, and that the two bundled captures of a live client replay bit for bit (the elytra capture up
 to the durability write the library does not model). It does not prove equivalence for every Minecraft state,
 server or network schedule: a returned state is a result under the facts you supplied, and a refusal means
@@ -216,11 +215,13 @@ Generator inputs live in `src/main/fields` and `src/main/templates`; generated J
 `build/generated` and never edited by hand. Tests and the bundled captures live under `src/test`;
 runnable examples under `examples/`.
 
-## Contributing, security and license
+## Contributing and license
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). The code is licensed under [MIT](LICENSE); see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for what is not covered.
+Run `./gradlew build` before opening a pull request; it compiles with warnings as errors, runs the tests,
+checks the API documentation, verifies the bundled captures, and runs the examples. Edit the generator
+inputs under `src/main/fields` and `src/main/templates` rather than `build/generated`, and never update a
+pinned digest to silence a failing test; see [VALIDATION.md](VALIDATION.md). The code is licensed under
+[MIT](LICENSE); see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for what is not covered.
 
 Minecraft is a trademark of Mojang and Microsoft. This project is not an official Minecraft product and is
 not affiliated with or endorsed by Mojang or Microsoft.

@@ -9,9 +9,6 @@ JUnit (Eclipse Public License 2.0) and the Gradle foojay toolchain resolver
 plugin (Apache License 2.0) are downloaded during the build. Neither is a
 runtime dependency or bundled in the library.
 
-`CODE_OF_CONDUCT.md` is adapted from the Contributor Covenant, version 2.1,
-under the Creative Commons Attribution 4.0 license.
-
 Minecraft is a separate proprietary product of Mojang and Microsoft. This
 project is not an official Minecraft product and is not affiliated with or
 endorsed by Mojang or Microsoft. Minecraft names identify the mechanics being
